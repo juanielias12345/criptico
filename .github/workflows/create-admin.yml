@@ -1,0 +1,40 @@
+# Crea una cuenta de administración en la base de producción.
+# Se ejecuta a mano: Actions → "Crear administrador" → Run workflow.
+# Necesita los secretos del repositorio DATABASE_URL, DATABASE_AUTH_TOKEN y
+# ADMIN_PASSWORD (Settings → Secrets and variables → Actions). La contraseña
+# nunca aparece en el registro de la ejecución.
+name: Crear administrador
+
+on:
+  workflow_dispatch:
+    inputs:
+      username:
+        description: Usuario
+        required: true
+      role:
+        description: Rol
+        required: true
+        default: owner
+        type: choice
+        options: [owner, editor, moderator]
+
+permissions:
+  contents: read
+
+jobs:
+  create:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci --omit=dev
+      - run: npm run admin:create
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DATABASE_AUTH_TOKEN: ${{ secrets.DATABASE_AUTH_TOKEN }}
+          ADMIN_USERNAME: ${{ inputs.username }}
+          ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
+          ADMIN_ROLE: ${{ inputs.role }}
+          SITE_URL: https://criptico.vercel.app
