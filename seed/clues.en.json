@@ -1,0 +1,192 @@
+[
+  {
+    "clue": "Pay attention to silent arrangement (6)",
+    "answer": "LISTEN", "definition": "Pay attention", "category": "language", "difficulty": 1, "mechanism": "anagram",
+    "wordplay": { "op": "anagram", "indicator": "arrangement", "of": [{ "op": "lit", "text": "silent" }] }
+  },
+  {
+    "clue": "Cheater reformed as an educator (7)",
+    "answer": "TEACHER", "definition": "an educator", "category": "people", "difficulty": 1, "mechanism": "anagram",
+    "wordplay": { "op": "anagram", "indicator": "reformed", "of": [{ "op": "lit", "text": "cheater" }] }
+  },
+  {
+    "clue": "Garden wrecked: that's a risk (6)",
+    "answer": "DANGER", "definition": "a risk", "category": "language", "difficulty": 1, "mechanism": "anagram",
+    "wordplay": { "op": "anagram", "indicator": "wrecked", "of": [{ "op": "lit", "text": "garden" }] }
+  },
+  {
+    "clue": "Partly honest home for birds (4)",
+    "answer": "NEST", "definition": "home for birds", "category": "animals", "difficulty": 1, "mechanism": "hidden",
+    "wordplay": { "op": "hidden", "indicator": "Partly", "in": "honest" }
+  },
+  {
+    "clue": "World seen in clear theory (5)",
+    "answer": "EARTH", "definition": "World", "category": "science", "difficulty": 2, "mechanism": "hidden",
+    "wordplay": { "op": "hidden", "indicator": "seen in", "in": "clear theory" }
+  },
+  {
+    "clue": "Prize from drawer turned over (6)",
+    "answer": "REWARD", "definition": "Prize", "category": "objects", "difficulty": 1, "mechanism": "reversal",
+    "wordplay": { "op": "reverse", "indicator": "turned over", "of": { "op": "lit", "text": "drawer" } }
+  },
+  {
+    "clue": "Evil turned back to exist (4)",
+    "answer": "LIVE", "definition": "exist", "category": "language", "difficulty": 1, "mechanism": "reversal",
+    "wordplay": { "op": "reverse", "indicator": "turned back", "of": { "op": "lit", "text": "evil" } }
+  },
+  {
+    "clue": "Stopper sent back for a swallow (4)",
+    "answer": "GULP", "definition": "a swallow", "category": "food", "difficulty": 2, "mechanism": "reversal",
+    "wordplay": { "op": "reverse", "indicator": "sent back", "of": { "op": "syn", "from": "Stopper", "text": "PLUG" } }
+  },
+  {
+    "clue": "Floor covering: vehicle and animal companion (6)",
+    "answer": "CARPET", "definition": "Floor covering", "category": "objects", "difficulty": 1, "mechanism": "charade",
+    "wordplay": { "op": "concat", "indicator": "and", "parts": [ { "op": "syn", "from": "vehicle", "text": "CAR" }, { "op": "syn", "from": "animal companion", "text": "PET" } ] }
+  },
+  {
+    "clue": "Criticise effort to make a larder (6)",
+    "answer": "PANTRY", "definition": "a larder", "category": "food", "difficulty": 2, "mechanism": "charade", "variant": "en-GB",
+    "wordplay": { "op": "concat", "parts": [ { "op": "syn", "from": "Criticise", "text": "PAN" }, { "op": "syn", "from": "effort", "text": "TRY" } ] }
+  },
+  {
+    "clue": "Box vehicle with heavy weight (6)",
+    "answer": "CARTON", "definition": "Box", "category": "objects", "difficulty": 1, "mechanism": "charade",
+    "wordplay": { "op": "concat", "indicator": "with", "parts": [ { "op": "syn", "from": "vehicle", "text": "CAR" }, { "op": "syn", "from": "heavy weight", "text": "TON" } ] }
+  },
+  {
+    "clue": "Beer holding a coat (5)",
+    "answer": "PAINT", "definition": "coat", "category": "objects", "difficulty": 2, "mechanism": "container",
+    "wordplay": { "op": "insert", "indicator": "holding", "outer": { "op": "syn", "from": "Beer", "text": "PINT" }, "inner": { "op": "lit", "text": "a" } }
+  },
+  {
+    "clue": "Fireside moor with river running through (6)",
+    "answer": "HEARTH", "definition": "Fireside", "category": "objects", "difficulty": 2, "mechanism": "container",
+    "wordplay": { "op": "insert", "indicator": "running through", "outer": { "op": "syn", "from": "moor", "text": "HEATH" }, "inner": { "op": "abbr", "from": "river", "text": "R" } }
+  },
+  {
+    "clue": "Grain loses west for warmth (4)",
+    "answer": "HEAT", "definition": "warmth", "category": "science", "difficulty": 2, "mechanism": "deletion",
+    "wordplay": { "op": "delete", "indicator": "loses", "remove": "W", "remove_from": "west", "of": { "op": "syn", "from": "Grain", "text": "WHEAT" } },
+    "note": "W is the standard abbreviation for west."
+  },
+  {
+    "clue": "Contest of elegance without its leader (4)",
+    "answer": "RACE", "definition": "Contest", "category": "sport", "difficulty": 2, "mechanism": "deletion",
+    "wordplay": { "op": "delete", "indicator": "without its leader", "remove": "first", "of": { "op": "syn", "from": "elegance", "text": "GRACE" } }
+  },
+  {
+    "clue": "Scheme for factory cut short (4)",
+    "answer": "PLAN", "definition": "Scheme", "category": "language", "difficulty": 2, "mechanism": "deletion",
+    "wordplay": { "op": "delete", "indicator": "cut short", "remove": "last", "of": { "op": "syn", "from": "factory", "text": "PLANT" } }
+  },
+  {
+    "clue": "Darkness, we hear, for a chess piece (6)",
+    "answer": "KNIGHT", "definition": "a chess piece", "category": "games", "difficulty": 1, "mechanism": "homophone",
+    "wordplay": { "op": "homophone", "indicator": "we hear", "of": { "op": "syn", "from": "Darkness", "text": "NIGHT" } }
+  },
+  {
+    "clue": "Bloom on the radio is a baking staple (5)",
+    "answer": "FLOUR", "definition": "a baking staple", "category": "food", "difficulty": 1, "mechanism": "homophone",
+    "wordplay": { "op": "homophone", "indicator": "on the radio", "of": { "op": "syn", "from": "Bloom", "text": "FLOWER" } }
+  },
+  {
+    "clue": "More distant parent, so to speak (7)",
+    "answer": "FARTHER", "definition": "More distant", "category": "people", "difficulty": 3, "mechanism": "homophone", "variant": "en-GB",
+    "note": "Works in non-rhotic British accents, where the R in farther is not pronounced.",
+    "wordplay": { "op": "homophone", "indicator": "so to speak", "of": { "op": "syn", "from": "parent", "text": "FATHER" } }
+  },
+  {
+    "clue": "The second mentioned steps, as Americans say (6)",
+    "answer": "LATTER", "definition": "The second mentioned", "category": "language", "difficulty": 3, "mechanism": "homophone", "variant": "en-US",
+    "note": "In most American accents the middle consonant of ladder and latter sounds the same.",
+    "wordplay": { "op": "homophone", "indicator": "as Americans say", "of": { "op": "syn", "from": "steps", "text": "LADDER" } }
+  },
+  {
+    "clue": "Tree covering, or what a dog does (4)",
+    "answer": "BARK", "category": "nature", "difficulty": 1, "mechanism": "double_definition",
+    "wordplay": { "op": "double", "definitions": ["Tree covering", "what a dog does"] }
+  },
+  {
+    "clue": "Flying mammal used in cricket (3)",
+    "answer": "BAT", "category": "sport", "difficulty": 1, "mechanism": "double_definition",
+    "wordplay": { "op": "double", "definitions": ["Flying mammal", "used in cricket"] }
+  },
+  {
+    "clue": "Calm person on the ward (7)",
+    "answer": "PATIENT", "category": "people", "difficulty": 2, "mechanism": "double_definition",
+    "wordplay": { "op": "double", "definitions": ["Calm", "person on the ward"] }
+  },
+  {
+    "clue": "Underground railway in New York, pedestrian tunnel in London (6)",
+    "answer": "SUBWAY", "category": "society", "difficulty": 2, "mechanism": "double_definition",
+    "note": "A nice transatlantic split: the same word names different things in the US and the UK.",
+    "wordplay": { "op": "double", "definitions": ["Underground railway in New York", "pedestrian tunnel in London"] }
+  },
+  {
+    "clue": "Writers often require dictionaries initially for a term (4)",
+    "answer": "WORD", "definition": "a term", "category": "language", "difficulty": 2, "mechanism": "initials",
+    "wordplay": { "op": "initials", "indicator": "initially", "in": "Writers often require dictionaries" }
+  },
+  {
+    "clue": "Young actress: celebrity allowed (7)",
+    "answer": "STARLET", "definition": "Young actress", "category": "people", "difficulty": 2, "mechanism": "charade",
+    "wordplay": { "op": "concat", "parts": [ { "op": "syn", "from": "celebrity", "text": "STAR" }, { "op": "syn", "from": "allowed", "text": "LET" } ] }
+  },
+  {
+    "clue": "Mind born before shower (5)",
+    "answer": "BRAIN", "definition": "Mind", "category": "science", "difficulty": 2, "mechanism": "charade",
+    "wordplay": { "op": "concat", "indicator": "before", "parts": [ { "op": "abbr", "from": "born", "text": "B" }, { "op": "syn", "from": "shower", "text": "RAIN" } ] }
+  },
+  {
+    "clue": "Runes scrambled for a carer (5)",
+    "answer": "NURSE", "definition": "a carer", "category": "people", "difficulty": 1, "mechanism": "anagram",
+    "wordplay": { "op": "anagram", "indicator": "scrambled", "of": [{ "op": "lit", "text": "runes" }] }
+  },
+  {
+    "clue": "Creditor transformed into film boss (8)",
+    "answer": "DIRECTOR", "definition": "film boss", "category": "culture", "difficulty": 2, "mechanism": "anagram",
+    "wordplay": { "op": "anagram", "indicator": "transformed", "of": [{ "op": "lit", "text": "creditor" }] }
+  },
+  {
+    "clue": "Aspire wildly to acclaim (6)",
+    "answer": "PRAISE", "definition": "acclaim", "category": "language", "difficulty": 2, "mechanism": "anagram",
+    "wordplay": { "op": "anagram", "indicator": "wildly", "of": [{ "op": "lit", "text": "aspire" }] }
+  },
+  {
+    "clue": "Mark wrong holding thanks (5)",
+    "answer": "STAIN", "definition": "Mark", "category": "objects", "difficulty": 3, "mechanism": "container", "variant": "en-GB",
+    "note": "TA is informal British English for thanks.",
+    "wordplay": { "op": "insert", "indicator": "holding", "outer": { "op": "syn", "from": "wrong", "text": "SIN" }, "inner": { "op": "abbr", "from": "thanks", "text": "TA" } }
+  },
+  {
+    "clue": "American nappy paid back, returned (6)",
+    "answer": "DIAPER", "definition": "American nappy", "category": "objects", "difficulty": 3, "mechanism": "reversal", "variant": "en-US",
+    "wordplay": { "op": "reverse", "indicator": "returned", "of": { "op": "syn", "from": "paid back", "text": "REPAID" } }
+  },
+  {
+    "clue": "Team stroll for the American pavement (8)",
+    "answer": "SIDEWALK", "definition": "the American pavement", "category": "society", "difficulty": 2, "mechanism": "charade", "variant": "en-US",
+    "wordplay": { "op": "concat", "parts": [ { "op": "syn", "from": "Team", "text": "SIDE" }, { "op": "syn", "from": "stroll", "text": "WALK" } ] }
+  },
+  {
+    "clue": "Sailor Ryan hides a British truck (5)",
+    "answer": "LORRY", "definition": "a British truck", "category": "objects", "difficulty": 2, "mechanism": "hidden", "variant": "en-GB",
+    "wordplay": { "op": "hidden", "indicator": "hides", "in": "Sailor Ryan" }
+  },
+  {
+    "clue": "American fuel or vapour (3)",
+    "answer": "GAS", "category": "science", "difficulty": 1, "mechanism": "double_definition", "variant": "en-US",
+    "wordplay": { "op": "double", "definitions": ["American fuel", "vapour"] }
+  },
+  {
+    "clue": "Angry: one to assess (5)",
+    "answer": "IRATE", "definition": "Angry", "category": "language", "difficulty": 2, "mechanism": "charade",
+    "wordplay": { "op": "concat", "parts": [ { "op": "abbr", "from": "one", "text": "I" }, { "op": "syn", "from": "assess", "text": "RATE" } ] }
+  },
+  {
+    "clue": "Post, it sounds, is masculine (4)",
+    "answer": "MALE", "definition": "masculine", "category": "language", "difficulty": 1, "mechanism": "homophone",
+    "wordplay": { "op": "homophone", "indicator": "it sounds", "of": { "op": "syn", "from": "Post", "text": "MAIL" } }
+  }
+]

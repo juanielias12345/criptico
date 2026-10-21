@@ -1,0 +1,29 @@
+{
+  "name": "criptico",
+  "version": "0.1.0",
+  "description": "Plataforma internacional de crípticos ilimitados",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "db:setup": "node scripts/db-setup.js",
+    "admin:create": "node scripts/create-admin.js",
+    "test": "node --test --test-concurrency=1 test/",
+    "test:e2e": "node --test test/e2e/",
+    "vercel-build": "node scripts/db-setup.js"
+  },
+  "license": "UNLICENSED",
+  "dependencies": {
+    "@libsql/client": "^0.18.0",
+    "an-array-of-english-words": "^2.0.0",
+    "an-array-of-spanish-words": "^2.0.0",
+    "express": "^5.3.0"
+  },
+  "devDependencies": {
+    "playwright-core": "^1.64.1"
+  },
+  "private": true,
+  "engines": {
+    "node": ">=20"
+  }
+}

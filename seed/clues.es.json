@@ -1,0 +1,218 @@
+[
+  {
+    "clue": "Ramo revuelto para el sentimiento (4)",
+    "answer": "AMOR", "definition": "el sentimiento", "category": "sentimientos", "difficulty": 1, "mechanism": "anagram",
+    "wordplay": { "op": "anagram", "indicator": "revuelto", "of": [{ "op": "lit", "text": "ramo" }] }
+  },
+  {
+    "clue": "Amor de vuelta en la capital italiana (4)",
+    "answer": "ROMA", "definition": "la capital italiana", "category": "geografia", "difficulty": 1, "mechanism": "reversal", "proper_noun": true,
+    "wordplay": { "op": "reverse", "indicator": "de vuelta", "of": { "op": "lit", "text": "amor" } }
+  },
+  {
+    "clue": "Queso solo esconde un animal del bosque (3)",
+    "answer": "OSO", "definition": "un animal del bosque", "category": "animales", "difficulty": 1, "mechanism": "hidden",
+    "wordplay": { "op": "hidden", "indicator": "esconde", "in": "queso solo" }
+  },
+  {
+    "clue": "Mar temido esconde la pintura, por ejemplo (4)",
+    "answer": "ARTE", "definition": "la pintura, por ejemplo", "category": "cultura", "difficulty": 2, "mechanism": "hidden",
+    "wordplay": { "op": "hidden", "indicator": "esconde", "in": "mar temido" }
+  },
+  {
+    "clue": "Jamón loco para una religiosa (5)",
+    "answer": "MONJA", "definition": "una religiosa", "category": "personas", "difficulty": 1, "mechanism": "anagram",
+    "wordplay": { "op": "anagram", "indicator": "loco", "of": [{ "op": "lit", "text": "jamón" }] }
+  },
+  {
+    "clue": "Trapo roto en el alumbramiento (5)",
+    "answer": "PARTO", "definition": "el alumbramiento", "category": "personas", "difficulty": 2, "mechanism": "anagram",
+    "wordplay": { "op": "anagram", "indicator": "roto", "of": [{ "op": "lit", "text": "trapo" }] }
+  },
+  {
+    "clue": "Astro rey y cubo de juego para un militar (7)",
+    "answer": "SOLDADO", "definition": "un militar", "category": "personas", "difficulty": 2, "mechanism": "charade",
+    "wordplay": { "op": "concat", "parts": [ { "op": "syn", "from": "astro rey", "text": "SOL" }, { "op": "syn", "from": "cubo de juego", "text": "DADO" } ] }
+  },
+  {
+    "clue": "Boda en hogar donde no digo la verdad (10)",
+    "answer": "CASAMIENTO", "definition": "Boda", "category": "sociedad", "difficulty": 3, "mechanism": "charade",
+    "wordplay": { "op": "concat", "parts": [ { "op": "syn", "from": "hogar", "text": "CASA" }, { "op": "syn", "from": "no digo la verdad", "text": "MIENTO" } ] }
+  },
+  {
+    "clue": "Número de Arquímedes y roedor: un corsario (6)",
+    "answer": "PIRATA", "definition": "un corsario", "category": "personas", "difficulty": 2, "mechanism": "charade",
+    "wordplay": { "op": "concat", "parts": [ { "op": "syn", "from": "número de Arquímedes", "text": "PI" }, { "op": "syn", "from": "roedor", "text": "RATA" } ] }
+  },
+  {
+    "clue": "Senda donde el de pelo blanco guarda lo mío (6)",
+    "answer": "CAMINO", "definition": "Senda", "category": "naturaleza", "difficulty": 3, "mechanism": "container",
+    "wordplay": { "op": "insert", "indicator": "guarda", "outer": { "op": "syn", "from": "el de pelo blanco", "text": "CANO" }, "inner": { "op": "syn", "from": "lo mío", "text": "MI" } }
+  },
+  {
+    "clue": "Peso que guarda al rey: un recluso (5)",
+    "answer": "PRESO", "definition": "un recluso", "category": "personas", "difficulty": 3, "mechanism": "container",
+    "wordplay": { "op": "insert", "indicator": "guarda", "outer": { "op": "lit", "text": "peso" }, "inner": { "op": "abbr", "from": "rey", "text": "R" } }
+  },
+  {
+    "clue": "Saludo sin principio forma una onda en el mar (3)",
+    "answer": "OLA", "definition": "una onda en el mar", "category": "naturaleza", "difficulty": 1, "mechanism": "deletion",
+    "wordplay": { "op": "delete", "indicator": "sin principio", "remove": "first", "of": { "op": "syn", "from": "saludo", "text": "HOLA" } }
+  },
+  {
+    "clue": "Prenda de abrigo de alguien competente sin fin (4)",
+    "answer": "CAPA", "definition": "Prenda de abrigo", "category": "objetos", "difficulty": 3, "mechanism": "deletion",
+    "wordplay": { "op": "delete", "indicator": "sin fin", "remove": "last", "of": { "op": "syn", "from": "alguien competente", "text": "CAPAZ" } }
+  },
+  {
+    "clue": "Portaequipajes del coche, que suena a rumiante (4)",
+    "answer": "BACA", "definition": "Portaequipajes del coche", "category": "objetos", "difficulty": 3, "mechanism": "homophone", "variant": "es-ES",
+    "note": "«Baca» es la palabra habitual en España para el portaequipajes del techo.",
+    "wordplay": { "op": "homophone", "indicator": "suena a", "of": { "op": "syn", "from": "rumiante", "text": "VACA" } }
+  },
+  {
+    "clue": "Hogar que, se oye, es una cacería (4)",
+    "answer": "CASA", "definition": "Hogar", "category": "objetos", "difficulty": 2, "mechanism": "homophone", "variant": "es-AR",
+    "note": "Funciona con seseo, como en el Río de la Plata: «caza» y «casa» suenan igual.",
+    "wordplay": { "op": "homophone", "indicator": "se oye", "of": { "op": "syn", "from": "una cacería", "text": "CAZA" } }
+  },
+  {
+    "clue": "Entidad financiera para sentarse en el parque (5)",
+    "answer": "BANCO", "category": "objetos", "difficulty": 2, "mechanism": "double_definition",
+    "wordplay": { "op": "double", "definitions": ["Entidad financiera", "para sentarse en el parque"] }
+  },
+  {
+    "clue": "Felino que sirve para levantar un coche (4)",
+    "answer": "GATO", "category": "animales", "difficulty": 1, "mechanism": "double_definition",
+    "wordplay": { "op": "double", "definitions": ["Felino", "que sirve para levantar un coche"] }
+  },
+  {
+    "clue": "Grupo que te lleva por Buenos Aires (9)",
+    "answer": "COLECTIVO", "category": "sociedad", "difficulty": 2, "mechanism": "double_definition", "variant": "es-AR",
+    "note": "En Argentina el colectivo es el autobús urbano.",
+    "wordplay": { "op": "double", "definitions": ["Grupo", "que te lleva por Buenos Aires"] }
+  },
+  {
+    "clue": "Infusión rioplatense que pone fin a la partida de ajedrez (4)",
+    "answer": "MATE", "category": "comida", "difficulty": 1, "mechanism": "double_definition", "variant": "es-AR",
+    "wordplay": { "op": "double", "definitions": ["Infusión rioplatense", "que pone fin a la partida de ajedrez"] }
+  },
+  {
+    "clue": "Acera porteña: mirar los años sin final (6)",
+    "answer": "VEREDA", "definition": "Acera porteña", "category": "sociedad", "difficulty": 3, "mechanism": "charade", "variant": "es-AR",
+    "wordplay": { "op": "concat", "parts": [
+      { "op": "syn", "from": "mirar", "text": "VER" },
+      { "op": "delete", "indicator": "sin final", "remove": "last", "of": { "op": "syn", "from": "los años", "text": "EDAD" } }
+    ] }
+  },
+  {
+    "clue": "Saga fascinante esconde anteojos españoles (5)",
+    "answer": "GAFAS", "definition": "anteojos españoles", "category": "objetos", "difficulty": 2, "mechanism": "hidden", "variant": "es-ES",
+    "wordplay": { "op": "hidden", "indicator": "esconde", "in": "saga fascinante" }
+  },
+  {
+    "clue": "De acuerdo, en España, y bono de compra (4)",
+    "answer": "VALE", "category": "lenguaje", "difficulty": 2, "mechanism": "double_definition", "variant": "es-ES",
+    "wordplay": { "op": "double", "definitions": ["De acuerdo, en España", "bono de compra"] }
+  },
+  {
+    "clue": "Japonés alterado: lo que absorbe en el baño (7)",
+    "answer": "ESPONJA", "definition": "lo que absorbe en el baño", "category": "objetos", "difficulty": 2, "mechanism": "anagram",
+    "wordplay": { "op": "anagram", "indicator": "alterado", "of": [{ "op": "lit", "text": "japonés" }] }
+  },
+  {
+    "clue": "Paleto confundido con el balón (6)",
+    "answer": "PELOTA", "definition": "el balón", "category": "deportes", "difficulty": 1, "mechanism": "anagram",
+    "wordplay": { "op": "anagram", "indicator": "confundido", "of": [{ "op": "lit", "text": "paleto" }] }
+  },
+  {
+    "clue": "Frutas de verano con solemne desorden (7)",
+    "answer": "MELONES", "definition": "Frutas de verano", "category": "comida", "difficulty": 2, "mechanism": "anagram",
+    "wordplay": { "op": "anagram", "indicator": "desorden", "of": [{ "op": "lit", "text": "solemne" }] }
+  },
+  {
+    "clue": "Oído que vuelve con rencor (4)",
+    "answer": "ODIO", "definition": "rencor", "category": "sentimientos", "difficulty": 1, "mechanism": "reversal",
+    "wordplay": { "op": "reverse", "indicator": "que vuelve", "of": { "op": "lit", "text": "oído" } }
+  },
+  {
+    "clue": "Ralos de vuelta: relativo al astro rey (5)",
+    "answer": "SOLAR", "definition": "relativo al astro rey", "category": "ciencia", "difficulty": 2, "mechanism": "reversal",
+    "wordplay": { "op": "reverse", "indicator": "de vuelta", "of": { "op": "lit", "text": "ralos" } }
+  },
+  {
+    "clue": "Bolsa grande de ocas que regresan (4)",
+    "answer": "SACO", "definition": "Bolsa grande", "category": "objetos", "difficulty": 1, "mechanism": "reversal",
+    "wordplay": { "op": "reverse", "indicator": "que regresan", "of": { "op": "lit", "text": "ocas" } }
+  },
+  {
+    "clue": "Asesino y guardo el norte en una capa (5)",
+    "answer": "MANTO", "definition": "una capa", "category": "objetos", "difficulty": 3, "mechanism": "container",
+    "wordplay": { "op": "insert", "indicator": "guardo", "outer": { "op": "syn", "from": "asesino", "text": "MATO" }, "inner": { "op": "abbr", "from": "el norte", "text": "N" } }
+  },
+  {
+    "clue": "Embarcación: taberna con cobalto (5)",
+    "answer": "BARCO", "definition": "Embarcación", "category": "objetos", "difficulty": 2, "mechanism": "charade",
+    "wordplay": { "op": "concat", "indicator": "con", "parts": [ { "op": "syn", "from": "taberna", "text": "BAR" }, { "op": "abbr", "from": "cobalto", "text": "CO" } ] }
+  },
+  {
+    "clue": "Agua salada: al principio, mira arenas remotas (3)",
+    "answer": "MAR", "definition": "Agua salada", "category": "naturaleza", "difficulty": 2, "mechanism": "initials",
+    "wordplay": { "op": "initials", "indicator": "al principio", "in": "mira arenas remotas" }
+  },
+  {
+    "clue": "Nota musical con oxígeno, sin compañía (4)",
+    "answer": "SOLO", "definition": "sin compañía", "category": "lenguaje", "difficulty": 1, "mechanism": "charade",
+    "wordplay": { "op": "concat", "indicator": "con", "parts": [ { "op": "abbr", "from": "nota musical", "text": "SOL" }, { "op": "abbr", "from": "oxígeno", "text": "O" } ] }
+  },
+  {
+    "clue": "Alimento horneado que adora un país centroamericano (6)",
+    "answer": "PANAMÁ", "definition": "un país centroamericano", "category": "geografia", "difficulty": 2, "mechanism": "charade", "proper_noun": true,
+    "wordplay": { "op": "concat", "parts": [ { "op": "syn", "from": "Alimento horneado", "text": "PAN" }, { "op": "syn", "from": "adora", "text": "AMA" } ] }
+  },
+  {
+    "clue": "Joya marina que pierde la ele: una fruta (4)",
+    "answer": "PERA", "definition": "una fruta", "category": "comida", "difficulty": 2, "mechanism": "deletion",
+    "wordplay": { "op": "delete", "indicator": "pierde la", "remove": "L", "remove_from": "ele", "of": { "op": "syn", "from": "Joya marina", "text": "PERLA" } },
+    "note": "«Ele» es el nombre de la letra L."
+  },
+  {
+    "clue": "Entras alterado: utensilio de cocina (6)",
+    "answer": "SARTÉN", "definition": "utensilio de cocina", "category": "objetos", "difficulty": 1, "mechanism": "anagram",
+    "wordplay": { "op": "anagram", "indicator": "alterado", "of": [{ "op": "lit", "text": "entras" }] }
+  },
+  {
+    "clue": "Décimo alterado para el doctor (6)",
+    "answer": "MÉDICO", "definition": "el doctor", "category": "personas", "difficulty": 1, "mechanism": "anagram",
+    "wordplay": { "op": "anagram", "indicator": "alterado", "of": [{ "op": "lit", "text": "décimo" }] }
+  },
+  {
+    "clue": "Alemán gordo oculta una fruta tropical (5)",
+    "answer": "MANGO", "definition": "una fruta tropical", "category": "comida", "difficulty": 2, "mechanism": "hidden",
+    "wordplay": { "op": "hidden", "indicator": "oculta", "in": "alemán gordo" }
+  },
+  {
+    "clue": "El imán contiene la capital peruana (4)",
+    "answer": "LIMA", "definition": "la capital peruana", "category": "geografia", "difficulty": 1, "mechanism": "hidden", "proper_noun": true,
+    "wordplay": { "op": "hidden", "indicator": "contiene", "in": "El imán" }
+  },
+  {
+    "clue": "Pasar las páginas, dicen, es echar un vistazo (6)",
+    "answer": "HOJEAR", "definition": "Pasar las páginas", "category": "cultura", "difficulty": 3, "mechanism": "homophone",
+    "wordplay": { "op": "homophone", "indicator": "dicen", "of": { "op": "syn", "from": "echar un vistazo", "text": "OJEAR" } }
+  },
+  {
+    "clue": "Cañería que, de oído, poseyó (4)",
+    "answer": "TUBO", "definition": "Cañería", "category": "objetos", "difficulty": 2, "mechanism": "homophone",
+    "wordplay": { "op": "homophone", "indicator": "de oído", "of": { "op": "syn", "from": "poseyó", "text": "TUVO" } }
+  },
+  {
+    "clue": "Agua salada, uno romano y se queda quieta ante la cámara: insecto de colores (8)",
+    "answer": "MARIPOSA", "definition": "insecto de colores", "category": "animales", "difficulty": 3, "mechanism": "charade",
+    "wordplay": { "op": "concat", "parts": [
+      { "op": "syn", "from": "Agua salada", "text": "MAR" },
+      { "op": "abbr", "from": "uno romano", "text": "I" },
+      { "op": "syn", "from": "se queda quieta ante la cámara", "text": "POSA" }
+    ] }
+  }
+]

@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Panel · Cripta</title>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/css/app.css">
+<link rel="stylesheet" href="/css/admin.css">
+</head>
+<body class="admin">
+<header class="site-header">
+  <a class="brand" href="#dashboard"><svg class="logo-mark" viewBox="0 0 32 32" aria-hidden="true"><rect x="2" y="2" width="28" height="28" rx="7" fill="currentColor"/><path d="M9 11h6v6H9zM17 15h6v6h-6z" fill="var(--bg)"/></svg><span>Panel</span></a>
+  <span class="muted small" id="who"></span>
+  <div class="header-tools"><a class="chip" href="/" target="_blank" rel="noopener">Ver sitio ↗</a><button class="chip" id="logout" hidden>Salir</button></div>
+</header>
+<div class="admin-wrap">
+  <nav class="admin-nav" id="admin-nav" aria-label="Secciones del panel" hidden>
+    <a href="#dashboard" data-perm="dashboard">Resumen</a>
+    <p class="nav-group">Catálogo</p>
+    <a href="#catalog" data-perm="catalog.read">Crípticos</a>
+    <a href="#new" data-perm="catalog.write">Nuevo críptico</a>
+    <a href="#generated" data-perm="catalog.write">Generados en revisión</a>
+    <a href="#reports" data-perm="reports.manage">Errores informados</a>
+    <a href="#duplicates" data-perm="catalog.read">Duplicados</a>
+    <p class="nav-group">Importaciones externas</p>
+    <a href="#sources" data-perm="sources.read">Fuentes</a>
+    <a href="#imports" data-perm="sources.read">Elementos importados</a>
+    <a href="#runs" data-perm="sources.read">Sincronizaciones</a>
+    <p class="nav-group">Propuestas de usuarios</p>
+    <a href="#submissions" data-perm="submissions.read">Moderación</a>
+    <p class="nav-group">Configuración</p>
+    <a href="#languages" data-perm="dashboard">Idiomas</a>
+    <a href="#settings" data-perm="dashboard">Reglas y funciones</a>
+    <a href="#users" data-perm="users.manage">Equipo</a>
+    <a href="#jobs" data-perm="dashboard">Tareas y errores</a>
+    <a href="#audit" data-perm="audit.read">Auditoría</a>
+  </nav>
+  <main id="admin-main" tabindex="-1"><p class="muted">Cargando…</p></main>
+</div>
+<script src="/js/admin.js" defer></script>
+</body>
+</html>
