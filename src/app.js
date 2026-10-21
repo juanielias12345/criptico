@@ -31,6 +31,28 @@ function securityHeaders(config) {
   };
 }
 
+// Qué identificador de jugador usa cada petición de la API.
+// - Con sesión: el identificador de este navegador si ya es de la cuenta; si no tiene
+//   partidas, se vincula (no hay nada que mezclar); si tiene partidas sin cuenta, NO se
+//   vincula solo: se ofrece y solo se une con autorización expresa (POST /api/me/link-anonymous).
+// - Sin sesión: si el identificador del navegador pertenece a una cuenta (por ejemplo,
+//   después de cerrar sesión en un equipo compartido), se juega como alguien nuevo.
+async function resolvePlayer(db, req) {
+  const pid = /^[0-9a-f-]{36}$/.test(req.cookies.pid || '') ? req.cookies.pid : null;
+  req.cookiePlayerId = pid;
+  req.anonPlayer = null;
+  const p = pid ? await db.get('SELECT id, user_id, (SELECT COUNT(*) FROM games g WHERE g.player_id = players.id) AS games FROM players WHERE id = ? AND retired_at IS NULL', [pid]) : null;
+  if (!req.user) { req.playerId = p && !p.user_id ? p.id : null; return; }
+  if (p && p.user_id === req.user.id) { req.playerId = p.id; return; }
+  req.playerId = null;
+  if (p && !p.user_id) {
+    if (!p.games) { await db.run('UPDATE players SET user_id = ? WHERE id = ? AND user_id IS NULL', [req.user.id, p.id]); req.playerId = p.id; return; }
+    req.anonPlayer = { id: p.id, games: p.games };
+  }
+  const own = await db.get('SELECT id FROM players WHERE user_id = ? ORDER BY last_seen_at DESC LIMIT 1', [req.user.id]);
+  req.playerId = own ? own.id : null;
+}
+
 function createApp({ db, config }) {
   const app = express();
   app.disable('x-powered-by');
@@ -49,6 +71,7 @@ function createApp({ db, config }) {
       req.session = await sessionFromToken(db, req.cookies.sid);
       req.user = req.session ? req.session.user : null;
       req.playerId = req.cookies.pid || null;
+      if (req.path.startsWith('/api/') && !req.path.startsWith('/api/admin')) await resolvePlayer(db, req);
       next();
     } catch (e) { next(e); }
   });
@@ -72,6 +95,7 @@ function createApp({ db, config }) {
   });
 
   app.use('/api/admin', require('./routes/admin')());
+  app.use('/api', require('./routes/profile')());
   app.use('/api', require('./routes/api')());
   app.use(express.static(path.join(__dirname, '..', 'public'), { maxAge: config.production ? '7d' : 0, index: false }));
   app.use(require('./routes/pages')());

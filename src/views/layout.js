@@ -4,6 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const { t, ROUTES, T } = require('../i18n');
+const PTEXT = require('./profile-text');
 
 // Versión de los archivos estáticos: cambia en cada despliegue para que nadie
 // quede con un CSS o JS viejo en caché junto a páginas nuevas.
@@ -11,7 +12,7 @@ const ASSET_V = (() => {
   if (process.env.VERCEL_GIT_COMMIT_SHA) return process.env.VERCEL_GIT_COMMIT_SHA.slice(0, 10);
   try {
     const h = crypto.createHash('sha256');
-    for (const f of ['css/app.css', 'js/app.js']) h.update(fs.readFileSync(path.join(__dirname, '..', '..', 'public', f)));
+    for (const f of ['css/app.css', 'js/app.js', 'js/profile.js']) h.update(fs.readFileSync(path.join(__dirname, '..', '..', 'public', f)));
     return h.digest('hex').slice(0, 10);
   } catch { return Date.now().toString(36); }
 })();
@@ -46,14 +47,17 @@ const ICON = {
 };
 
 // boot: datos para el script del navegador (no ejecutable, compatible con la CSP).
-function layout({ lang, config, title, description, page, path, alternates, body, boot = {}, jsonLd, noindex }) {
+function layout({ lang, config, title, description, page, path, alternates, body, boot = {}, jsonLd, noindex, scripts = [], ogImage }) {
   const site = config.siteName;
   const fullTitle = title ? `${title} · ${site}` : `${site} · ${t(lang, 'tagline')}`;
   const canonical = `${config.siteUrl}${path}`;
   const alt = alternates || {};
   const nav = [['play', 'nav_play'], ['archive', 'nav_archive'], ['daily', 'nav_daily'], ['help', 'nav_help']];
   const strings = T[lang];
-  const bootData = JSON.stringify({ lang, page, site, routes: ROUTES[lang], allRoutes: ROUTES, strings, ...boot }).replace(/</g, '\\u003c');
+  // pmini: lo mínimo del perfil que usa el juego (avisos de logros y práctica dirigida).
+  const PT = PTEXT[lang];
+  const pmini = { ach: Object.fromEntries(Object.entries(PT.ach).map(([k, v]) => [k, v[0]])), ach_new: PT.ach_new, practice_banner: PT.practice_banner, practice_clear: PT.practice_clear };
+  const bootData = JSON.stringify({ lang, page, site, routes: ROUTES[lang], allRoutes: ROUTES, strings, pmini, ...boot }).replace(/</g, '\\u003c');
   return `<!doctype html>
 <html lang="${lang}">
 <head>
@@ -69,6 +73,7 @@ ${noindex ? '<meta name="robots" content="noindex">' : ''}
 <meta property="og:description" content="${esc(description || t(lang, 'home_lead'))}">
 <meta property="og:type" content="website">
 <meta property="og:url" content="${esc(canonical)}">
+${ogImage ? `<meta property="og:image" content="${esc(ogImage)}">\n<meta name="twitter:card" content="summary_large_image">` : ''}
 <meta name="theme-color" content="#f4eee2" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#15130f" media="(prefers-color-scheme: dark)">
 <link rel="preload" href="/fonts/fraunces-latin-opsz-normal.woff2" as="font" type="font/woff2" crossorigin>
@@ -127,8 +132,9 @@ ${body}
 <div id="dialog-root"></div>
 <script type="application/json" id="boot">${bootData}</script>
 <script src="/js/app.js?v=${ASSET_V}" defer></script>
+${scripts.map((src) => `<script src="${esc(src)}?v=${ASSET_V}" defer></script>`).join('\n')}
 </body>
 </html>`;
 }
 
-module.exports = { layout, esc, href, ICON, LOGO };
+module.exports = { layout, esc, href, ICON, LOGO, ASSET_V };

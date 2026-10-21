@@ -65,3 +65,31 @@ npm run test:e2e  # navegador Chromium sin interfaz
 | 17 | Solicitudes de datos y estadísticas agregadas que se mantienen | panel «#17…» |
 | 18 | Panel en escritorio y móvil | e2e «#18 panel de administración en escritorio y móvil» |
 | 20 | Alertas con umbrales, sin duplicados; tareas que se recuperan | panel «#20…» |
+
+## Perfil personal: las 16 pruebas pedidas
+
+Resultado al publicar: `npm test` 77/77 y `npm run test:e2e` 14/14 (dos corridas seguidas sin fallos).
+
+| # | Prueba | Dónde |
+| --- | --- | --- |
+| 1–3 | Partida guardada, tiempo coherente, intentos asociados a la partida correcta | perfil «#1 #2 #3…» |
+| 4, 5 | Pistas registradas con orden y momento; revelada ≠ resuelta | perfil «#4 #5…» |
+| 6, 7 | Historial y gráficos coinciden con los registros | perfil «#6 #7…» |
+| 8 | Logros según su condición (incluida la racha de días) | perfil «#8 #9 #10…» y «#8 condición de racha…» |
+| 9, 10 | Récords sin duplicar; repetir un críptico no suma únicos ni experiencia | perfil «#8 #9 #10…» |
+| 11 | El perfil público, la tarjeta compartida y los rankings no exponen datos privados | perfil «#11…» (dos pruebas) |
+| 12 | Vincular partidas anónimas requiere autorización | perfil «#12…» y e2e «#13 perfil personal…» |
+| 13 | Escritorio y móvil | e2e «#13 perfil personal en escritorio y móvil…» |
+| 14 | Cortes de conexión (reenvíos simultáneos, fallo al evaluar logros) no corrompen el resultado | perfil «#14…» |
+| 15 | El borrado de datos se aplica (incluido el acceso desde el mismo navegador) | perfil «#15…» |
+| 16 | Las recomendaciones llevan a crípticos jugables y se pueden apagar | perfil «#16…» y e2e «práctica dirigida…» |
+| — | Rendimiento con 3000 partidas, uso de índices y paginado | perfil «rendimiento…» |
+
+Problemas que encontró la revisión y se corrigieron:
+
+- Una cuenta eliminada podía volver a ver sus partidas desde el mismo navegador sin sesión. Se agregó `players.retired_at`.
+- La interfaz escribía «null» en lugares vacíos.
+- El mapa de fortalezas no tomaba el color de cada nivel.
+- Los ejes de los gráficos mostraban valores como 1,3 o 3,8 para conteos.
+- En móvil, el historial ocupaba demasiado.
+- Una prueba del panel fallaba a veces por una condición de carrera.

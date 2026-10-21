@@ -16,7 +16,7 @@
       else if (k === 'html') n.innerHTML = v;
       else if (k.startsWith('on')) n.addEventListener(k.slice(2), v); else n.setAttribute(k, v === true ? '' : v);
     }
-    for (const kid of kids.flat()) if (kid !== null && kid !== undefined && kid !== false && kid !== '') n.append(kid.nodeType ? kid : document.createTextNode(String(kid)));
+    for (const kid of kids.flat(Infinity)) if (kid !== null && kid !== undefined && kid !== false && kid !== '') n.append(kid.nodeType ? kid : document.createTextNode(String(kid)));
     return n;
   };
   const svg = (paths, extra) => {
@@ -275,11 +275,32 @@
   const dots = (n) => el('span', { class: 'dots', 'aria-hidden': 'true' }, [1, 2, 3, 4, 5].map((i) => el('i', { class: i <= n ? 'on' : null })));
   const lengthOf = (enumeration) => String(enumeration).split(/[,-]/).reduce((s, x) => s + (Number(x) || 0), 0);
 
+  // Logros nuevos que devuelve el servidor al cerrar una partida (se pueden apagar en el perfil).
+  function announceAchievements(codes) {
+    if (!codes || !codes.length || store.get('cripta.ach_notify') === false) return;
+    const PB = BOOT.pmini || {};
+    const names = codes.map((c) => { const m = /^(.+)_(\d+)$/.exec(c); return m && PB.ach && PB.ach[m[1]] ? PB.ach[m[1]] + ' · ' + m[2] : c; });
+    toast((PB.ach_new || '{name}').replace('{name}', names.join(', ')));
+  }
+
   // ── Juego ──
   function Game(root, { kind }) {
     const st = { game: null, clue: null, hints: [], solved: false, finished: false, streak: 0, timer: null, mode: BOOT.mode || 'infinite', category: null, tried: [] };
     let busy = false;
     let shownId = null;
+    // Práctica dirigida desde el perfil: ?mechanism=…&difficulty=…&choice=… (no cambia tus preferencias).
+    const qp = new URLSearchParams(location.search);
+    const focus = kind === 'play' ? {
+      mechanism: /^[a-z_]{2,40}$/.test(qp.get('mechanism') || '') ? qp.get('mechanism') : null,
+      difficulty: /^[1-5]$/.test(qp.get('difficulty') || '') ? Number(qp.get('difficulty')) : null,
+      choice: /^[a-z]{2}(-[A-Z]{2})?$/.test(qp.get('choice') || '') ? qp.get('choice') : null,
+    } : {};
+    if (focus.mechanism || focus.difficulty || focus.choice) {
+      const PB = BOOT.pmini || {};
+      const label = [focus.mechanism ? t('mech_' + focus.mechanism) : null, focus.difficulty ? t('diff_' + focus.difficulty) : null, focus.choice ? focus.choice : null].filter(Boolean).join(' · ');
+      root.before(el('div', { class: 'notice info practice-focus', id: 'practice-focus' }, el('p', { text: (PB.practice_banner || '{x}').replace('{x}', label) }),
+        el('a', { class: 'link-btn', href: route('play'), text: PB.practice_clear || '×' })));
+    }
 
     function enumTiles(enumeration, value, { ok, shown } = {}) {
       const letters = lettersOf(value);
@@ -341,7 +362,8 @@
       root.setAttribute('aria-busy', 'true');
       const nb = $('#next-btn', root); if (nb) { nb.setAttribute('aria-busy', 'true'); nb.disabled = true; }
       try {
-        const body = { choice: kind === 'clue' ? (BOOT.clueVariant || BOOT.clueLang) : prefs.choice, country: prefs.country, mode: kind === 'clue' ? 'shared' : st.mode, category: st.category };
+        const body = { choice: kind === 'clue' ? (BOOT.clueVariant || BOOT.clueLang) : focus.choice || prefs.choice, country: prefs.country, mode: kind === 'clue' ? 'shared' : st.mode, category: st.category,
+          mechanism: focus.mechanism || undefined, difficulty: focus.difficulty || undefined };
         if (kind === 'clue') body.slug = BOOT.slug;
         const data = await api(kind === 'daily' ? '/api/daily/start' : '/api/game/start', { method: 'POST', body });
         Object.assign(st, { game: data.game_id, clue: data.clue, notice: data.notice, recycled: data.recycled, hints: [], solved: false, finished: false,
@@ -398,7 +420,7 @@
         st.attempts = r.attempts || st.attempts;
         if (r.correct) {
           stopTimer(); st.solved = true; st.finished = true; st.solution = r.solution; st.daily = r.daily; st.streak++;
-          st.feedback = null; session.bump('solved');
+          st.feedback = null; session.bump('solved'); announceAchievements(r.achievements);
         } else if (!r.empty) {
           st.tried.push(key);
           const fb = (r.feedback || [])[0];
@@ -424,13 +446,13 @@
       try {
         const r = await api('/api/game/' + st.game + '/reveal', { method: 'POST', body: {} });
         stopTimer(); st.solution = r.solution; st.daily = r.daily; st.finished = true; st.streak = 0;
-        st.feedback = null;
+        st.feedback = null; announceAchievements(r.achievements);
       } catch (e) { st.feedback = { cls: 'error', text: t('error_generic') }; }
       render();
     }
 
     async function next() {
-      if (st.game && !st.finished) { try { await api('/api/game/' + st.game + '/skip', { method: 'POST', body: {} }); } catch (e) { /* ignorar */ } if (st.mode === 'streak') st.streak = 0; }
+      if (st.game && !st.finished) { try { const r = await api('/api/game/' + st.game + '/skip', { method: 'POST', body: {} }); announceAchievements(r.achievements); } catch (e) { /* ignorar */ } if (st.mode === 'streak') st.streak = 0; }
       if (kind === 'clue' || kind === 'daily') { location.href = route('play'); return; }
       start();
     }
@@ -735,61 +757,7 @@
     if (code.value) load();
   }
 
-  // ── Perfil y cuenta ──
-  async function Profile(root) {
-    await authReady;
-    const s = await api('/api/me/stats');
-    root.textContent = '';
-    if (!s.played) {
-      root.append(el('div', { class: 'empty' }, el('p', { class: 'serif', text: t('no_stats') }), el('a', { class: 'btn primary', href: route('play'), text: t('home_cta') })));
-    } else {
-      const stat = (v, k, meter) => el('div', { class: 'stat' }, el('b', { text: String(v) }), el('span', { text: t(k) }), meter != null ? el('div', { class: 'meter', 'aria-hidden': 'true' }, el('i', { style: '--v:' + meter + '%' })) : null);
-      root.append(el('div', { class: 'stats-grid', id: 'stats' },
-        stat(s.solved, 'solved'), stat(s.solve_rate + '%', 'solve_rate', s.solve_rate), stat(s.current_streak, 'current_streak'), stat(s.best_streak, 'best_streak')));
-      const allMechs = ['anagram', 'hidden', 'reversal', 'container', 'deletion', 'charade', 'homophone', 'double_definition', 'initials'];
-      const done = new Set(s.mechanisms_solved || []);
-      root.append(el('div', { class: 'profile-cols' },
-        el('section', {}, el('h2', { text: t('learned') }), el('ul', { class: 'learned' }, allMechs.map((x) => el('li', { class: done.has(x) ? '' : 'off' }, el('span', { text: t('mech_' + x) }), el('span', { class: 'mark', text: done.has(x) ? '✓' : '—' }))))),
-        el('section', {}, el('h2', { text: t('achievements') }), s.achievements.length ? el('ul', { class: 'ach' }, s.achievements.map((a) => el('li', { text: t('ach_' + a) }))) : el('p', { class: 'muted', text: '—' }),
-          el('h2', { style: 'margin-top:32px', text: t('daily_streak') }), el('p', { class: 'serif', style: 'font-size:2rem', text: String(s.daily_streak) }),
-          s.languages && s.languages.length ? el('div', {}, el('h2', { style: 'margin-top:32px', text: t('languages_used') }), el('p', { text: s.languages.map((x) => x.toUpperCase()).join(' · ') })) : null)));
-    }
-    if (!me) { root.append(el('div', { class: 'banner', style: 'margin-top:48px' }, el('div', {}, el('h2', { text: t('account_title') }), el('p', { text: t('account_lead') })), el('a', { class: 'btn', href: route('account'), text: t('login') + ' / ' + t('register') }))); return; }
-    const [fav, subs, notes] = await Promise.all([api('/api/me/favorites'), api('/api/me/submissions'), api('/api/me/notifications')]);
-    const sec = (title, body) => el('section', {}, el('h2', { text: title }), body);
-    root.append(el('div', { class: 'profile-cols', style: 'margin-top:48px' },
-      sec(t('favorites'), fav.items.length ? el('ul', { class: 'plain-list' }, fav.items.map((c) => el('li', {}, el('a', { class: 'clue-text', href: route('clue', '/' + c.slug), text: c.clue })))) : el('p', { class: 'muted', text: '—' })),
-      sec(t('my_submissions'), subs.items.length ? el('ul', { class: 'plain-list' }, subs.items.map((x) => el('li', {}, el('span', { class: 'clue-text', text: x.clue_text }), el('span', {}, el('span', { class: 'status-pill ' + x.status, text: t('st_' + x.status) })), x.moderator_note ? el('span', { class: 'small', text: x.moderator_note }) : null))) : el('p', { class: 'muted', text: '—' })),
-      sec(t('notifications'), notes.items.length ? el('ul', { class: 'plain-list' }, notes.items.map((n) => el('li', { class: 'small', text: t('st_' + n.kind.replace('submission_', '')) + ' · ' + new Date(n.created_at).toLocaleString(L) }))) : el('p', { class: 'muted', text: '—' })),
-      sec(me.username, el('div', { class: 'form-actions' },
-        el('button', { class: 'btn', type: 'button', id: 'logout-btn', text: t('logout'), onclick: async () => { await api('/api/auth/logout', { method: 'POST', body: {} }); location.reload(); } }),
-        el('button', { class: 'link-btn', type: 'button', text: L === 'es' ? 'Eliminar mi cuenta' : 'Delete my account', onclick: async () => {
-          if (!window.confirm(L === 'es' ? '¿Eliminar tu cuenta? No se puede deshacer.' : 'Delete your account? This cannot be undone.')) return;
-          await api('/api/me/account', { method: 'DELETE', body: {} }); location.href = route('home');
-        } }))),
-      await dataSection()));
-
-    // Derechos sobre los datos: copia descargable y pedido de corrección.
-    async function dataSection() {
-      const es = L === 'es';
-      const reqs = await api('/api/me/data-requests').catch(() => ({ items: [] }));
-      const msg = el('textarea', { id: 'rect-msg', rows: '3', maxlength: '2000', placeholder: es ? '¿Qué dato hay que corregir?' : 'What should be corrected?' });
-      const out = el('p', { class: 'small', role: 'status' });
-      const label = { access: es ? 'Acceso' : 'Access', rectification: es ? 'Corrección' : 'Correction', deletion: es ? 'Eliminación' : 'Deletion' };
-      const st = { open: es ? 'recibida' : 'received', in_progress: es ? 'en curso' : 'in progress', done: es ? 'resuelta' : 'done', rejected: es ? 'rechazada' : 'rejected' };
-      return sec(es ? 'Tus datos' : 'Your data', el('div', { class: 'form' },
-        el('p', { class: 'small', text: es ? 'Podés descargar una copia de tus datos o pedir que corrijamos algo.' : 'Download a copy of your data or ask us to correct something.' }),
-        el('a', { class: 'btn small', href: '/api/me/export', download: 'mis-datos.json', text: es ? 'Descargar mis datos' : 'Download my data' }),
-        el('label', { class: 'field' }, el('span', { text: es ? 'Pedir una corrección' : 'Request a correction' }), msg),
-        el('button', { class: 'btn small', type: 'button', id: 'rect-send', text: es ? 'Enviar pedido' : 'Send request', onclick: async () => {
-          if (!msg.value.trim()) { msg.focus(); return; }
-          try { await api('/api/me/data-requests', { method: 'POST', body: { kind: 'rectification', message: msg.value } }); msg.value = ''; out.textContent = es ? 'Recibimos tu pedido.' : 'Request received.'; }
-          catch (e) { out.textContent = t('error_generic'); }
-        } }), out,
-        reqs.items.length ? el('ul', { class: 'plain-list' }, reqs.items.map((r) => el('li', { class: 'small', text: label[r.kind] + ' · ' + st[r.status] + ' · ' + new Date(r.created_at).toLocaleDateString(L) }))) : null));
-    }
-  }
-
+  // ── Cuenta (el perfil vive en /js/profile.js) ──
   async function Account(root) {
     await authReady;
     if (me) {
@@ -821,7 +789,6 @@
   if (game) Game(game, { kind: BOOT.page === 'daily' ? 'daily' : BOOT.page === 'clue' ? 'clue' : 'play' });
   if ($('#contribute-root')) Contribute($('#contribute-root'));
   if ($('#submission-root')) SubmissionStatus($('#submission-root'));
-  if ($('#profile-root')) Profile($('#profile-root')).catch(() => { $('#profile-root').replaceChildren(el('div', { class: 'notice error' }, el('p', { text: t('error_generic') }))); });
   if ($('#account-root')) Account($('#account-root'));
-  window.__cripta = { openPrefs, getPrefs };
+  window.__cripta = { openPrefs, getPrefs, el, t, api, route, toast, authReady, getMe: () => me, countryName, meta, store };
 })();

@@ -13,7 +13,8 @@ El nombre visible se cambia con la variable `SITE_NAME`.
   - Fuentes externas: se publican solas solo si cumplen las 10 condiciones (fuente activa y aprobada, licencia que permite republicar, método autorizado, atribución, sin errores críticos, validación superada, idioma y formato, sin duplicados, procedencia verificable, sin contenido inseguro). Si falla una, va a la cola de revisión.
   - Propuestas de usuarios: **siempre** requieren aprobación manual de un moderador o propietario. La base de datos lo impone con disparadores; no existe ningún camino por reputación.
 - **Panel de administración** (`/admin`): centro de control con indicadores reales por período (comparados con el anterior), usuarios y partidas, regiones e idiomas, embudo y retención, rendimiento de crípticos, alertas, privacidad y exportaciones CSV; además catálogo, generados, propuestas, fuentes, importaciones, reportes, duplicados, idiomas, ajustes, equipo y roles (superadministrador, contenido, moderación, analista), tareas y auditoría. Detalle y definiciones de cada métrica en [docs/PANEL.md](docs/PANEL.md).
-- **Cuentas opcionales**, estadísticas, logros, favoritos y notificaciones.
+- **Perfil personal** (`/es/perfil`): estadísticas con definiciones, historial filtrable con el detalle de cada partida (respuestas, pistas y tiempos reales), evolución con gráficos, fortalezas por mecanismo, logros, récords, objetivos, biblioteca y colecciones, recomendaciones, perfil público y rankings voluntarios, y enlaces para compartir resultados. Funciona sin cuenta; las partidas sin cuenta se suman a una cuenta solo con permiso. Detalle en [docs/PERFIL.md](docs/PERFIL.md).
+- **Cuentas opcionales**, favoritos y notificaciones.
 - **SEO**: sitemap, robots, hreflang, canónicas y datos estructurados.
 - **Seguridad**: validación en servidor, SQL parametrizado, sesiones con token aleatorio, CSRF, control de origen, límites por IP con hash, bloqueo por intentos fallidos, cabeceras CSP, secretos solo por variables de entorno y sin contraseñas por defecto.
 
@@ -36,8 +37,8 @@ En desarrollo no hacen falta `IP_HASH_SALT` ni `CRON_SECRET`; en producción son
 ## Pruebas
 
 ```bash
-npm test          # 50 pruebas: validador, juego, propuestas, importaciones, seguridad, base y tareas
-npm run test:e2e  # 7 pruebas en Chromium: preferencias, juego, móvil, propuesta y aprobación
+npm test          # 77 pruebas: validador, juego, propuestas, importaciones, seguridad, base, tareas, panel y perfil
+npm run test:e2e  # 14 pruebas en Chromium: preferencias, juego, móvil, propuesta, panel y perfil
 ```
 
 Las pruebas de navegador usan `playwright-core` con un Chromium ya instalado (`CHROMIUM_PATH` si no está en `/opt/pw-browsers/chromium`). Detalle en [docs/PRUEBAS.md](docs/PRUEBAS.md).
@@ -45,6 +46,7 @@ Las pruebas de navegador usan `playwright-core` con un Chromium ya instalado (`C
 ## Documentación
 
 - [docs/DESPLIEGUE.md](docs/DESPLIEGUE.md): publicar en Vercel con Turso, variables, dominio, cron, copias de seguridad y actualizaciones.
+- [docs/PERFIL.md](docs/PERFIL.md): perfil del jugador, definiciones, reglas de logros, experiencia, récords, rankings y privacidad.
 - [docs/ARQUITECTURA.md](docs/ARQUITECTURA.md): estructura del código y del modelo de datos.
 - [docs/CRIPTICOS.md](docs/CRIPTICOS.md): formato del juego de palabras y cómo se valida.
 - [docs/FUENTES.md](docs/FUENTES.md): cómo conectar una fuente externa autorizada.

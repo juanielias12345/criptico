@@ -42,6 +42,7 @@ module.exports = {
 <li><strong>Cuenta opcional:</strong> nombre de usuario y contraseña (guardada con hash scrypt; nunca en texto plano). El correo es opcional.</li>
 <li><strong>Propuestas:</strong> el contenido que envíes y, si lo indicás, el nombre público con el que querés aparecer.</li>
 <li><strong>Partidas:</strong> de cada partida registramos el críptico, cuándo empezó y terminó, los intentos, las pistas, si se reveló la respuesta y un tiempo activo estimado (mientras la pestaña está visible y hay interacción). No guardamos lo que escribís como respuesta.</li>
+<li><strong>Perfil:</strong> tus respuestas escritas (en mayúsculas, sin espacios), el momento de cada pista y los logros obtenidos, para mostrarte tu historial y tu evolución. Solo los ves vos. El perfil público y los rankings están apagados por defecto: si los activás, se muestra únicamente lo que elijas (nunca tu correo, historial, respuestas, tiempos ni pistas). Los enlaces para compartir un resultado no incluyen tu nombre.</li>
 <li><strong>Visitas:</strong> contamos visitas de forma agregada por día, idioma y país elegido, sin cookies ni identificadores. Si tu navegador envía «Do Not Track» o «Global Privacy Control», no se cuentan.</li>
 <li><strong>Seguridad:</strong> para limitar abusos usamos un hash de la dirección IP con una sal secreta; no guardamos la IP. El hash asociado a una sesión se borra a los 30 días.</li>
 <li><strong>Ubicación:</strong> no la inferimos. Solo usamos el país que elegís.</li>
@@ -104,6 +105,7 @@ module.exports = {
 <li><strong>Optional account:</strong> username and password (stored as a scrypt hash, never in plain text). Email is optional.</li>
 <li><strong>Submissions:</strong> what you send and, if you choose, a public name.</li>
 <li><strong>Games:</strong> for each game we record the clue, when it started and ended, attempts, hints, whether the answer was revealed and an estimated active time (while the tab is visible and you interact). We don't store what you type as an answer.</li>
+<li><strong>Profile:</strong> the answers you typed (uppercase, no spaces), when each hint was requested and the achievements you earned, to show your history and progress. Only you can see them. The public profile and leaderboards are off by default: if you turn them on, only what you choose is shown (never your email, history, answers, times or hints). Links to share a result do not include your name.</li>
 <li><strong>Visits:</strong> counted in aggregate per day, language and chosen country, with no cookies or identifiers. If your browser sends Do Not Track or Global Privacy Control, they aren't counted.</li>
 <li><strong>Security:</strong> to limit abuse we use a salted hash of your IP address; we don't store the address itself. The hash attached to a session is erased after 30 days.</li>
 <li><strong>Location:</strong> we don't infer it. We only use the country you choose.</li>

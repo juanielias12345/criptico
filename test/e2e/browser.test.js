@@ -312,13 +312,107 @@ test('panel: el rol analista no ve correos ni acciones', async () => {
   assert.equal(await page.locator('#admin-nav a[href="#users"]').isVisible(), false);
   assert.equal(await page.locator('#admin-nav a[href="#privacy"]').isVisible(), false);
   await page.goto(env.base + '/admin#players');
-  await page.locator('#admin-main table').waitFor();
+  await page.waitForLoadState('networkidle');
+  await page.locator('#admin-main tbody a').first().waitFor();
   assert.equal(await page.locator('#admin-main th:has-text("Correo")').count(), 0);
   await page.locator('#admin-main tbody a').first().click();
   await page.locator('.tabs').waitFor();
   assert.equal(await page.getByRole('button', { name: 'Suspender' }).count(), 0);
   assert.equal(await page.getByRole('button', { name: 'Eliminar datos personales' }).count(), 0);
   assert.equal(await page.locator('text=@example.com').count(), 0);
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('#13 perfil personal en escritorio y móvil: pestañas, detalle de partida, compartir y vincular con permiso', async () => {
+  for (const viewport of [{ width: 1366, height: 860 }, { width: 360, height: 740 }]) {
+    const { ctx, page, errors } = await newPage({ viewport });
+    await playReady(page);
+    // Juega sin cuenta: una incorrecta, una pista y la correcta.
+    const started = page.waitForResponse((r) => r.url().endsWith('/api/game/start'));
+    await page.goto(env.base + '/es/jugar');
+    const data = await (await started).json();
+    const row = await env.db.get('SELECT answer FROM clues WHERE id = ?', [data.clue.id]);
+    await page.fill('#answer', 'ZZZZ'); await page.click('#check-btn');
+    await page.locator('#feedback.bad, #feedback.warn').waitFor();
+    await page.click('#hint-btn'); await page.locator('.hints li').first().waitFor();
+    await page.fill('#answer', row.answer); await page.click('#check-btn');
+    await page.locator('#solution-answer').waitFor();
+    await page.locator('.toast:has-text("Logro nuevo")').waitFor();
+    // Perfil sin cuenta: muestra la partida real.
+    await page.goto(env.base + '/es/perfil');
+    await page.locator('.kpi[data-k="unique_solved"] .kpi-value').waitFor();
+    assert.equal((await page.textContent('.kpi[data-k="unique_solved"] .kpi-value')).trim(), '1');
+    assert.equal((await page.textContent('.kpi[data-k="hints"] .kpi-value')).trim(), '1');
+    // Cada indicador tiene su definición.
+    await page.locator('.kpi[data-k="solve_rate"] .def summary').click();
+    assert.match(await page.textContent('.kpi[data-k="solve_rate"] .def p'), /cerradas/);
+    await page.goto(env.base + '/es/perfil#history');
+    await page.locator('.pf-table.history tbody tr').first().waitFor();
+    assert.equal(await page.locator('.pf-table.history tbody tr').count(), 1);
+    await page.locator('.pf-table.history tbody a.btn').first().click();
+    await page.locator('.pf-detail').waitFor();
+    assert.equal(await page.locator('.attempts:not(.hints) li').count(), 2, 'dos respuestas: incorrecta y correcta');
+    assert.equal(await page.locator('.attempts.hints li').count(), 1);
+    assert.equal((await page.textContent('.pf-answer b')).trim(), row.answer);
+    // Compartir: el enlace muestra la tarjeta sin la respuesta.
+    await page.click('#share-create');
+    const url = await page.locator('#share-url').inputValue();
+    const card = await ctx.newPage();
+    await card.goto(url);
+    await card.locator('.share-card').waitFor();
+    assert.equal(await card.locator(`text=${row.answer}`).count(), 0, 'sin la respuesta salvo que se elija');
+    await card.close();
+    for (const tab of ['progress', 'strengths', 'achievements', 'records', 'leaderboard', 'goals', 'library', 'settings']) {
+      await page.goto(env.base + '/es/perfil#' + tab);
+      await page.locator('#pf-' + tab).waitFor();
+      await page.waitForLoadState('networkidle');
+      assert.equal(await page.locator('#pf-' + tab + ' .notice.error').count(), 0, tab);
+      assert.equal(await page.locator('#pf-' + tab + ' >> text=null').count(), 0, tab + ': sin «null» suelto');
+      const { sw, cw } = await page.evaluate(() => ({ sw: document.documentElement.scrollWidth, cw: document.documentElement.clientWidth }));
+      assert.ok(sw <= cw + 1, `${tab}: ancho ${sw} > ${cw}`);
+    }
+    await page.goto(env.base + '/es/perfil#goals');
+    await page.locator('#pf-goals .empty').waitFor(); // objetivos piden cuenta
+    // Crear cuenta: se ofrece sumar las partidas, no se suman solas.
+    const username = 'e2e' + Math.random().toString(36).slice(2, 8);
+    await page.goto(env.base + '/es/cuenta');
+    await page.fill('#register-form [name=username]', username);
+    await page.fill('#register-form [name=password]', 'Una-clave-de-prueba-9');
+    await env.db.run("DELETE FROM rate_limits WHERE bucket LIKE 'register:%'");
+    await page.click('#register-form button[type=submit]');
+    await page.waitForURL(/\/es\/perfil/);
+    await page.locator('#link-yes').waitFor();
+    const u = await env.db.get('SELECT id FROM users WHERE username = ?', [username]);
+    assert.equal((await env.db.get('SELECT COUNT(*) AS n FROM players WHERE user_id = ?', [u.id])).n, 0, 'todavía no se unieron');
+    await page.click('#link-yes');
+    await page.locator('.kpi[data-k="unique_solved"] .kpi-value').waitFor();
+    assert.equal((await page.textContent('.kpi[data-k="unique_solved"] .kpi-value')).trim(), '1');
+    // Ajustes: perfil público privado por defecto; al activarlo se ve solo lo elegido.
+    await page.goto(env.base + '/es/perfil#settings');
+    await page.locator('#public-on').waitFor();
+    assert.equal(await page.isChecked('#public-on'), false);
+    const saved = page.waitForResponse((r) => r.url().endsWith('/api/me/profile') && r.request().method() === 'PUT');
+    await page.check('#public-on'); await saved;
+    const pub = await ctx.newPage();
+    await pub.goto(env.base + '/es/u/' + username);
+    await pub.locator('.pub-profile h1').waitFor();
+    assert.equal(await pub.locator('.pf-quick').count(), 0, 'sin datos elegidos no muestra estadísticas');
+    await pub.close();
+    assert.deepEqual(errors, []);
+    await ctx.close();
+  }
+});
+
+test('práctica dirigida desde una recomendación: el críptico es del mecanismo pedido', async () => {
+  const { ctx, page, errors } = await newPage();
+  await playReady(page);
+  const started = page.waitForResponse((r) => r.url().endsWith('/api/game/start'));
+  await page.goto(env.base + '/es/jugar?mechanism=anagram');
+  const data = await (await started).json();
+  await page.locator('#practice-focus').waitFor();
+  const c = await env.db.get('SELECT mechanism FROM clues WHERE id = ?', [data.clue.id]);
+  assert.equal(c.mechanism, 'anagram');
   assert.deepEqual(errors, []);
   await ctx.close();
 });

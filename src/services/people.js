@@ -222,16 +222,20 @@ async function anonymizeUser(db, id) {
   if (!u) throw new HttpError(404, 'not_found');
   if (u.role !== 'player') throw new HttpError(400, 'staff_account', 'Las cuentas del equipo se desactivan desde «Equipo».');
   if (u.deleted_at) return { ok: true, already: true };
+  const playerIds = (await db.all('SELECT id FROM players WHERE user_id = ?', [id])).map((r) => r.id);
   await db.tx(async (t) => {
+    // Perfil: logros, objetivos, biblioteca, colecciones y enlaces compartidos.
+    await require('./profile').forgetProfile(t, id, playerIds);
     const subs = await t.all('SELECT id FROM submissions WHERE user_id = ?', [id]);
     for (const s of subs) await t.run('UPDATE clues SET author_name = NULL WHERE submission_id = ?', [s.id]);
     await t.run('UPDATE submissions SET user_id = NULL, public_name = NULL WHERE user_id = ?', [id]);
     await t.run('DELETE FROM sessions WHERE user_id = ?', [id]);
     await t.run('DELETE FROM favorites WHERE user_id = ?', [id]);
     await t.run('DELETE FROM notifications WHERE user_id = ?', [id]);
-    await t.run('UPDATE players SET user_id = NULL WHERE user_id = ?', [id]);
+    await t.run('UPDATE players SET user_id = NULL, retired_at = ? WHERE user_id = ?', [now(), id]);
     await t.run(`UPDATE users SET username = ?, email = NULL, email_verified_at = NULL, display_name = NULL, password_hash = '!', disabled = 1,
-      country_code = NULL, play_variant = NULL, ui_language = NULL, timezone = NULL, failed_logins = 0, locked_until = NULL, deleted_at = ? WHERE id = ?`,
+      country_code = NULL, play_variant = NULL, ui_language = NULL, timezone = NULL, failed_logins = 0, locked_until = NULL, deleted_at = ?,
+      public_profile = 0, public_name = NULL, avatar = NULL, profile_share = '{}', profile_prefs = '{}', leaderboard_opt_in = 0 WHERE id = ?`,
     ['eliminado-' + id.slice(0, 8), now(), id]);
   });
   return { ok: true };
@@ -251,6 +255,13 @@ async function exportOwnData(db, userId, playerIds) {
     submissions: await db.all('SELECT id, clue_text, answer, explanation, status, created_at FROM submissions WHERE user_id = ?', [userId]),
     favorites: await db.all('SELECT clue_id, created_at FROM favorites WHERE user_id = ?', [userId]),
     data_requests: await db.all('SELECT kind, status, created_at, resolved_at FROM data_requests WHERE user_id = ?', [userId]),
+    game_events: await db.all(`SELECT e.game_id, e.kind, e.data, e.created_at FROM game_events e JOIN games g ON g.id = e.game_id WHERE g.player_id IN (${ph}) ORDER BY e.id`, ids),
+    profile: u ? { public_profile: !!u.public_profile, public_name: u.public_name, avatar: u.avatar, share: parseJson(u.profile_share, {}),
+      prefs: parseJson(u.profile_prefs, {}), leaderboard_opt_in: !!u.leaderboard_opt_in } : null,
+    achievements: await db.all('SELECT code, earned_at FROM achievements_earned WHERE owner = ?', ['u:' + userId]),
+    goals: await db.all('SELECT kind, target, period, param, created_at FROM user_goals WHERE user_id = ?', [userId]),
+    retry_list: await db.all('SELECT clue_id, created_at FROM retry_list WHERE user_id = ?', [userId]),
+    collections: await db.all(`SELECT k.name, i.clue_id, i.added_at FROM collections k LEFT JOIN collection_items i ON i.collection_id = k.id WHERE k.user_id = ?`, [userId]),
   };
 }
 

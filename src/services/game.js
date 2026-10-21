@@ -8,6 +8,7 @@ const { publicClue, solutionView } = require('./clues');
 const { getSetting } = require('./settings');
 const { uuid, now, parseJson, HttpError, sha256 } = require('./util');
 const track = require('./tracking');
+const profile = require('./profile');
 
 const MODES = {
   quick: {}, infinite: {}, practice: { noStats: true }, streak: {}, shared: {}, archive: {},
@@ -41,7 +42,7 @@ async function resolveVariant(db, choice) {
   return { lang, variant: null, enabled: true };
 }
 
-function poolFilter({ lang, variant, mode, category, difficulty }) {
+function poolFilter({ lang, variant, mode, category, difficulty, mechanism }) {
   const where = ["c.status = 'published'", 'c.language_code = ?'];
   const args = [lang];
   if (variant) { where.push('(c.variant_code IS NULL OR c.variant_code = ?)'); args.push(variant); }
@@ -50,6 +51,7 @@ function poolFilter({ lang, variant, mode, category, difficulty }) {
   if (m.maxDifficulty) { where.push('c.difficulty <= ?'); args.push(m.maxDifficulty); }
   if (difficulty) { where.push('c.difficulty = ?'); args.push(Number(difficulty)); }
   if (category) { where.push('c.category = ?'); args.push(category); }
+  if (mechanism) { where.push('c.mechanism = ?'); args.push(mechanism); }
   return { where: where.join(' AND '), args };
 }
 
@@ -68,7 +70,7 @@ async function contentNotice(db, sel, pool) {
   return null;
 }
 
-async function startGame(db, { playerId, choice, mode = 'infinite', category, difficulty, country, clueSlug }) {
+async function startGame(db, { playerId, choice, mode = 'infinite', category, difficulty, mechanism, country, clueSlug }) {
   if (!MODES[mode]) throw new HttpError(400, 'invalid_mode');
   const enabled = await getSetting(db, 'modes.enabled');
   if (!enabled.includes(mode)) throw new HttpError(403, 'mode_disabled', 'Este modo de juego no está disponible.');
@@ -80,7 +82,7 @@ async function startGame(db, { playerId, choice, mode = 'infinite', category, di
   const player = await ensurePlayer(db, playerId, { country, variant: choice });
 
   let clue = null; let recycled = false;
-  const filter = poolFilter({ lang: sel.lang, variant: sel.variant, mode, category, difficulty });
+  const filter = poolFilter({ lang: sel.lang, variant: sel.variant, mode, category, difficulty, mechanism });
   const poolRow = await db.get(`SELECT COUNT(*) AS n FROM clues c WHERE ${filter.where}`, filter.args);
   const notice = await contentNotice(db, sel, poolRow.n);
 
@@ -159,9 +161,10 @@ async function guess(db, { gameId, playerId, answer }) {
   const accepted = [clue.answer_key, ...parseJson(clue.alt_answers, [])];
   const cur = await track.resumeIfAbandoned(db, g);
   if (accepted.includes(key)) {
-    await finish(db, cur, 'solved', { attempt: true });
+    const closed = await finish(db, cur, 'solved', { attempt: true, data: { answer: key } });
     const attempts = (await db.get('SELECT attempts FROM games WHERE id = ?', [g.id])).attempts;
-    return { correct: true, attempts, hints_used: g.hints_used, solution: solutionView(clue), daily: g.daily_date ? await dailySummary(db, g.daily_date, lang) : null };
+    const achievements = closed && g.mode !== 'practice' ? await profile.onGameFinished(db, g.player_id, g.id) : [];
+    return { correct: true, attempts, hints_used: g.hints_used, solution: solutionView(clue), daily: g.daily_date ? await dailySummary(db, g.daily_date, lang) : null, achievements };
   }
   const feedback = [];
   if (key.length !== clue.answer_key.length) feedback.push({ code: 'length', expected: clue.answer_key.length, got: key.length });
@@ -171,7 +174,8 @@ async function guess(db, { gameId, playerId, answer }) {
   const r = await db.run(`UPDATE games SET attempts = attempts + 1, wrong_attempts = wrong_attempts + 1, last_wrong_key = ?, status = 'in_progress',
     active_ms = active_ms + ?, last_activity_at = ? WHERE id = ? AND finished_at IS NULL AND (last_wrong_key IS NULL OR last_wrong_key <> ?)`,
   [key, delta, now(), g.id, key]);
-  await track.event(db, g.id, r.changes ? 'guess_wrong' : 'guess_repeat', { length: key.length });
+  // Se guarda la respuesta normalizada (mayúsculas, sin espacios): es lo que la persona ve en su historial.
+  await track.event(db, g.id, r.changes ? 'guess_wrong' : 'guess_repeat', { answer: key, length: key.length });
   const attempts = (await db.get('SELECT attempts FROM games WHERE id = ?', [g.id])).attempts;
   return { correct: false, attempts, feedback, repeated: !r.changes };
 }
@@ -191,7 +195,7 @@ async function hint(db, { gameId, playerId, level: wanted }) {
     // Condición sobre el valor leído: dos pedidos simultáneos no suman dos pistas.
     const r = await db.run(`UPDATE games SET hints_used = ?, status = 'in_progress', active_ms = active_ms + ?, last_activity_at = ?
       WHERE id = ? AND hints_used = ? AND finished_at IS NULL`, [level, delta, now(), g.id, g.hints_used]);
-    if (r.changes) await track.event(db, g.id, 'hint', { level });
+    if (r.changes) await track.event(db, g.id, 'hint', { level, kind: (buildHints(clue, level)[level - 1] || {}).kind || null });
   }
   return { hints: buildHints(clue, level), hints_used: level, max_hints: max };
 }
@@ -214,14 +218,17 @@ function buildHints(clue, level) {
 
 async function reveal(db, { gameId, playerId }) {
   const { g, clue } = await loadGame(db, gameId, playerId);
-  if (!g.finished_at) await finish(db, g, 'revealed');
-  return { solution: solutionView(clue), daily: g.daily_date ? await dailySummary(db, g.daily_date, clue.language_code) : null };
+  const closed = !g.finished_at && await finish(db, g, 'revealed');
+  const achievements = closed && g.mode !== 'practice' ? await profile.onGameFinished(db, g.player_id, g.id) : [];
+  return { solution: solutionView(clue), daily: g.daily_date ? await dailySummary(db, g.daily_date, clue.language_code) : null, achievements };
 }
 
 async function skip(db, { gameId, playerId, reason }) {
   const { g } = await loadGame(db, gameId, playerId);
-  if (!g.finished_at) await finish(db, g, reason === 'timeout' ? 'timeout' : 'skipped');
-  return { ok: true };
+  const closed = !g.finished_at && await finish(db, g, reason === 'timeout' ? 'timeout' : 'skipped');
+  // Abandonar también puede completar logros de constancia (por ejemplo, días jugados).
+  const achievements = closed && g.mode !== 'practice' ? await profile.onGameFinished(db, g.player_id, g.id) : [];
+  return { ok: true, achievements };
 }
 
 // Reinicia una partida no resuelta: mismos datos, contadores a cero.

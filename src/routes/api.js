@@ -54,12 +54,17 @@ module.exports = function api() {
     const choice = CHOICE_RE.test(b.choice || '') ? b.choice : 'es';
     const country = COUNTRY_RE.test(b.country || '') ? b.country : null;
     return { choice, country, mode: String(b.mode || 'infinite'), category: b.category ? String(b.category).slice(0, 40) : null,
-      difficulty: b.difficulty ? Number(b.difficulty) : null, clueSlug: b.slug ? String(b.slug).slice(0, 80) : null };
+      difficulty: /^[1-5]$/.test(String(b.difficulty || '')) ? Number(b.difficulty) : null, clueSlug: b.slug ? String(b.slug).slice(0, 80) : null,
+      mechanism: /^[a-z_]{2,40}$/.test(b.mechanism || '') ? b.mechanism : null };
   }
 
   async function linkPlayer(req, res, playerId) {
     const db = req.app.locals.db;
-    if (playerId && playerId !== req.playerId) cookie(res, req.app.locals.config, 'pid', playerId, { maxAge: 400 * 86400 });
+    // Sin sesión, el navegador guarda su identificador seudónimo. Con sesión, el identificador
+    // nuevo se crea dentro de la cuenta y la cookie del navegador no cambia (puede tener
+    // partidas sin cuenta que solo se unen si la persona lo autoriza).
+    if (!req.user && playerId && playerId !== req.playerId) cookie(res, req.app.locals.config, 'pid', playerId, { maxAge: 400 * 86400 });
+    if (req.user && !req.cookiePlayerId && playerId) cookie(res, req.app.locals.config, 'pid', playerId, { maxAge: 400 * 86400 });
     if (req.user && playerId) {
       await db.run('UPDATE players SET user_id = ? WHERE id = ? AND user_id IS NULL', [req.user.id, playerId]);
       await db.run('UPDATE users SET last_active_at = ? WHERE id = ?', [now(), req.user.id]);
@@ -179,8 +184,7 @@ module.exports = function api() {
     await auth.createUser(db, { username: b.username, password: b.password, email: b.email || null, role: 'player' });
     const s = await auth.login(db, { username: b.username, password: b.password, ipHash: req.ipHash, userAgent: req.headers['user-agent'] });
     cookie(res, req.app.locals.config, 'sid', s.token, { maxAge: 30 * 86400 });
-    if (req.playerId) await db.run('UPDATE players SET user_id = ? WHERE id = ? AND user_id IS NULL', [s.user.id, req.playerId]);
-    res.status(201).json({ user: s.user, csrf: s.csrf });
+    res.status(201).json({ user: s.user, csrf: s.csrf, link_offer: await linkOffer(db, req.playerId) });
   }));
   r.post('/auth/login', a(async (req, res) => {
     const db = req.app.locals.db;
@@ -196,9 +200,8 @@ module.exports = function api() {
     }
     const hours = s.user.role === 'player' ? 30 * 24 : 12;
     cookie(res, req.app.locals.config, 'sid', s.token, { maxAge: hours * 3600 });
-    if (req.playerId) await db.run('UPDATE players SET user_id = ? WHERE id = ? AND user_id IS NULL', [s.user.id, req.playerId]);
     if (s.user.role !== 'player') await audit(db, { actorId: s.user.id, action: 'admin.login', ipHash: req.ipHash });
-    res.json({ user: s.user, csrf: s.csrf });
+    res.json({ user: s.user, csrf: s.csrf, link_offer: s.user.role === 'player' ? await linkOffer(db, req.playerId) : null });
   }));
   r.post('/auth/logout', a(async (req, res) => {
     await auth.logout(req.app.locals.db, req.cookies.sid);
@@ -209,6 +212,13 @@ module.exports = function api() {
     res.set('Cache-Control', 'no-store');
     res.json({ user: req.user, csrf: req.session ? req.session.csrf : null });
   }));
+
+  // Partidas de este navegador jugadas sin cuenta: se ofrecen, nunca se unen solas.
+  async function linkOffer(db, playerId) {
+    if (!playerId) return null;
+    const p = await db.get('SELECT user_id, (SELECT COUNT(*) FROM games g WHERE g.player_id = players.id) AS games FROM players WHERE id = ?', [playerId]);
+    return p && !p.user_id && p.games ? { games: p.games } : null;
+  }
 
   const needUser = (req) => { if (!req.user) throw new HttpError(401, 'login_required'); return req.user; };
 

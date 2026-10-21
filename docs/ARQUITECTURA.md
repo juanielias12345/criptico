@@ -68,3 +68,7 @@ Así, ni un error de programación ni una edición directa pueden saltarse los d
 ## Tareas
 
 `services/jobs.js` define tareas con intervalo y bloqueo por arrendamiento (`jobs.locked_until`). `tick()` corre las vencidas; lo llama Vercel Cron o, en servidor propio, un temporizador interno. `recover_stuck` libera bloqueos vencidos y marca ejecuciones colgadas.
+
+## Perfil personal
+
+Servicio `src/services/profile.js`, API `src/routes/profile.js` (montada antes de `routes/api`), migración `003_profile.sql` y la interfaz `public/js/profile.js`, que se carga solo en «Mi perfil». La resolución del jugador de cada pedido (`resolvePlayer` en `src/app.js`) decide qué identificador usa la API y nunca une partidas anónimas sin permiso. Detalle en [PERFIL.md](PERFIL.md).

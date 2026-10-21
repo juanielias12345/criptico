@@ -6,6 +6,9 @@ const CONTENT = require('../views/content');
 const { t, ROUTES, UI_LANGS, pickUiLang } = require('../i18n');
 const { publicClue } = require('../services/clues');
 const { today } = require('../services/game');
+const PROFILE = require('../services/profile');
+const PTEXT = require('../views/profile-text');
+const { cardText } = require('../views/share-card');
 
 const a = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
 
@@ -365,9 +368,76 @@ ${pub.author && c.origin === 'community' ? `<p class="attribution">${esc(t(lang,
       }));
     }
 
+    const PT = PTEXT[lang];
     r.get(P('profile'), (req, res) => render(req, res, {
-      page: 'profile', path: P('profile'), alternates: altFor('profile'), title: t(lang, 'profile_title'), noindex: true,
-      body: `<header class="page-head"><p class="eyebrow">${esc(t(lang, 'nav_profile'))}</p><h1>${esc(t(lang, 'profile_title'))}</h1><p class="lead">${esc(t(lang, 'profile_lead'))}</p></header><section id="profile-root">${skeleton}</section>`,
+      page: 'profile', path: P('profile'), alternates: altFor('profile'), title: t(lang, 'nav_profile'), noindex: true,
+      boot: { ptext: PT, achGroups: Object.fromEntries(PROFILE.ACHIEVEMENTS.map((x) => [x.family, x.group])), avatars: { glyphs: PROFILE.AVATAR_GLYPHS, tones: PROFILE.AVATAR_TONES } },
+      scripts: ['/js/profile.js'],
+      body: `<section id="profile-root" class="profile" aria-live="polite"><h1 class="sr-only">${esc(t(lang, 'nav_profile'))}</h1>${skeleton}</section>
+<noscript><p class="notice">${esc(lang === 'es' ? 'Tu perfil necesita JavaScript activado.' : 'Your profile needs JavaScript enabled.')}</p></noscript>`,
+    }));
+
+    // Perfil público: solo lo que la persona eligió mostrar. No se indexa.
+    r.get(`/${lang}/u/:username`, a(async (req, res) => {
+      const pub = await PROFILE.publicProfile(req.app.locals.db, req.params.username);
+      const path = `/${lang}/u/${encodeURIComponent(req.params.username)}`;
+      if (!pub) {
+        return res.status(404).send(layout({ lang, config: req.app.locals.config, page: 'public-profile', path, noindex: true, title: PT.pub_private,
+          body: `<section class="lost"><h1>${esc(PT.pub_private)}</h1><div class="hero-actions"><a class="btn primary big" href="${P('play')}">${esc(t(lang, 'home_cta'))}</a></div></section>` }));
+      }
+      const m = /^(.+)-([0-7])$/.exec(pub.avatar || '');
+      const glyph = m ? m[1] : (pub.name[0] || '?').toUpperCase();
+      const levelName = pub.level ? PT.level_names[pub.level - 1] : null;
+      const country = pub.country ? (() => { try { return new Intl.DisplayNames([lang], { type: 'region' }).of(pub.country); } catch { return pub.country; } })() : null;
+      const langName = (c) => ({ es: 'Español', en: 'English' }[c] || c.toUpperCase());
+      const items = [
+        pub.level ? [PT.pub_level, `${pub.level} · ${levelName}`] : null,
+        pub.unique_solved !== undefined ? [PT.pub_solved, String(pub.unique_solved)] : null,
+        pub.streaks ? [PT.pub_streak, String(pub.streaks.current)] : null,
+        pub.streaks ? [PT.pub_best, String(pub.streaks.best)] : null,
+        pub.languages && pub.languages.length ? [PT.pub_langs, pub.languages.map(langName).join(' · ')] : null,
+        country ? [PT.pub_country, country] : null,
+      ].filter(Boolean);
+      const achName = (code) => { const x = /^(.+)_(\d+)$/.exec(code); return x ? `${PT.ach[x[1]][0]} · ${x[2]}` : code; };
+      res.set('Cache-Control', 'no-store');
+      render(req, res, {
+        page: 'public-profile', path, noindex: true, title: PT.pub_title.replace('{n}', pub.name),
+        body: `<article class="pub-profile">
+  <header class="pf-head"><div class="pf-id"><span class="pf-avatar big av-${m ? m[2] : 'x'}" aria-hidden="true">${esc(glyph)}</span>
+    <div><p class="eyebrow">${esc(t(lang, 'nav_profile'))}</p><h1>${esc(pub.name)}</h1><p class="pf-meta">@${esc(pub.username)}</p></div></div>
+  ${items.length ? `<dl class="pf-quick">${items.map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join('')}</dl>` : ''}</header>
+  ${pub.badges && pub.badges.length ? `<section class="pf-sec"><h2>${esc(PT.pub_badges)}</h2><ul class="mini-ach">${pub.badges.map((b) => `<li><svg class="badge on" viewBox="0 0 48 48" width="40" height="40" aria-hidden="true"><path class="b-shape" d="M24 3a21 21 0 1 1 0 42a21 21 0 1 1 0-42z"/><path class="b-glyph" d="M15 25l6 6 12-13"/></svg><span><b>${esc(achName(b.code))}</b><span class="small muted">${esc(b.earned_on)}</span></span></li>`).join('')}</ul></section>` : ''}
+  <p class="small muted">${esc(PT.pub_note)}</p>
+  <p><a class="btn primary" href="${P('play')}">${esc(t(lang, 'home_cta'))}</a></p>
+</article>`,
+      });
+    }));
+
+    // Resultado compartido: la tarjeta y un enlace para jugar el mismo críptico.
+    r.get(`/${lang}/r/:token`, a(async (req, res) => {
+      const c = await PROFILE.sharedCard(req.app.locals.db, req.params.token);
+      const path = `/${lang}/r/${encodeURIComponent(req.params.token)}`;
+      if (!c) {
+        return res.status(404).send(layout({ lang, config: req.app.locals.config, page: 'share', path, noindex: true, title: '404',
+          body: `<section class="lost"><h1>${esc(t(lang, 'not_found'))}</h1><div class="hero-actions"><a class="btn primary big" href="${P('play')}">${esc(t(lang, 'home_cta'))}</a></div></section>` }));
+      }
+      const x = cardText(c, lang);
+      const img = `/api/share/${encodeURIComponent(req.params.token)}.svg?lang=${lang}`;
+      const clueLang = UI_LANGS.includes(c.language) ? c.language : lang;
+      res.set('Cache-Control', 'no-store');
+      render(req, res, {
+        page: 'share', path, noindex: true, title: `${x.result} · ${c.clue}`, description: `${x.result} · ${c.clue}`,
+        ogImage: req.app.locals.config.siteUrl + img,
+        body: `<article class="share-page">
+  <p class="eyebrow">${esc(x.result)}</p>
+  <img class="share-card" src="${esc(img)}" width="1200" height="630" alt="${esc(x.result + ' — ' + c.clue + ' — ' + x.meta + (x.answer ? ' — ' + x.answer : ''))}">
+  <p class="clue-text">${clueWithEnum(c.clue)}</p>
+  <p class="small muted">${esc(x.meta)}${c.attempts && c.result === 'solved' ? ' · ' + esc(c.attempts === 1 ? PT.card_attempt : PT.card_attempts.replace('{n}', c.attempts)) : ''}</p>
+  ${x.answer ? `<p><b>${esc(x.answer)}</b></p>` : ''}
+  <p><a class="btn primary big" href="${href(clueLang, 'clue', '/' + encodeURIComponent(c.slug))}">${esc(PT.card_play)}</a></p>
+  <p class="small muted">${esc(PT.card_note)}</p>
+</article>`,
+      });
     }));
 
     r.get(P('account'), (req, res) => render(req, res, {
