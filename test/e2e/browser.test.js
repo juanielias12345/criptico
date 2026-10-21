@@ -259,3 +259,66 @@ async function waitFor(fn, ms = 5000) {
   while (Date.now() < end) { if (await fn()) return; await new Promise((r) => setTimeout(r, 100)); }
   throw new Error('timeout');
 }
+
+// #18: el centro de control carga en escritorio y en móvil, con datos reales y sin errores.
+async function adminLogin(page, who) {
+  await page.goto(env.base + '/admin');
+  await page.fill('#a-user', who.username);
+  await page.fill('#a-pass', who.password);
+  await page.click('#admin-login button[type=submit]');
+  await page.locator('#logout').waitFor({ state: 'visible' });
+}
+
+test('#18 panel de administración en escritorio y móvil', async () => {
+  const { client } = require('../helpers');
+  const c = client(env.base);
+  const reg = await c.post('/api/auth/register', { username: 'panel' + Date.now().toString(36), password: 'Una-clave-de-prueba-9', email: 'panel@example.com' });
+  assert.equal(reg.status, 201);
+  const s = await c.post('/api/game/start', { choice: 'es-AR', country: 'AR' });
+  const ans = (await env.db.get('SELECT c.answer FROM games g JOIN clues c ON c.id = g.clue_id WHERE g.id = ?', [s.json.game_id])).answer;
+  await c.post(`/api/game/${s.json.game_id}/guess`, { answer: ans });
+  const owner = await staff(env, 'owner');
+  const views = ['dashboard', 'alerts', 'geo', 'funnel', 'cluestats', 'exports', 'players', 'player/' + reg.json.user.id, 'player/' + reg.json.user.id + '?tab=games',
+    'player/' + reg.json.user.id + '?tab=performance', 'games', 'game/' + s.json.game_id, 'privacy', 'catstats', 'importstats', 'catalog', 'submissions', 'users'];
+  for (const viewport of [{ width: 1440, height: 900 }, { width: 375, height: 812 }]) {
+    const { ctx, page, errors } = await newPage({ viewport });
+    await adminLogin(page, owner);
+    for (const v of views) {
+      await page.goto(env.base + '/admin#' + v);
+      await page.waitForFunction(() => !document.querySelector('#admin-main .flash.bad') && document.querySelector('#admin-main h1'));
+      await page.waitForLoadState('networkidle');
+      const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+      assert.ok(overflow <= 0, `${v} desborda ${overflow}px a ${viewport.width}px`);
+      assert.equal(await page.locator('#admin-main .flash.bad').count(), 0, v);
+    }
+    // Resumen con datos reales: la partida resuelta aparece.
+    await page.goto(env.base + '/admin#dashboard');
+    await page.locator('.card:has-text("Resueltas correctamente") b').waitFor();
+    assert.ok(Number(await page.textContent('.card:has-text("Resueltas correctamente") b')) >= 1);
+    if (viewport.width < 800) {
+      assert.equal(await page.locator('#admin-nav').isVisible(), false, 'el menú arranca plegado en móvil');
+      await page.click('#nav-toggle');
+      assert.equal(await page.locator('#admin-nav').isVisible(), true);
+    }
+    assert.deepEqual(errors, []);
+    await ctx.close();
+  }
+});
+
+test('panel: el rol analista no ve correos ni acciones', async () => {
+  const analyst = await staff(env, 'analyst');
+  const { ctx, page, errors } = await newPage();
+  await adminLogin(page, analyst);
+  assert.equal(await page.locator('#admin-nav a[href="#users"]').isVisible(), false);
+  assert.equal(await page.locator('#admin-nav a[href="#privacy"]').isVisible(), false);
+  await page.goto(env.base + '/admin#players');
+  await page.locator('#admin-main table').waitFor();
+  assert.equal(await page.locator('#admin-main th:has-text("Correo")').count(), 0);
+  await page.locator('#admin-main tbody a').first().click();
+  await page.locator('.tabs').waitFor();
+  assert.equal(await page.getByRole('button', { name: 'Suspender' }).count(), 0);
+  assert.equal(await page.getByRole('button', { name: 'Eliminar datos personales' }).count(), 0);
+  assert.equal(await page.locator('text=@example.com').count(), 0);
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});

@@ -33,7 +33,7 @@ test/                     pruebas con node:test; test/e2e en Chromium
 
 ## Datos
 
-Tablas principales (ver `src/db/migrations/001_init.sql`):
+Tablas principales (ver `src/db/migrations/001_init.sql`; las del centro de control — eventos de partida, resúmenes diarios, visitas agregadas, alertas y solicitudes de datos — están en `002_panel.sql` y se describen en [PANEL.md](PANEL.md)):
 
 - `languages`, `language_variants`: idiomas y variantes; fr/pt/it/de ya existen desactivados.
 - `clues`: el catálogo. `origin` indica de dónde viene (`original`, `generated`, `external`, `community`) y `status` su estado (`draft`, `review`, `published`, `disabled`, `archived`). Cada cambio queda en `clue_events`.

@@ -62,7 +62,22 @@ async function migrate(db) {
   for (const file of fs.readdirSync(dir).filter((f) => f.endsWith('.sql')).sort()) {
     if (done.has(file)) continue;
     const sql = fs.readFileSync(path.join(dir, file), 'utf8');
-    await db.exec(`BEGIN;\n${sql}\nINSERT INTO schema_migrations(name) VALUES ('${file.replace(/'/g, '')}');\nCOMMIT;`);
+    // Una migración que reconstruye tablas declara «-- fk: off». Las claves foráneas se
+    // apagan en la misma conexión (fuera de la transacción, como exige SQLite) para que
+    // reemplazar una tabla no dispare borrados en cascada; al final se verifican.
+    const fkOff = /^--\s*fk:\s*off/m.test(sql);
+    try {
+      await db.exec(`${fkOff ? 'PRAGMA foreign_keys = OFF;\n' : ''}BEGIN;\n${sql}\nINSERT INTO schema_migrations(name) VALUES ('${file.replace(/'/g, '')}');\nCOMMIT;${fkOff ? '\nPRAGMA foreign_keys = ON;' : ''}`);
+    } catch (e) {
+      // Si falló a mitad, se deshace todo (en una conexión remota la transacción ya se cerró).
+      try { await db.exec('ROLLBACK;'); } catch { /* no había transacción abierta */ }
+      if (fkOff) { try { await db.exec('PRAGMA foreign_keys = ON;'); } catch { /* idem */ } }
+      throw e;
+    }
+    if (fkOff) {
+      const bad = await db.all('PRAGMA foreign_key_check');
+      if (bad.length) throw new Error(`migration ${file}: foreign key check failed (${bad.length})`);
+    }
     applied.push(file);
   }
   return applied;

@@ -232,7 +232,7 @@
       const before = getPrefs();
       setPrefs({ country: state.country, choice: state.choice, remember: rememberIt, theme: state.theme });
       updatePrefsLabel();
-      if (me) api('/api/me/prefs', { method: 'PUT', body: { country: state.country, choice: state.choice, ui: L } }).catch(() => {});
+      if (me) api('/api/me/prefs', { method: 'PUT', body: { country: state.country, choice: state.choice, ui: L, timezone: (Intl.DateTimeFormat().resolvedOptions() || {}).timeZone } }).catch(() => {});
       document.dispatchEvent(new CustomEvent('prefs-changed', { detail: { before, after: getPrefs() } }));
     };
     dlg.querySelector('form').addEventListener('submit', () => { saved = true; save(remember.checked); });
@@ -246,6 +246,11 @@
   }
   $('#prefs-button').addEventListener('click', () => openPrefs());
   updatePrefsLabel();
+  // Visita agregada (sin identificadores): «first» es verdadero si este navegador todavía no eligió idioma y país.
+  if (navigator.doNotTrack !== '1' && !navigator.globalPrivacyControl) {
+    const p0 = getPrefs();
+    api('/api/visit', { method: 'POST', body: { ui: L, country: p0 && p0.country, first: !p0 }, keepalive: true }).catch(() => {});
+  }
   if (!getPrefs() && ['home', 'play', 'daily', 'clue'].includes(BOOT.page)) openPrefs({ first: true });
 
   // ── Utilidades de texto ──
@@ -354,6 +359,17 @@
       } finally { root.removeAttribute('aria-busy'); }
     }
 
+    // Latido para estimar el tiempo activo: solo con la pestaña visible y si hubo
+    // interacción en el último minuto. Si falla, no pasa nada: la partida sigue igual.
+    let lastInput = Date.now();
+    ['keydown', 'pointerdown', 'input'].forEach((ev) => root.addEventListener(ev, () => { lastInput = Date.now(); }, { passive: true }));
+    const beat = () => {
+      if (!st.game || st.finished || document.visibilityState !== 'visible' || Date.now() - lastInput > 60000) return;
+      api('/api/game/' + st.game + '/ping', { method: 'POST', body: {} }).catch(() => {});
+    };
+    setInterval(beat, 30000);
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') { lastInput = Date.now(); beat(); } });
+
     function startTimer(seconds) {
       const end = Date.now() + seconds * 1000;
       st.timer = setInterval(async () => {
@@ -398,7 +414,7 @@
     async function hint(silent) {
       const b = $('#hint-btn', root); if (b) b.setAttribute('aria-busy', 'true');
       try {
-        const r = await api('/api/game/' + st.game + '/hint', { method: 'POST', body: {} });
+        const r = await api('/api/game/' + st.game + '/hint', { method: 'POST', body: { level: (st.hintsUsed || 0) + 1 } });
         st.hints = r.hints; st.hintsUsed = r.hints_used; st.maxHints = r.max_hints;
       } catch (e) { st.feedback = { cls: 'error', text: t('error_generic') }; }
       if (!silent) render($('#answer', root) ? $('#answer', root).value : '');
@@ -750,7 +766,28 @@
         el('button', { class: 'link-btn', type: 'button', text: L === 'es' ? 'Eliminar mi cuenta' : 'Delete my account', onclick: async () => {
           if (!window.confirm(L === 'es' ? '¿Eliminar tu cuenta? No se puede deshacer.' : 'Delete your account? This cannot be undone.')) return;
           await api('/api/me/account', { method: 'DELETE', body: {} }); location.href = route('home');
-        } })))));
+        } }))),
+      await dataSection()));
+
+    // Derechos sobre los datos: copia descargable y pedido de corrección.
+    async function dataSection() {
+      const es = L === 'es';
+      const reqs = await api('/api/me/data-requests').catch(() => ({ items: [] }));
+      const msg = el('textarea', { id: 'rect-msg', rows: '3', maxlength: '2000', placeholder: es ? '¿Qué dato hay que corregir?' : 'What should be corrected?' });
+      const out = el('p', { class: 'small', role: 'status' });
+      const label = { access: es ? 'Acceso' : 'Access', rectification: es ? 'Corrección' : 'Correction', deletion: es ? 'Eliminación' : 'Deletion' };
+      const st = { open: es ? 'recibida' : 'received', in_progress: es ? 'en curso' : 'in progress', done: es ? 'resuelta' : 'done', rejected: es ? 'rechazada' : 'rejected' };
+      return sec(es ? 'Tus datos' : 'Your data', el('div', { class: 'form' },
+        el('p', { class: 'small', text: es ? 'Podés descargar una copia de tus datos o pedir que corrijamos algo.' : 'Download a copy of your data or ask us to correct something.' }),
+        el('a', { class: 'btn small', href: '/api/me/export', download: 'mis-datos.json', text: es ? 'Descargar mis datos' : 'Download my data' }),
+        el('label', { class: 'field' }, el('span', { text: es ? 'Pedir una corrección' : 'Request a correction' }), msg),
+        el('button', { class: 'btn small', type: 'button', id: 'rect-send', text: es ? 'Enviar pedido' : 'Send request', onclick: async () => {
+          if (!msg.value.trim()) { msg.focus(); return; }
+          try { await api('/api/me/data-requests', { method: 'POST', body: { kind: 'rectification', message: msg.value } }); msg.value = ''; out.textContent = es ? 'Recibimos tu pedido.' : 'Request received.'; }
+          catch (e) { out.textContent = t('error_generic'); }
+        } }), out,
+        reqs.items.length ? el('ul', { class: 'plain-list' }, reqs.items.map((r) => el('li', { class: 'small', text: label[r.kind] + ' · ' + st[r.status] + ' · ' + new Date(r.created_at).toLocaleDateString(L) }))) : null));
+    }
   }
 
   async function Account(root) {

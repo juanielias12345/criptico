@@ -10,7 +10,7 @@
       if (k === 'class') n.className = v; else if (k === 'text') n.textContent = v; else if (k === 'style') n.style.cssText = v;
       else if (k.startsWith('on')) n.addEventListener(k.slice(2), v); else n.setAttribute(k, v === true ? '' : v);
     }
-    for (const kid of kids.flat()) if (kid !== null && kid !== undefined && kid !== false) n.append(kid.nodeType ? kid : document.createTextNode(String(kid)));
+    for (const kid of kids.flat(Infinity)) if (kid !== null && kid !== undefined && kid !== false) n.append(kid.nodeType ? kid : document.createTextNode(String(kid)));
     return n;
   };
   const main = $('#admin-main');
@@ -43,7 +43,7 @@
 
   // ── Acceso ──
   function loginView(msg) {
-    $('#admin-nav').hidden = true; $('#logout').hidden = true;
+    $('#admin-nav').hidden = true; $('#nav-toggle').hidden = true; $('#logout').hidden = true;
     const u = el('input', { id: 'a-user', autocomplete: 'username', required: true });
     const p = el('input', { id: 'a-pass', type: 'password', autocomplete: 'current-password', required: true });
     const err = el('p', { class: 'field-error', role: 'alert', text: msg || '' });
@@ -59,11 +59,18 @@
   async function boot() {
     const s = await api('/api/auth/me'); csrf = s.csrf;
     if (!s.user || s.user.role === 'player') return loginView();
-    const m = await api('/api/admin/me'); me = m.user; perms = m.permissions;
-    $('#who').textContent = me.username + ' · ' + me.role;
+    const m = await api('/api/admin/me'); me = m.user; me.role_label = m.role_label; perms = m.permissions;
+    try { meta = await api('/api/admin/panel/meta'); } catch (e) { meta = null; }
+    $('#who').textContent = me.username + ' · ' + (m.role_label || me.role);
     $('#logout').hidden = false;
-    $('#admin-nav').hidden = false;
+    $('#admin-nav').hidden = false; $('#nav-toggle').hidden = false;
     document.querySelectorAll('#admin-nav a').forEach((a) => { a.hidden = !can(a.dataset.perm); });
+    // Un grupo sin enlaces visibles no se muestra.
+    document.querySelectorAll('#admin-nav .nav-group').forEach((g) => {
+      let n = g.nextElementSibling; let any = false;
+      while (n && !n.classList.contains('nav-group')) { if (!n.hidden) any = true; n = n.nextElementSibling; }
+      g.hidden = !any;
+    });
     route();
   }
   $('#logout').addEventListener('click', async () => { await api('/api/auth/logout', { method: 'POST', body: {} }); csrf = null; loginView(); });
@@ -71,26 +78,642 @@
   // ── Vistas ──
   const V = {};
 
+  // ── Utilidades del centro de control ──
+  const NA = 'Sin información';
+  const isNum = (v) => v !== null && v !== undefined && v !== '' && !Number.isNaN(Number(v));
+  const nf = (v, d) => (isNum(v) ? Number(v).toLocaleString('es', { maximumFractionDigits: d === undefined ? 1 : d }) : NA);
+  const pct = (v) => (isNum(v) ? nf(v) + ' %' : NA);
+  const dur = (v) => {
+    if (!isNum(v)) return NA;
+    const s = Math.round(Number(v) / 1000);
+    if (s < 60) return s + ' s';
+    if (s < 3600) return Math.floor(s / 60) + ' min ' + String(s % 60).padStart(2, '0') + ' s';
+    return Math.floor(s / 3600) + ' h ' + String(Math.floor((s % 3600) / 60)).padStart(2, '0') + ' min';
+  };
+  let regionNames = null;
+  try { regionNames = new Intl.DisplayNames(['es'], { type: 'region' }); } catch (e) { /* navegador antiguo */ }
+  const country = (c) => (!c ? NA : (regionNames ? (regionNames.of(c) || c) + ' (' + c + ')' : c));
+  const LANGS = { es: 'Español', en: 'Inglés', fr: 'Francés', pt: 'Portugués', it: 'Italiano', de: 'Alemán' };
+  const lang = (c) => (!c ? NA : (LANGS[c] || c) + ' (' + c + ')');
+  const variantName = (v) => (!v ? NA : v);
+  const GS = { started: 'Iniciada', in_progress: 'En curso', solved: 'Resuelta', revealed: 'Completada tras revelar', abandoned: 'Abandonada',
+    expired: 'Expirada', error: 'Interrumpida por error' };
+  const END = { inactivity: 'por inactividad', skipped: 'pasó a otra', server_error: 'error del servidor', timeout: 'se agotó el tiempo', restart: 'reinició' };
+  const gpill = (s, reason) => el('span', { class: 'pill g-' + s, text: (GS[s] || s) + (reason && END[reason] ? ' · ' + END[reason] : '') });
+  const EV = { start: 'Inicio', resume: 'Reanudación', guess_wrong: 'Respuesta incorrecta', guess_repeat: 'Respuesta repetida (no cuenta)', guess_correct: 'Respuesta correcta',
+    hint: 'Pista pedida', reveal: 'Reveló la respuesta', skip: 'Pasó a otra', timeout: 'Tiempo agotado', abandon: 'Marcada como abandonada', error: 'Error técnico', restart: 'Reinicio' };
+  const MODES = { quick: 'Rápida', infinite: 'Infinita', daily: 'Diaria', archive: 'Archivo', beginner: 'Principiante', intermediate: 'Intermedio', expert: 'Experto',
+    guided: 'Guiada', timed: 'Contrarreloj', themed: 'Temática', practice: 'Práctica', streak: 'Racha', shared: 'Compartida' };
+  const PERIOD_LABELS = { today: 'Hoy', '24h': 'Últimas 24 h', '7d': 'Últimos 7 días', '30d': 'Últimos 30 días', '90d': 'Últimos 90 días',
+    this_month: 'Este mes', last_month: 'Mes anterior', custom: 'Personalizado' };
+  let meta = null;
+  const def = (k) => (meta && meta.definitions && meta.definitions[k]) || '';
+
+  const hashName = () => location.hash.replace(/^#/, '').split('?')[0];
+  const qs = () => new URLSearchParams(location.hash.split('?')[1] || '');
+  const go = (params) => {
+    const p = new URLSearchParams();
+    for (const [k, v] of Object.entries(params)) if (v !== '' && v !== null && v !== undefined) p.set(k, v);
+    location.hash = hashName() + (String(p) ? '?' + p : '');
+  };
+  const store = {
+    get(k, d) { try { const v = localStorage.getItem('adm.' + k); return v ? JSON.parse(v) : d; } catch (e) { return d; } },
+    set(k, v) { try { localStorage.setItem('adm.' + k, JSON.stringify(v)); } catch (e) { /* sin almacenamiento */ } },
+  };
+  const section = (title, ...kids) => el('section', { class: 'panel' }, el('h3', { text: title }), kids);
+  const empty = (t) => el('p', { class: 'empty', text: t || 'Todavía no hay datos para este filtro.' });
+  const infoTip = (text) => (text ? el('details', { class: 'def' }, el('summary', { 'aria-label': 'Definición', text: '?' }), el('p', { text })) : '');
+
+  // Barra de período y filtros (país, idioma, variante). Se refleja en la URL.
+  function filterBar(q, opts) {
+    const o = Object.assign({ period: true, geo: true }, opts || {});
+    const per = el('select', { name: 'period', 'aria-label': 'Período' }, (meta ? meta.periods : Object.keys(PERIOD_LABELS)).map((p) =>
+      el('option', { value: p, selected: (q.get('period') || '30d') === p, text: PERIOD_LABELS[p] || p })));
+    const from = el('input', { type: 'date', name: 'from', 'aria-label': 'Desde', value: q.get('from') || '' });
+    const to = el('input', { type: 'date', name: 'to', 'aria-label': 'Hasta', value: q.get('to') || '' });
+    const custom = el('span', { class: 'custom-range' }, from, el('span', { class: 'muted', text: '→' }), to);
+    custom.hidden = per.value !== 'custom';
+    per.addEventListener('change', () => { custom.hidden = per.value !== 'custom'; });
+    const ctry = el('input', { name: 'country', placeholder: 'País (AR, ES…)', maxlength: '2', size: '10', 'aria-label': 'País elegido', value: q.get('country') || '' });
+    const lg = el('select', { name: 'lang', 'aria-label': 'Idioma' }, el('option', { value: '', text: 'Todos los idiomas' }),
+      Object.keys(LANGS).map((l) => el('option', { value: l, selected: q.get('lang') === l, text: LANGS[l] })));
+    const vr = el('input', { name: 'variant', placeholder: 'Variante (es-AR…)', size: '14', 'aria-label': 'Variante', value: q.get('variant') || '' });
+    const f = el('form', { class: 'toolbar filters', role: 'search' }, o.period ? [per, custom] : '', o.geo ? [ctry, lg, vr] : '', o.extra || '',
+      el('button', { class: 'btn', type: 'submit', text: 'Aplicar' }));
+    f.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const p = Object.fromEntries(q);
+      delete p.page;
+      if (o.period) { p.period = per.value; p.from = per.value === 'custom' ? from.value : ''; p.to = per.value === 'custom' ? to.value : ''; }
+      if (o.geo) { p.country = ctry.value.trim().toUpperCase(); p.lang = lg.value; p.variant = vr.value.trim(); }
+      for (const n of f.querySelectorAll('[data-extra]')) p[n.name] = n.type === 'checkbox' ? (n.checked ? '1' : '') : n.value;
+      go(p);
+    });
+    return f;
+  }
+  const apiQs = (q, keys) => { const p = new URLSearchParams(); for (const k of keys) if (q.get(k)) p.set(k, q.get(k)); return String(p); };
+  const PERIOD_KEYS = ['period', 'from', 'to', 'country', 'lang', 'variant'];
+
+  function pager(d) {
+    const q = qs(); const page = d.page || 1; const pages = Math.max(1, Math.ceil(d.total / d.per_page));
+    const set = (n) => () => { q.set('page', n); go(Object.fromEntries(q)); };
+    return el('div', { class: 'toolbar pager' }, el('span', { class: 'muted small', text: nf(d.total, 0) + ' resultados · página ' + page + ' de ' + pages }),
+      page > 1 ? btn('← Anterior', set(page - 1)) : '', page < pages ? btn('Siguiente →', set(page + 1)) : '');
+  }
+
+  // Tabla con selección de columnas (se recuerda por navegador).
+  function dataTable(key, cols, rows, opts) {
+    const o = opts || {};
+    const saved = store.get('cols.' + key, null);
+    const visible = cols.filter((c) => (saved ? saved.includes(c.k) : !c.hidden));
+    const picker = el('details', { class: 'col-picker' }, el('summary', { text: 'Columnas' }),
+      el('div', { class: 'col-list' }, cols.map((c) => {
+        const cb = el('input', { type: 'checkbox', value: c.k }); cb.checked = visible.includes(c);
+        cb.addEventListener('change', () => {
+          const now = [...picker.querySelectorAll('input:checked')].map((x) => x.value);
+          store.set('cols.' + key, now.length ? now : cols.filter((x) => !x.hidden).map((x) => x.k)); route();
+        });
+        return el('label', { class: 'check' }, cb, c.t);
+      })));
+    const sortKey = qs().get('sort');
+    const head = visible.map((c) => {
+      if (!c.sort || !o.sortable) return el('th', { text: c.t, class: c.num ? 'num' : null });
+      const q = qs(); const active = sortKey === c.sort;
+      return el('th', { class: (c.num ? 'num ' : '') + (active ? 'sorted' : '') }, el('a', { href: '#', onclick: (e) => { e.preventDefault(); q.set('sort', c.sort); q.delete('page'); go(Object.fromEntries(q)); }, text: c.t + (active ? ' ↓' : '') }));
+    });
+    const body = rows.map((r) => el('tr', {}, visible.map((c) => {
+      const v = c.f ? c.f(r) : r[c.k];
+      return el('td', { class: c.num ? 'num' : null }, v === null || v === undefined || v === '' ? el('span', { class: 'muted', text: NA }) : v);
+    })));
+    return el('div', {}, o.noPicker ? '' : el('div', { class: 'toolbar end' }, picker),
+      rows.length ? el('div', { class: 'tbl-wrap' }, el('table', {}, el('thead', {}, el('tr', {}, head)), el('tbody', {}, body))) : empty(o.empty));
+  }
+
+  // ── Gráficos (SVG generado en el navegador; sin estilos en línea en el HTML del servidor) ──
+  const SVGNS = 'http://www.w3.org/2000/svg';
+  const svg = (tag, attrs, ...kids) => { const n = document.createElementNS(SVGNS, tag); for (const [k, v] of Object.entries(attrs || {})) n.setAttribute(k, v); for (const k of kids) if (k) n.append(k); return n; };
+  const fmtT = (t, unit) => (unit === 'hour' ? t.slice(11, 13) + ' h' : unit === 'week' ? 'sem. ' + t.slice(5, 10).split('-').reverse().join('/') : t.slice(5, 10).split('-').reverse().join('/'));
+
+  // Líneas en un solo eje; cada serie con su color, leyenda y etiqueta del último valor.
+  function lineChart(points, series, opts) {
+    const o = Object.assign({ unit: 'day', fmt: (v) => nf(v, 0), height: 200 }, opts || {});
+    if (!points.length || points.every((p) => series.every((s) => !p[s.k]))) return empty('Sin partidas en este período.');
+    const W = 720; const H = o.height; const pad = 6;
+    const max = Math.max(1, ...points.flatMap((p) => series.map((s) => Number(p[s.k]) || 0)));
+    const x = (i) => (points.length === 1 ? W / 2 : pad + (i * (W - 2 * pad)) / (points.length - 1));
+    const y = (v) => H - pad - ((Number(v) || 0) / max) * (H - 2 * pad);
+    const g = svg('svg', { viewBox: `0 0 ${W} ${H}`, preserveAspectRatio: 'none', class: 'chart-svg', role: 'img', 'aria-label': o.label || 'Gráfico' });
+    for (const f of [0.5, 1]) g.append(svg('line', { x1: 0, x2: W, y1: y(max * f), y2: y(max * f), class: 'grid' }));
+    g.append(svg('line', { x1: 0, x2: W, y1: H - pad, y2: H - pad, class: 'axis' }));
+    series.forEach((s, si) => {
+      const d = points.map((p, i) => (i ? 'L' : 'M') + x(i).toFixed(1) + ' ' + y(p[s.k]).toFixed(1)).join(' ');
+      g.append(svg('path', { d, class: 'line s' + (si + 1), 'vector-effect': 'non-scaling-stroke' }));
+    });
+    // Zonas de lectura por punto: el título muestra todos los valores.
+    const colW = W / points.length;
+    const cross = svg('line', { x1: 0, x2: 0, y1: 0, y2: H, class: 'cross', visibility: 'hidden' });
+    g.append(cross);
+    points.forEach((p, i) => {
+      const r = svg('rect', { x: Math.max(0, x(i) - colW / 2), y: 0, width: colW, height: H, class: 'hit' },
+        svg('title', {}, document.createTextNode(fmtT(p.t, o.unit) + ' — ' + series.map((s) => s.t + ': ' + o.fmt(p[s.k])).join(' · '))));
+      r.addEventListener('mouseenter', () => { cross.setAttribute('x1', x(i)); cross.setAttribute('x2', x(i)); cross.setAttribute('visibility', 'visible'); tip.textContent = r.textContent; });
+      r.addEventListener('mouseleave', () => { cross.setAttribute('visibility', 'hidden'); tip.textContent = ''; });
+      g.append(r);
+    });
+    const last = points[points.length - 1];
+    const tip = el('p', { class: 'chart-tip small', 'aria-live': 'polite' });
+    const legend = el('ul', { class: 'legend' }, series.map((s, si) => el('li', {}, el('span', { class: 'swatch s' + (si + 1) }), s.t + ' · último: ' + o.fmt(last[s.k]))));
+    const table = el('details', { class: 'chart-table' }, el('summary', { text: 'Ver como tabla' }),
+      el('div', { class: 'tbl-wrap' }, el('table', {}, el('thead', {}, el('tr', {}, el('th', { text: o.unit === 'hour' ? 'Hora (UTC)' : o.unit === 'week' ? 'Semana' : 'Día (UTC)' }), series.map((s) => el('th', { class: 'num', text: s.t })))),
+        el('tbody', {}, points.map((p) => el('tr', {}, el('td', { text: p.t }), series.map((s) => el('td', { class: 'num', text: o.fmt(p[s.k]) }))))))));
+    return el('figure', { class: 'chart' }, series.length > 1 ? legend : el('p', { class: 'small muted', text: series[0].t + ' · último: ' + o.fmt(last[series[0].k]) }),
+      el('div', { class: 'chart-frame' }, el('span', { class: 'y-max small muted', text: o.fmt(max) }), g),
+      el('div', { class: 'x-axis small muted' }, el('span', { text: fmtT(points[0].t, o.unit) }), points.length > 2 ? el('span', { text: fmtT(points[Math.floor(points.length / 2)].t, o.unit) }) : '', el('span', { text: fmtT(last.t, o.unit) })),
+      tip, table);
+  }
+
+  // Barras horizontales (magnitud, una sola serie).
+  function barList(rows, labelF, valueF, opts) {
+    const o = Object.assign({ fmt: (v) => nf(v, 0) }, opts || {});
+    if (!rows.length) return empty();
+    const max = Math.max(1, ...rows.map((r) => Number(valueF(r)) || 0));
+    return el('ul', { class: 'bars' }, rows.map((r) => {
+      const v = Number(valueF(r)) || 0;
+      return el('li', { title: labelF(r) + ': ' + o.fmt(v) + (o.extra ? ' · ' + o.extra(r) : '') },
+        el('span', { class: 'bar-label', text: labelF(r) }),
+        el('span', { class: 'bar-track' }, el('span', { class: 'bar-fill', style: 'width:' + Math.max(1, Math.round((v / max) * 100)) + '%' })),
+        el('span', { class: 'bar-value', text: o.fmt(v) + (o.extra ? ' · ' + o.extra(r) : '') }));
+    }));
+  }
+
+  // Tarjeta de indicador con comparación contra el período anterior.
+  function kpi(label, value, opts) {
+    const o = opts || {};
+    const shown = o.fmt ? o.fmt(value) : nf(value, 0);
+    let delta = '';
+    if (o.prev !== undefined) {
+      if (o.prev === null || o.prev === undefined || !isNum(value)) delta = el('small', { class: 'delta muted', text: 'Sin período anterior comparable' });
+      else if (o.points) {
+        const d = Math.round((Number(value) - Number(o.prev)) * 10) / 10;
+        delta = el('small', { class: 'delta', text: (d > 0 ? '▲ +' : d < 0 ? '▼ ' : '= ') + nf(d) + ' pts vs. anterior (' + (o.fmt ? o.fmt(o.prev) : nf(o.prev)) + ')' });
+      } else if (Number(o.prev) === 0) delta = el('small', { class: 'delta', text: Number(value) ? 'Antes: 0' : '= sin cambios (0)' });
+      else {
+        const d = ((Number(value) - Number(o.prev)) / Number(o.prev)) * 100;
+        delta = el('small', { class: 'delta', text: (d > 0.05 ? '▲ +' : d < -0.05 ? '▼ ' : '= ') + nf(d) + ' % vs. anterior (' + (o.fmt ? o.fmt(o.prev) : nf(o.prev, 0)) + ')' });
+      }
+    }
+    return el('div', { class: 'card' + (o.warn && Number(value) ? ' warn' : '') + (shown === NA ? ' na' : '') },
+      el('div', { class: 'card-head' }, el('span', { text: label }), infoTip(o.def)), el('b', { class: o.txt ? 'txt' : null, text: shown }), delta, o.href ? el('a', { class: 'small', href: o.href, text: o.link || 'Ver detalle' }) : '');
+  }
+
+  // ── Resumen ──
   V.dashboard = async () => {
-    const d = await api('/api/admin/dashboard');
-    const card = (v, label, warn) => el('div', { class: 'card' + (warn && v ? ' warn' : '') }, el('b', { text: String(v) }), el('span', { text: label }));
-    const pub = d.clues.filter((c) => c.status === 'published').reduce((s, c) => s + c.n, 0);
-    const maxDay = Math.max(1, ...d.activity.map((x) => x.games));
-    main.replaceChildren(el('h1', { text: 'Resumen' }),
+    if (!can('analytics.read')) return dashboardBasic();
+    const q = qs();
+    const d = await api('/api/admin/analytics/overview?' + apiQs(q, PERIOD_KEYS));
+    const c = d.current; const p = d.previous; const cg = c.games; const pg = p ? p.games : null;
+    // Sin datos en el período anterior: no se muestra comparación en cada tarjeta.
+    const P = (k) => (pg ? pg[k] : undefined); const PB = (k) => (p ? p[k] : undefined);
+    const failingJobs = d.jobs.filter((j) => j.consecutive_failures > 0 || j.last_status === 'failed');
+    const alertsN = d.open_alerts.reduce((s, a) => s + a.n, 0);
+    const crit = (d.open_alerts.find((a) => a.severity === 'critical') || {}).n || 0;
+    const periodTxt = (d.period.from.slice(0, 10) + ' → ' + new Date(Date.parse(d.period.to) - 1).toISOString().slice(0, 10)) + ' (UTC)';
+    main.replaceChildren(
+      el('div', { class: 'adm-head' }, el('h1', { text: 'Resumen' }),
+        el('p', { class: 'muted small', text: periodTxt + (p ? ' · comparado con el período anterior de igual duración' : ' · el período anterior no tiene datos para comparar') + ' · datos calculados ' + fmt(d.computed_at) }),
+        el('div', { class: 'toolbar' }, btn('Recalcular ahora', act(() => api('/api/admin/analytics/refresh', { method: 'POST', body: {} }), 'Indicadores recalculados.')),
+          can('export.data') ? el('a', { class: 'btn', href: '/api/admin/export/daily.csv?' + apiQs(q, PERIOD_KEYS), text: 'Exportar CSV diario' }) : '')),
+      filterBar(q),
+      alertsN ? el('a', { class: 'flash ' + (crit ? 'bad' : 'warn'), href: '#alerts', text: alertsN + ' alertas abiertas' + (crit ? ' (' + crit + ' críticas)' : '') + ' → revisar' }) : '',
+      el('h2', { text: 'Personas' }),
       el('div', { class: 'cards' },
-        card(d.users, 'Usuarios registrados'), card(d.games.started, 'Partidas iniciadas'), card(d.games.finished, 'Partidas terminadas'),
-        card(d.games.solve_rate + '%', 'Tasa de resolución'), card(d.games.last7, 'Partidas (7 días)'), card(pub, 'Crípticos publicados'),
-        card(d.new_clues_7d, 'Nuevos crípticos (7 días)'), card(d.pending_submissions, 'Propuestas pendientes', true), card(d.import_review, 'Importaciones en revisión', true),
-        card(d.sources_with_errors, 'Fuentes con errores', true), card(d.duplicates_open, 'Duplicados por revisar', true), card(d.reports_open, 'Errores informados', true),
-        card(d.errors_7d, 'Errores del sistema (7 días)', true), card(d.retention.rate + '%', 'Retención 30 días (' + d.retention.returning_30d + '/' + d.retention.active_30d + ')')),
+        kpi('Usuarios registrados', d.registered_total, { def: def('registered') }),
+        kpi('Nuevos registros', c.new_users, { prev: PB('new_users'), def: def('new_users') }),
+        kpi('Jugadores activos', c.active_players, { prev: PB('active_players'), def: def('active_players') }),
+        kpi('Registrados que jugaron', c.active_registered, { prev: PB('active_registered'), def: def('active_registered') }),
+        kpi('DAU', d.dau, { def: def('dau') }), kpi('WAU', d.wau, { def: def('wau') }), kpi('MAU', d.mau, { def: def('mau') }),
+        kpi('Visitas (páginas)', c.visits.pageview, { prev: p ? p.visits.pageview : undefined, def: def('visits') }),
+        kpi('Navegadores nuevos', c.visits.new_visitor, { prev: p ? p.visits.new_visitor : undefined, def: def('visits') })),
+      el('h2', { text: 'Partidas' }),
+      el('div', { class: 'cards' },
+        kpi('Iniciadas', cg.started, { prev: P('started'), def: def('started'), href: '#games' }),
+        kpi('Completadas', cg.completed, { prev: P('completed'), def: def('completed') }),
+        kpi('Resueltas correctamente', cg.solved, { prev: P('solved'), def: def('solved') }),
+        kpi('Tasa de resolución', cg.solve_rate, { fmt: pct, points: true, prev: P('solve_rate'), def: def('solve_rate') }),
+        kpi('Tasa de abandono', cg.abandon_rate, { fmt: pct, points: true, prev: P('abandon_rate'), def: def('abandon_rate') }),
+        kpi('Tiempo medio hasta resolver', cg.avg_solve_ms, { fmt: dur, prev: P('avg_solve_ms'), def: def('avg_solve') }),
+        kpi('Mediana hasta resolver', c.median_solve_ms, { fmt: dur, prev: PB('median_solve_ms'), def: def('median_solve') }),
+        kpi('Mediana de tiempo activo', c.median_active_solve_ms, { fmt: dur, prev: PB('median_active_solve_ms'), def: def('median_active') }),
+        kpi('Pistas por partida', cg.hints_per_game, { fmt: (v) => nf(v), prev: P('hints_per_game') }),
+        kpi('Reveladas', cg.revealed, { prev: P('revealed') }), kpi('Expiradas', cg.expired, { prev: P('expired') }),
+        kpi('Interrumpidas por error', cg.errored, { prev: P('errored'), warn: true })),
+      section('Evolución de partidas', lineChart(d.series.points, [{ k: 'started', t: 'Iniciadas' }, { k: 'solved', t: 'Resueltas' }], { unit: d.series.unit, label: 'Partidas iniciadas y resueltas' })),
+      section('Jugadores distintos', lineChart(d.series.points, [{ k: 'players', t: 'Jugadores' }], { unit: d.series.unit, label: 'Jugadores distintos' })),
+      el('h2', { text: 'Contenido y operación' }),
+      el('div', { class: 'cards' },
+        kpi('Crípticos publicados', d.catalog.published, { href: '#catstats', link: 'Ver catálogo' }),
+        kpi('Importados automáticamente', d.catalog.auto_imported, { def: 'Elementos de fuentes externas publicados solos en el período.', href: '#importstats' }),
+        kpi('Propuestas pendientes', d.pending_submissions, { warn: true, href: '#submissions', link: 'Moderar' }),
+        kpi('Errores técnicos', c.errors, { prev: PB('errors'), warn: true, def: def('errors'), href: '#jobs' }),
+        kpi('Fuentes activas', d.sources.active, { def: 'Fuentes externas aprobadas y activas.' }),
+        kpi('Fuentes con fallos', d.sources.failing, { warn: true, href: '#importstats' }),
+        kpi('Tareas con fallos', failingJobs.length, { warn: true, href: '#jobs' })),
       el('div', { class: 'cols' },
-        el('div', { class: 'panel' }, el('h3', { text: 'Idiomas jugados' }), table(['Idioma', 'Partidas'], d.languages.map((x) => el('tr', {}, el('td', { text: x.lang }), el('td', { text: x.games }))))),
-        el('div', { class: 'panel' }, el('h3', { text: 'Variantes elegidas' }), table(['Variante', 'Partidas'], d.variants.map((x) => el('tr', {}, el('td', { text: x.variant }), el('td', { text: x.games }))))),
-        el('div', { class: 'panel' }, el('h3', { text: 'Países más activos' }), table(['País', 'Partidas'], d.countries.map((x) => el('tr', {}, el('td', { text: x.country }), el('td', { text: x.games }))))),
-        el('div', { class: 'panel' }, el('h3', { text: 'Publicados por origen' }), table(['Origen', 'Crípticos'], d.published_by_origin.map((x) => el('tr', {}, el('td', { text: LABELS[x.origin] }), el('td', { text: x.n })))))),
-      el('div', { class: 'panel' }, el('h3', { text: 'Actividad (30 días)' }), table(['Día', 'Partidas', 'Jugadores', ''], d.activity.map((x) => el('tr', {}, el('td', { text: x.day }), el('td', { text: x.games }), el('td', { text: x.players }), el('td', { style: 'width:40%' }, el('div', { class: 'admin-bar', style: 'width:' + Math.round((x.games / maxDay) * 100) + '%' })))))),
-      el('div', { class: 'panel' }, el('h3', { text: 'Tareas programadas' }), table(['Tarea', 'Estado', 'Última', 'Próxima', 'Error'], d.jobs.map((j) => el('tr', {}, el('td', { text: j.name }), el('td', {}, j.last_status ? pill(j.last_status) : '—'), el('td', { text: fmt(j.last_run_at) }), el('td', { text: fmt(j.next_run_at) }), el('td', { text: j.last_error || '' }))))),
-      d.last_errors.length ? el('div', { class: 'panel' }, el('h3', { text: 'Últimos errores' }), table(['Ámbito', 'Mensaje', 'Fecha'], d.last_errors.map((e) => el('tr', {}, el('td', { text: e.scope }), el('td', { text: e.message }), el('td', { text: fmt(e.created_at) }))))) : '');
+        section('Idiomas más jugados', barList(d.top.languages, (r) => lang(r.k), (r) => r.games, { extra: (r) => nf(r.players, 0) + ' jug.' })),
+        section('Países elegidos', el('p', { class: 'small muted', text: 'País que cada persona eligió en sus preferencias. No se deduce de la conexión.' }),
+          barList(d.top.countries, (r) => country(r.k), (r) => r.games, { extra: (r) => nf(r.players, 0) + ' jug.' })),
+        section('Variantes elegidas', barList(d.top.variants, (r) => variantName(r.k), (r) => r.games))),
+      section('Estado de importaciones y tareas', el('p', { class: 'small', text: 'Última importación correcta: ' + fmt(d.sources.last_success) }),
+        table(['Tarea', 'Estado', 'Última', 'Próxima', 'Fallos'], d.jobs.map((j) => el('tr', {}, el('td', { text: j.name }), el('td', {}, j.last_status ? pill(j.last_status) : el('span', { class: 'muted', text: NA })),
+          el('td', { text: fmt(j.last_run_at) }), el('td', { text: fmt(j.next_run_at) }), el('td', { text: j.consecutive_failures })))))
+    );
+  };
+
+  // Resumen reducido para roles sin acceso a estadísticas (moderación, contenido básico).
+  async function dashboardBasic() {
+    const d = await api('/api/admin/dashboard');
+    const card = (v, label, warn, href) => el('div', { class: 'card' + (warn && v ? ' warn' : '') }, el('div', { class: 'card-head' }, el('span', { text: label })), el('b', { text: String(v) }), href ? el('a', { class: 'small', href, text: 'Abrir' }) : '');
+    main.replaceChildren(el('h1', { text: 'Resumen' }),
+      el('p', { class: 'muted', text: 'Tu rol (' + (me.role_label || me.role) + ') no incluye las estadísticas de uso. Estas son tus tareas pendientes.' }),
+      el('div', { class: 'cards' },
+        can('submissions.read') ? card(d.pending_submissions, 'Propuestas pendientes', true, '#submissions') : '',
+        can('reports.manage') ? card(d.reports_open, 'Errores informados', true, '#reports') : '',
+        card(d.duplicates_open, 'Duplicados por revisar', true, '#duplicates'),
+        can('sources.read') ? card(d.import_review, 'Importaciones en revisión', true, '#imports') : '',
+        can('sources.read') ? card(d.sources_with_errors, 'Fuentes con errores', true, '#sources') : ''));
+  }
+
+  // ── Usuarios registrados ──
+  const USTATUS = { active: 'Activa', suspended: 'Suspendida', deleted: 'Eliminada' };
+  const ustat = (s) => el('span', { class: 'pill u-' + s, text: USTATUS[s] || s });
+  V.players = async () => {
+    const q = qs();
+    const d = await api('/api/admin/players?' + apiQs(q, ['q', 'status', 'country', 'lang', 'variant', 'from', 'to', 'verified', 'sort', 'page', 'per']));
+    const search = el('input', { type: 'search', name: 'q', 'data-extra': '1', placeholder: can('players.pii') ? 'Usuario, nombre, correo o id' : 'Usuario, nombre o id', value: q.get('q') || '' });
+    const st = el('select', { name: 'status', 'data-extra': '1', 'aria-label': 'Estado' }, [['', 'Todos los estados'], ['active', 'Activas'], ['suspended', 'Suspendidas'], ['deleted', 'Eliminadas']].map(([v, t]) => el('option', { value: v, selected: q.get('status') === v, text: t })));
+    const from = el('input', { type: 'date', name: 'from', 'data-extra': '1', 'aria-label': 'Registrado desde', value: q.get('from') || '' });
+    const to = el('input', { type: 'date', name: 'to', 'data-extra': '1', 'aria-label': 'Registrado hasta', value: q.get('to') || '' });
+    const ver = el('input', { type: 'checkbox', name: 'verified', 'data-extra': '1' }); ver.checked = q.get('verified') === '1';
+    const cols = [
+      { k: 'username', t: 'Usuario', sort: 'name', f: (u) => el('a', { href: '#player/' + u.id, text: u.username }) },
+      { k: 'display_name', t: 'Nombre visible' },
+      ...(can('players.pii') ? [{ k: 'email', t: 'Correo', f: (u) => u.email || '' }] : []),
+      { k: 'email_verified', t: 'Correo verificado', f: (u) => (u.has_email ? (u.email_verified ? 'Sí' : 'No') : '') , hidden: true },
+      { k: 'status', t: 'Estado', f: (u) => ustat(u.status) },
+      { k: 'created_at', t: 'Registro', sort: 'created', f: (u) => fmt(u.created_at) },
+      { k: 'last_login_at', t: 'Último acceso', f: (u) => (u.last_login_at ? fmt(u.last_login_at) : ''), hidden: true },
+      { k: 'last_active_at', t: 'Última actividad', sort: 'active', f: (u) => (u.last_active_at ? fmt(u.last_active_at) : '') },
+      { k: 'country_code', t: 'País elegido', f: (u) => (u.country_code ? country(u.country_code) : '') },
+      { k: 'play_variant', t: 'Variante', f: (u) => u.play_variant || '' },
+      { k: 'ui_language', t: 'Idioma de interfaz', f: (u) => (u.ui_language ? lang(u.ui_language) : ''), hidden: true },
+      { k: 'timezone', t: 'Zona horaria', hidden: true },
+      { k: 'games', t: 'Partidas', sort: 'games', num: true },
+      { k: 'solved', t: 'Resueltas', num: true },
+      { k: 'abandoned', t: 'Abandonadas', num: true, hidden: true },
+      { k: 'revealed', t: 'Reveladas', num: true, hidden: true },
+      { k: 'solve_rate', t: '% resolución', sort: 'solve_rate', num: true, f: (u) => (isNum(u.solve_rate) ? pct(u.solve_rate) : '') },
+      { k: 'avg_solve_ms', t: 'Tiempo medio', num: true, f: (u) => (isNum(u.avg_solve_ms) ? dur(u.avg_solve_ms) : '') , hidden: true },
+      { k: 'hints', t: 'Pistas', num: true, hidden: true },
+      { k: 'last_game_at', t: 'Última partida', sort: 'last_game', f: (u) => (u.last_game_at ? fmt(u.last_game_at) : '') },
+    ];
+    const exp = can('export.data') ? el('a', { class: 'btn', href: '/api/admin/export/users.csv?' + apiQs(q, ['q', 'status', 'country', 'lang', 'variant', 'from', 'to', 'verified']), text: 'Exportar CSV' }) : '';
+    main.replaceChildren(
+      el('div', { class: 'adm-head' }, el('h1', { text: 'Usuarios registrados' }), el('div', { class: 'toolbar' }, exp)),
+      el('p', { class: 'muted small', text: 'Solo cuentas de jugador. Nunca se muestran contraseñas, tokens ni sesiones.' + (can('players.pii') ? ' Consultar una ficha con correo queda en la auditoría.' : ' Tu rol no ve correos electrónicos.') }),
+      filterBar(q, { period: false, extra: [search, st, el('label', { class: 'inline small' }, 'Registro', from, to), el('label', { class: 'check small' }, ver, 'Correo verificado')] }),
+      dataTable('players', cols, d.items, { sortable: true, empty: 'No hay cuentas con estos filtros.' }), pager(d));
+  };
+
+  V.player = async (id) => {
+    const q = qs(); const tab = q.get('tab') || 'summary';
+    const d = await api('/api/admin/players/' + id);
+    const u = d.user; const s = d.stats;
+    const TABS = [['summary', 'Resumen'], ['games', 'Historial de partidas'], ['performance', 'Rendimiento'], ['contributions', 'Contribuciones'], ['activity', 'Actividad reciente'], ['admin', 'Historial administrativo']];
+    const tabs = el('div', { class: 'tabs', role: 'tablist' }, TABS.map(([k, t]) => el('a', { href: '#player/' + id + '?tab=' + k, class: k === tab ? 'active' : '', role: 'tab', 'aria-selected': k === tab ? 'true' : 'false', text: t })));
+    const actions = el('div', { class: 'toolbar' },
+      can('players.manage') && u.status === 'active' ? btn('Suspender', async () => {
+        const reason = prompt('Motivo de la suspensión (queda en la auditoría):'); if (reason === null) return;
+        try { await api('/api/admin/players/' + id + '/suspend', { method: 'POST', body: { reason } }); flash('Cuenta suspendida. Se cerraron sus sesiones.', true); route(); } catch (e) { flash(e.message); }
+      }) : '',
+      can('players.manage') && u.status === 'suspended' ? btn('Reactivar', act(() => api('/api/admin/players/' + id + '/reactivate', { method: 'POST', body: {} }), 'Cuenta reactivada.')) : '',
+      can('privacy.manage') && u.status !== 'deleted' ? btn('Eliminar datos personales', async () => {
+        const c = prompt('Esto anonimiza la cuenta de forma irreversible (las partidas quedan solo como estadística). Escribí ELIMINAR para confirmar.');
+        if (c === null) return;
+        try { await api('/api/admin/players/' + id + '/anonymize', { method: 'POST', body: { confirm: c } }); flash('Datos personales eliminados.', true); route(); } catch (e) { flash(e.message); }
+      }, 'danger') : '');
+    const head = el('div', { class: 'adm-head' }, el('p', {}, el('a', { href: '#players', text: '← Usuarios' })),
+      el('h1', { text: u.username }), el('p', {}, ustat(u.status), ' ', el('span', { class: 'muted small', text: 'id ' + u.id + ' · ' + d.pseudonymous_ids + ' identificadores de jugador vinculados' })), actions);
+    let body;
+    if (tab === 'summary') {
+      const fact = (k, v) => el('div', {}, el('dt', { text: k }), el('dd', {}, v === null || v === undefined || v === '' ? el('span', { class: 'muted', text: NA }) : v));
+      const pref = (rows, f) => (rows.length ? rows.map((r) => f(r.k) + ' (' + r.n + ')').join(', ') : NA);
+      body = [
+        el('div', { class: 'cols' },
+          section('Cuenta', el('dl', { class: 'facts' },
+            fact('Nombre visible', u.display_name), can('players.pii') ? fact('Correo', u.email) : fact('Correo', u.has_email ? 'Oculto para tu rol' : 'No informado'),
+            fact('Correo verificado', u.has_email ? (u.email_verified ? 'Sí' : 'No') : null), fact('Registro', fmt(u.created_at)),
+            fact('Último acceso', u.last_login_at && fmt(u.last_login_at)), fact('Última actividad', u.last_active_at && fmt(u.last_active_at)),
+            fact('Idioma de interfaz', u.ui_language && lang(u.ui_language)), fact('País elegido', u.country_code && country(u.country_code)),
+            fact('Variante de juego', u.play_variant), fact('Zona horaria', u.timezone))),
+          section('Preferencias observadas', el('dl', { class: 'facts' },
+            fact('Idiomas jugados', pref(d.preferences.languages, lang)), fact('Dificultades', pref(d.preferences.difficulties, (k) => 'nivel ' + k)),
+            fact('Categorías', pref(d.preferences.categories, (k) => k || NA)), fact('Modos', pref(d.preferences.modes, (k) => MODES[k] || k)),
+            fact('País al jugar', pref(d.preferences.countries, (k) => (k ? k : NA)))))),
+        el('div', { class: 'cards' },
+          kpi('Partidas', s.games), kpi('Completadas', s.completed), kpi('Resueltas', s.solved), kpi('% resolución', s.solve_rate, { fmt: pct }),
+          kpi('Abandonadas', s.abandoned), kpi('Reveladas', s.revealed), kpi('En curso', s.in_progress), kpi('Respuestas incorrectas', s.wrong),
+          kpi('Pistas usadas', s.hints), kpi('Tiempo medio hasta resolver', s.avg_solve_ms, { fmt: dur }), kpi('Mediana hasta resolver', s.median_solve_ms, { fmt: dur }),
+          kpi('Tiempo activo total', s.active_ms, { fmt: dur }), kpi('Racha actual', s.current_streak), kpi('Mejor racha', s.best_streak),
+          kpi('Última partida', s.last_game_at, { txt: true, fmt: (v) => (v ? fmt(v) : NA) })),
+      ];
+    } else if (tab === 'games') {
+      body = await gamesTable('/api/admin/players/' + id + '/games', q, { hideUser: true });
+    } else if (tab === 'performance') {
+      const p = await api('/api/admin/players/' + id + '/performance');
+      const pts = p.weeks.map((w) => ({ ...w, t: w.week }));
+      body = pts.length ? [
+        section('Partidas por semana', lineChart(pts, [{ k: 'games', t: 'Partidas' }, { k: 'solved', t: 'Resueltas' }], { unit: 'week' })),
+        section('Tasa de resolución semanal', lineChart(pts, [{ k: 'solve_rate', t: '% resolución' }], { unit: 'week', fmt: pct })),
+        section('Tiempo medio hasta resolver', lineChart(pts, [{ k: 'avg_solve_ms', t: 'Tiempo medio' }], { unit: 'week', fmt: dur })),
+        section('Pistas por semana', lineChart(pts, [{ k: 'hints', t: 'Pistas' }], { unit: 'week' })),
+        section('Dificultad media jugada', lineChart(pts, [{ k: 'avg_difficulty', t: 'Dificultad media (1–5)' }], { unit: 'week', fmt: (v) => nf(v) })),
+      ] : empty('Esta cuenta todavía no jugó.');
+    } else if (tab === 'contributions') {
+      const c = await api('/api/admin/players/' + id + '/contributions');
+      body = c.items.length ? table(['Propuesta', 'Respuesta', 'Idioma', 'Estado', 'Enviada', 'Decisiones'], c.items.map((x) => el('tr', {},
+        el('td', {}, can('submissions.read') ? el('a', { href: '#submission/' + x.id, text: x.clue_text }) : x.clue_text), el('td', { text: x.answer }),
+        el('td', { text: x.language_code + (x.variant_code ? ' · ' + x.variant_code : '') }), el('td', {}, pill(x.status)), el('td', { text: fmt(x.created_at) }),
+        el('td', {}, x.events.map((e) => el('div', { class: 'small', text: fmt(e.created_at) + ' · ' + (LABELS[e.to_status] || e.to_status) + (e.actor ? ' · ' + e.actor : '') + (e.note ? ' — ' + e.note : '') })))))) : empty('Sin propuestas enviadas.');
+    } else if (tab === 'activity') {
+      const t = await api('/api/admin/players/' + id + '/timeline');
+      const KIND = { account_created: 'Creó la cuenta', last_login: 'Último inicio de sesión', game: 'Partida', submission: 'Propuesta', admin_action: 'Acción administrativa', data_request: 'Solicitud de datos' };
+      body = section('Actividad reciente', el('p', { class: 'small muted', text: 'Hechos relevantes; no se registra cada movimiento en pantalla.' }),
+        el('ol', { class: 'timeline' }, t.items.map((x) => el('li', {}, el('time', { text: fmt(x.at) }), el('strong', { text: KIND[x.kind] || x.kind }), ' ',
+          x.kind === 'game' ? [gpill(x.status), ' ', el('a', { href: '#game/' + x.game_id, text: x.clue })] : '',
+          x.kind === 'submission' ? [pill(x.status), ' ', x.clue] : '', x.kind === 'admin_action' ? x.action + (x.actor ? ' · ' + x.actor : '') : '',
+          x.kind === 'data_request' ? x.request + ' · ' + x.status : ''))));
+    } else {
+      const h = await api('/api/admin/players/' + id + '/admin-history');
+      body = h.items.length ? table(['Fecha', 'Quién', 'Acción', 'Detalles'], h.items.map((x) => el('tr', {}, el('td', { text: fmt(x.created_at) }), el('td', { text: x.actor || '—' }),
+        el('td', { text: x.action }), el('td', {}, el('code', { class: 'small', text: (x.details || '').slice(0, 200) }))))) : empty('Sin acciones administrativas sobre esta cuenta.');
+    }
+    main.replaceChildren(head, tabs, el('div', { role: 'tabpanel' }, body));
+  };
+
+  // ── Partidas ──
+  async function gamesTable(endpoint, q, opts) {
+    const o = opts || {};
+    const keys = ['id', 'player', 'clue', 'status', 'mode', 'lang', 'variant', 'country', 'from', 'to', 'registered', 'page'];
+    const d = await api(endpoint + '?' + apiQs(q, keys));
+    const st = el('select', { name: 'status', 'data-extra': '1', 'aria-label': 'Estado' }, el('option', { value: '', text: 'Todos los estados' }), Object.keys(GS).map((k) => el('option', { value: k, selected: q.get('status') === k, text: GS[k] })));
+    const md = el('select', { name: 'mode', 'data-extra': '1', 'aria-label': 'Modo' }, el('option', { value: '', text: 'Todos los modos' }), Object.keys(MODES).map((k) => el('option', { value: k, selected: q.get('mode') === k, text: MODES[k] })));
+    const clue = el('input', { name: 'clue', 'data-extra': '1', placeholder: 'Id o slug del críptico', value: q.get('clue') || '' });
+    const gid = el('input', { name: 'id', 'data-extra': '1', placeholder: 'Id de partida', value: q.get('id') || '' });
+    const from = el('input', { type: 'date', name: 'from', 'data-extra': '1', 'aria-label': 'Desde', value: q.get('from') || '' });
+    const to = el('input', { type: 'date', name: 'to', 'data-extra': '1', 'aria-label': 'Hasta', value: q.get('to') || '' });
+    const reg = el('select', { name: 'registered', 'data-extra': '1', 'aria-label': 'Tipo de jugador' }, [['', 'Con y sin cuenta'], ['1', 'Con cuenta'], ['0', 'Sin cuenta']].map(([v, t]) => el('option', { value: v, selected: (q.get('registered') || '') === v, text: t })));
+    const cols = [
+      { k: 'started_at', t: 'Inicio', f: (g) => el('a', { href: '#game/' + g.id, text: fmt(g.started_at) }) },
+      { k: 'clue_text', t: 'Críptico', f: (g) => g.clue_text },
+      ...(o.hideUser ? [] : [{ k: 'username', t: 'Jugador', f: (g) => (g.user_id && g.username ? el('a', { href: '#player/' + g.user_id, text: g.username }) : g.registered ? 'Con cuenta' : 'Sin cuenta (seudónimo)') }]),
+      { k: 'status', t: 'Estado', f: (g) => gpill(g.status, g.end_reason) },
+      { k: 'mode', t: 'Modo', f: (g) => MODES[g.mode] || g.mode },
+      { k: 'language_code', t: 'Idioma', f: (g) => g.language_code },
+      { k: 'play_variant', t: 'Variante', hidden: true },
+      { k: 'country_code', t: 'País elegido', hidden: true },
+      { k: 'difficulty', t: 'Dificultad', num: true, hidden: true },
+      { k: 'attempts', t: 'Intentos', num: true },
+      { k: 'wrong_attempts', t: 'Incorrectas', num: true, hidden: true },
+      { k: 'hints_used', t: 'Pistas', num: true },
+      { k: 'elapsed_ms', t: 'Transcurrido', num: true, f: (g) => dur(g.elapsed_ms) },
+      { k: 'active_ms', t: 'Activo', num: true, f: (g) => dur(g.active_ms) },
+      { k: 'finished_at', t: 'Cierre', f: (g) => (g.finished_at ? fmt(g.finished_at) : '') , hidden: true },
+    ];
+    const exp = can('export.data') && !o.hideUser ? el('a', { class: 'btn', href: '/api/admin/export/games.csv?' + apiQs(q, keys.filter((k) => k !== 'page')), text: 'Exportar CSV' }) : '';
+    return [filterBar(q, { period: false, extra: [gid, clue, st, md, reg, el('label', { class: 'inline small' }, 'Fecha', from, to)] }), exp ? el('div', { class: 'toolbar' }, exp) : '',
+      dataTable(o.hideUser ? 'player-games' : 'games', cols, d.items, { empty: 'No hay partidas con estos filtros.' }), pager(d)];
+  }
+
+  V.games = async () => {
+    const q = qs();
+    const body = await gamesTable('/api/admin/games', q, {});
+    main.replaceChildren(el('div', { class: 'adm-head' }, el('h1', { text: 'Partidas' })),
+      el('p', { class: 'muted small', text: 'Una partida se marca como abandonada recién cuando pasa el plazo de inactividad configurado (analytics.abandon_minutes); si la persona vuelve, se reanuda. Cerrar la pestaña no la abandona en el acto.' }),
+      body);
+  };
+
+  V.game = async (id) => {
+    const d = await api('/api/admin/games/' + id);
+    const g = d.game;
+    const row = (k, v) => el('div', {}, el('dt', { text: k }), el('dd', {}, v === null || v === undefined || v === '' ? el('span', { class: 'muted', text: NA }) : v));
+    const t0 = Date.parse(g.started_at);
+    main.replaceChildren(el('p', {}, el('a', { href: '#games', text: '← Partidas' })),
+      el('h1', { class: 'clue-text', text: g.clue_text }), el('p', {}, gpill(g.status, g.end_reason)),
+      el('div', { class: 'cols' },
+        section('Partida', el('dl', { class: 'facts' }, row('Id', g.id), row('Jugador', g.user_id && g.username ? el('a', { href: '#player/' + g.user_id, text: g.username }) : 'Sin cuenta (identificador seudónimo)'),
+          row('Modo', MODES[g.mode] || g.mode), row('Diario', g.daily_date), row('Variante', g.play_variant), row('País elegido', g.country_code && country(g.country_code)),
+          row('Inicio', fmt(g.started_at)), row('Última actividad', fmt(g.last_activity_at)), row('Cierre', g.finished_at && fmt(g.finished_at)))),
+        section('Medidas', el('dl', { class: 'facts' }, row('Tiempo transcurrido', dur(g.elapsed_ms)), row('Tiempo activo estimado', dur(g.active_ms)),
+          row('Tiempo hasta resolver', g.status === 'solved' ? dur(g.duration_ms) : null), row('Tiempo hasta abandonar', g.status === 'abandoned' ? dur(g.elapsed_ms) : null),
+          row('Intentos', g.attempts), row('Respuestas incorrectas', g.wrong_attempts), row('Pistas', g.hints_used), row('Errores técnicos', g.error_count))),
+        section('Críptico', el('dl', { class: 'facts' }, row('Respuesta', g.answer), row('Idioma', lang(g.language_code)), row('Variante', g.variant_code || 'general'),
+          row('Dificultad', g.difficulty), row('Mecanismo', g.mechanism), row('Origen', LABELS[g.origin] || g.origin)), can('catalog.read') ? el('a', { href: '#clue/' + g.clue_id, text: 'Abrir críptico' }) : '')),
+      section('Eventos', d.events.length ? table(['Momento', 'Desde el inicio', 'Evento', 'Datos'], d.events.map((e) => el('tr', {}, el('td', { text: fmt(e.created_at) }),
+        el('td', { text: dur(Date.parse(e.created_at) - t0) }), el('td', { text: EV[e.kind] || e.kind }), el('td', {}, e.data ? el('code', { class: 'small', text: JSON.stringify(e.data).slice(0, 160) }) : '')))) : empty('Sin eventos registrados.')));
+  };
+
+  // ── Rendimiento por críptico ──
+  const SORT_LABELS = { abandon: 'Más abandonados', solve: 'Menor resolución', time: 'Más lentos', hints: 'Más pistas', flags: 'Posibles errores', plays: 'Más jugados', reveals: 'Más revelados' };
+  V.cluestats = async () => {
+    const q = qs();
+    const d = await api('/api/admin/analytics/clues?' + apiQs(q, ['period', 'from', 'to', 'country', 'lang', 'variant', 'mechanism', 'origin', 'status', 'difficulty', 'q', 'min_plays', 'sort', 'page']));
+    const sort = q.get('sort') || 'plays';
+    const search = el('input', { type: 'search', name: 'q', 'data-extra': '1', placeholder: 'Pista, respuesta o id', value: q.get('q') || '' });
+    const minP = el('input', { type: 'number', min: '0', name: 'min_plays', 'data-extra': '1', 'aria-label': 'Mínimo de partidas', placeholder: 'mín. partidas', size: '8', value: q.get('min_plays') || '' });
+    const diff = el('select', { name: 'difficulty', 'data-extra': '1', 'aria-label': 'Dificultad' }, el('option', { value: '', text: 'Toda dificultad' }), [1, 2, 3, 4, 5].map((n) => el('option', { value: n, selected: q.get('difficulty') === String(n), text: 'Nivel ' + n })));
+    const origin = el('select', { name: 'origin', 'data-extra': '1', 'aria-label': 'Origen' }, el('option', { value: '', text: 'Todo origen' }), ['original', 'generated', 'external', 'community'].map((o) => el('option', { value: o, selected: q.get('origin') === o, text: LABELS[o] })));
+    const per = el('select', { name: 'period', 'data-extra': '1', 'aria-label': 'Período' }, el('option', { value: '', text: 'Todo el historial' }), Object.keys(PERIOD_LABELS).filter((p) => p !== 'custom').map((p) => el('option', { value: p, selected: q.get('period') === p, text: PERIOD_LABELS[p] })));
+    const cols = [
+      { k: 'clue_text', t: 'Críptico', f: (c) => el('span', {}, el('a', { href: '#clue/' + c.id, text: c.clue_text }), c.review ? el('span', { class: 'pill review', title: 'Señalado para revisión: puede ser solo difícil.', text: 'Revisar' }) : '') },
+      { k: 'answer', t: 'Respuesta' }, { k: 'language_code', t: 'Idioma', f: (c) => c.language_code + (c.variant_code ? ' · ' + c.variant_code : '') },
+      { k: 'difficulty', t: 'Dif.', num: true }, { k: 'mechanism', t: 'Mecanismo', hidden: true }, { k: 'origin', t: 'Origen', f: (c) => LABELS[c.origin], hidden: true },
+      { k: 'plays', t: 'Partidas', num: true }, { k: 'solve_rate', t: '% resolución', num: true, f: (c) => (isNum(c.solve_rate) ? pct(c.solve_rate) : '') },
+      { k: 'abandon_rate', t: '% abandono', num: true, f: (c) => (isNum(c.abandon_rate) ? pct(c.abandon_rate) : '') },
+      { k: 'reveal_rate', t: '% revelado', num: true, f: (c) => (isNum(c.reveal_rate) ? pct(c.reveal_rate) : '') },
+      { k: 'wrong', t: 'Incorrectas', num: true, hidden: true },
+      { k: 'avg_solve_ms', t: 'Tiempo medio', num: true, f: (c) => (isNum(c.avg_solve_ms) ? dur(c.avg_solve_ms) : '') },
+      { k: 'median_solve_ms', t: 'Mediana', num: true, f: (c) => (isNum(c.median_solve_ms) ? dur(c.median_solve_ms) : ''), hidden: true },
+      { k: 'hints_avg', t: 'Pistas/partida', num: true, f: (c) => (isNum(c.hints_avg) ? nf(c.hints_avg) : '') },
+      { k: 'reports_open', t: 'Reportes', num: true },
+    ];
+    main.replaceChildren(el('div', { class: 'adm-head' }, el('h1', { text: 'Rendimiento de crípticos' }),
+      can('export.data') ? el('div', { class: 'toolbar' }, el('a', { class: 'btn', href: '/api/admin/export/clues.csv?' + apiQs(q, ['period', 'lang', 'variant', 'origin', 'difficulty', 'q', 'min_plays', 'sort']), text: 'Exportar CSV' })) : ''),
+      el('p', { class: 'muted small', text: `«Revisar» aparece con ${d.thresholds.reports} o más reportes de respuesta/explicación, o con resolución menor a ${d.thresholds.minRate} % y al menos ${d.thresholds.minPlays} partidas. Es una señal para mirar respuesta y explicación: un críptico difícil no está necesariamente mal.` }),
+      el('div', { class: 'tabs' }, Object.keys(SORT_LABELS).map((k) => el('a', { href: '#', class: k === sort ? 'active' : '', onclick: (e) => { e.preventDefault(); const p = Object.fromEntries(qs()); p.sort = k; delete p.page; go(p); }, text: SORT_LABELS[k] }))),
+      filterBar(q, { period: false, extra: [per, search, diff, origin, minP] }),
+      dataTable('cluestats', cols, d.items, { empty: 'Sin crípticos con estos filtros.' }), pager(d));
+  };
+
+  // ── Regiones e idiomas ──
+  V.geo = async () => {
+    const q = qs();
+    const d = await api('/api/admin/analytics/geo?' + apiQs(q, PERIOD_KEYS));
+    const ex = (r) => (can('export.data') ? el('a', { class: 'btn small', href: '/api/admin/export/' + r + '.csv?' + apiQs(q, PERIOD_KEYS), text: 'CSV' }) : '');
+    main.replaceChildren(el('div', { class: 'adm-head' }, el('h1', { text: 'Regiones e idiomas' })),
+      el('p', { class: 'muted small', text: 'País = el que cada persona eligió en sus preferencias. Idioma = el idioma del críptico jugado. Son datos distintos: el idioma no indica dónde está alguien. No se infiere ubicación por IP.' }),
+      filterBar(q),
+      section('Países elegidos', ex('countries'), dataTable('geo-countries', [
+        { k: 'country', t: 'País', f: (c) => country(c.country) }, { k: 'players', t: 'Jugadores', num: true }, { k: 'games', t: 'Partidas', num: true },
+        { k: 'solve_rate', t: '% resolución', num: true, f: (c) => (isNum(c.solve_rate) ? pct(c.solve_rate) : '') },
+        { k: 'active_ms', t: 'Tiempo activo', num: true, f: (c) => dur(c.active_ms) },
+        { k: 'users', t: 'Cuentas', num: true }, { k: 'new_users', t: 'Cuentas nuevas', num: true }, { k: 'active_users', t: 'Cuentas activas', num: true },
+      ], d.countries, { noPicker: true })),
+      el('div', { class: 'cols' },
+        section('Idiomas jugados', ex('languages'), barList(d.languages, (r) => lang(r.lang), (r) => r.games, { extra: (r) => nf(r.players, 0) + ' jug. · ' + pct(r.games ? (r.solved / r.games) * 100 : null) })),
+        section('Variantes jugadas', barList(d.variants, (r) => variantName(r.variant), (r) => r.games, { extra: (r) => nf(r.players, 0) + ' jug.' })),
+        section('Preferencia de las cuentas', el('p', { class: 'small muted', text: 'Variante o idioma guardado en cada cuenta (todas, sin período).' }), barList(d.user_languages, (r) => r.choice || NA, (r) => r.users))),
+      section('Evolución de los 5 países con más partidas', d.evolution.length ? d.evolution.map((e) => el('div', { class: 'mini' }, el('h4', { text: country(e.country) }),
+        lineChart(e.points, [{ k: 'games', t: 'Partidas' }], { height: 90 }))) : empty()));
+  };
+
+  // ── Embudo y retención ──
+  const FUNNEL = { visit: 'Navegadores nuevos que visitaron', start: 'Iniciaron una partida', attempt: 'Enviaron al menos una respuesta', hint: 'Pidieron una pista',
+    complete: 'Completaron un críptico', another: 'Jugaron otro', return: 'Volvieron otro día', register: 'Crearon una cuenta' };
+  V.funnel = async () => {
+    const q = qs(); const seg = q.get('segment') || 'all';
+    const [f, r] = await Promise.all([api('/api/admin/analytics/funnel?' + apiQs(q, PERIOD_KEYS)), api('/api/admin/analytics/retention?' + apiQs(q, [...PERIOD_KEYS, 'segment', 'weeks']))]);
+    const segSel = el('select', { name: 'segment', 'data-extra': '1', 'aria-label': 'Unidad' }, [['all', 'Identificadores de jugador'], ['registered', 'Solo cuentas registradas']].map(([v, t]) => el('option', { value: v, selected: seg === v, text: t })));
+    const s = r.sessions;
+    const max = Math.max(1, ...f.steps.map((x) => x.n));
+    main.replaceChildren(el('div', { class: 'adm-head' }, el('h1', { text: 'Embudo y retención' }),
+      can('export.data') ? el('div', { class: 'toolbar' }, el('a', { class: 'btn', href: '/api/admin/export/retention.csv?' + apiQs(q, ['segment', 'weeks']), text: 'Exportar cohortes CSV' })) : ''),
+      filterBar(q, { extra: [segSel] }),
+      section('Embudo de jugadores nuevos del período',
+        el('p', { class: 'small muted', text: 'Desde «Iniciaron», la unidad es el identificador de jugador creado en el período (un navegador) y cada paso se mide sobre quienes iniciaron: los pasos no son obligatorios en orden (se puede completar sin pedir pistas). La visita es un conteo agregado, sin identificadores, por eso no se encadena exactamente con el segundo paso.' }),
+        el('ol', { class: 'funnel' }, f.steps.map((x, i) => el('li', {}, el('span', { class: 'bar-label', text: (i + 1) + '. ' + FUNNEL[x.key] }),
+          el('span', { class: 'bar-track' }, el('span', { class: 'bar-fill', style: 'width:' + Math.max(1, Math.round((x.n / max) * 100)) + '%' })),
+          el('span', { class: 'bar-value', text: nf(x.n, 0) + (i > 1 ? ' · ' + pct(x.of_start) + ' de los que iniciaron' : '') })))) ),
+      el('div', { class: 'cards' },
+        kpi('Retención D1', r.overall.d1, { fmt: pct, def: 'Del grupo que ya cumplió 1 día desde su primera partida, porcentaje que volvió a jugar al día siguiente.' }),
+        kpi('Retención D7', r.overall.d7, { fmt: pct, def: 'Volvieron a jugar dentro de los 7 días siguientes a su primer día (solo quienes ya cumplieron 7 días).' }),
+        kpi('Retención D30', r.overall.d30, { fmt: pct, def: 'Ídem, dentro de 30 días.' }),
+        kpi('Sesiones', s.sessions, { def: 'Una sesión agrupa las partidas de la misma unidad separadas por menos de 30 minutos.' }),
+        kpi('Sesiones por unidad', s.sessions_per_unit, { fmt: (v) => nf(v) }), kpi('Partidas por sesión', s.games_per_session, { fmt: (v) => nf(v) }),
+        kpi('Horas entre sesiones (prom.)', s.avg_hours_between_sessions, { fmt: (v) => (isNum(v) ? nf(v) + ' h' : NA) }),
+        kpi('Jugaron más de una partida', s.multi_game_pct, { fmt: pct })),
+      section('Cohortes semanales (' + (seg === 'registered' ? 'cuentas registradas' : 'identificadores de jugador') + ')',
+        el('p', { class: 'small muted', text: seg === 'registered' ? 'Cada cuenta es una persona identificada.' : 'Un identificador es un navegador, no una persona: alguien que juega en dos dispositivos sin cuenta cuenta dos veces. «—» = la ventana todavía no se cumplió.' }),
+        r.cohorts.length ? table(['Semana (lunes)', 'Nuevos', 'D1', 'D7', 'D30', 'Volvieron alguna vez'], r.cohorts.map((c) => el('tr', {}, el('td', { text: c.week }), el('td', { class: 'num', text: c.size }),
+          ...['d1', 'd7', 'd30', 'returned'].map((k) => el('td', { class: 'heat', 'data-v': isNum(c[k]) ? String(Math.min(4, Math.floor(c[k] / 20))) : '', text: isNum(c[k]) ? pct(c[k]) : '—' }))))) : empty()));
+  };
+
+  // ── Catálogo ──
+  V.catstats = async () => {
+    const d = await api('/api/admin/analytics/catalog');
+    const bl = (rows, f) => barList(rows, f, (r) => r.n);
+    main.replaceChildren(el('h1', { text: 'Estadísticas del catálogo' }),
+      el('div', { class: 'cards' }, kpi('Crípticos en total', d.total), kpi('Validación fallida', d.validation_failed, { warn: true, href: '#catalog?validation_status=failed' }),
+        kpi('Duplicados por revisar', d.duplicates_open, { warn: true, href: '#duplicates' }), kpi('Reportes abiertos', d.reports_open, { warn: true, href: '#reports' })),
+      el('div', { class: 'cols' },
+        section('Por estado', bl(d.by_status, (r) => LABELS[r.k] || r.k)), section('Por origen', bl(d.by_origin, (r) => LABELS[r.k] || r.k)),
+        section('Por idioma', bl(d.by_language, (r) => lang(r.k))), section('Por variante', bl(d.by_variant, (r) => r.k)),
+        section('Por dificultad', bl(d.by_difficulty, (r) => 'Nivel ' + r.k)), section('Por mecanismo', bl(d.by_mechanism, (r) => r.k || NA))));
+  };
+
+  // ── Estado de fuentes externas ──
+  V.importstats = async () => {
+    const d = await api('/api/admin/analytics/imports');
+    main.replaceChildren(el('div', { class: 'adm-head' }, el('h1', { text: 'Estado de fuentes externas' }),
+      can('export.data') ? el('div', { class: 'toolbar' }, el('a', { class: 'btn', href: '/api/admin/export/imports.csv', text: 'Exportar CSV' })) : ''),
+      el('p', { class: 'muted small', text: 'Que una página publique un críptico no da permiso para republicarlo: solo se publica solo lo que viene de una fuente aprobada con licencia que lo permita.' }),
+      d.job ? el('p', { class: 'small', text: 'Tarea de importación: ' + (d.job.last_status || 'sin ejecutar') + ' · última ' + fmt(d.job.last_run_at) + ' · próxima ' + fmt(d.job.next_run_at) }) : '',
+      dataTable('importstats', [
+        { k: 'name', t: 'Fuente', f: (s) => el('a', { href: '#source/' + s.id, text: s.name }) }, { k: 'status', t: 'Estado', f: (s) => pill(s.status) },
+        { k: 'license_name', t: 'Licencia' }, { k: 'access_method', t: 'Acceso', hidden: true }, { k: 'language_code', t: 'Idioma', hidden: true },
+        { k: 'last_success_at', t: 'Último éxito', f: (s) => (s.last_success_at ? fmt(s.last_success_at) : '') }, { k: 'next_run_at', t: 'Próxima', f: (s) => (s.next_run_at ? fmt(s.next_run_at) : ''), hidden: true },
+        { k: 'items', t: 'Elementos', num: true }, { k: 'auto_published', t: 'Publicados solos', num: true }, { k: 'published_manual', t: 'Publicados a mano', num: true },
+        { k: 'review', t: 'En revisión', num: true }, { k: 'duplicates', t: 'Duplicados', num: true }, { k: 'discarded', t: 'Descartados', num: true },
+        { k: 'errors', t: 'Errores', num: true }, { k: 'consecutive_failures', t: 'Fallos seguidos', num: true }, { k: 'last_error', t: 'Último error', hidden: true },
+      ], d.sources, { empty: 'Todavía no hay fuentes externas.' }));
+  };
+
+  // ── Alertas ──
+  const SEV = { critical: 'Crítica', warning: 'Advertencia', info: 'Información' };
+  const AST = { open: 'Abierta', acknowledged: 'Vista', resolved: 'Resuelta' };
+  V.alerts = async () => {
+    const q = qs();
+    const d = await api('/api/admin/alerts?' + apiQs(q, ['status', 'severity']));
+    const st = el('select', { name: 'status', 'data-extra': '1', 'aria-label': 'Estado' }, [['', 'Sin resolver'], ['open', 'Abiertas'], ['acknowledged', 'Vistas'], ['resolved', 'Resueltas']].map(([v, t]) => el('option', { value: v, selected: (q.get('status') || '') === v, text: t })));
+    const sv = el('select', { name: 'severity', 'data-extra': '1', 'aria-label': 'Gravedad' }, [['', 'Toda gravedad'], ['critical', 'Críticas'], ['warning', 'Advertencias'], ['info', 'Información']].map(([v, t]) => el('option', { value: v, selected: (q.get('severity') || '') === v, text: t })));
+    const set = (id, status) => act(() => api('/api/admin/alerts/' + id, { method: 'POST', body: { status } }), 'Alerta actualizada.');
+    main.replaceChildren(el('div', { class: 'adm-head' }, el('h1', { text: 'Alertas' }),
+      el('div', { class: 'toolbar' }, can('alerts.manage') ? btn('Revisar ahora', act(async () => { const r = await api('/api/admin/alerts/scan', { method: 'POST', body: {} }); flash('Revisión hecha: ' + r.alerts + ' condiciones detectadas.', true); })) : '',
+        can('settings.write') ? el('a', { class: 'btn', href: '#settings', text: 'Umbrales (alerts.*)' }) : '')),
+      el('p', { class: 'muted small', text: 'Última revisión automática: ' + (d.last_scan ? fmt(d.last_scan.last_run_at) : NA) + '. Los umbrales y la muestra mínima se configuran en «Reglas y funciones». Las copias de seguridad las gestiona Turso: este panel no tiene acceso a su estado.' }),
+      filterBar(q, { period: false, geo: false, extra: [st, sv] }),
+      d.items.length ? el('ul', { class: 'alert-list' }, d.items.map((x) => el('li', { class: 'alert sev-' + x.severity },
+        el('div', { class: 'alert-head' }, el('span', { class: 'pill sev-' + x.severity, text: (x.severity === 'critical' ? '⛔ ' : x.severity === 'warning' ? '⚠ ' : 'ℹ ') + SEV[x.severity] }),
+          el('strong', { text: x.title }), el('span', { class: 'pill', text: AST[x.status] })),
+        el('p', { class: 'small muted', text: 'Primera vez ' + fmt(x.first_seen_at) + ' · última ' + fmt(x.last_seen_at) + ' · ' + x.occurrences + ' veces' + (x.resolved_at ? ' · resuelta ' + fmt(x.resolved_at) : '') }),
+        x.details && x.details.note ? el('p', { class: 'small', text: x.details.note }) : '',
+        x.details && x.details.clue_id ? el('a', { class: 'small', href: '#clue/' + x.details.clue_id, text: 'Abrir críptico' }) : '',
+        x.details && x.details.source_id ? el('a', { class: 'small', href: '#source/' + x.details.source_id, text: 'Abrir fuente' }) : '',
+        x.details && x.details.error ? el('code', { class: 'small', text: String(x.details.error).slice(0, 200) }) : '',
+        can('alerts.manage') ? el('div', { class: 'toolbar' }, x.status === 'open' ? btn('Marcar como vista', set(x.id, 'acknowledged')) : '',
+          x.status !== 'resolved' ? btn('Resolver', set(x.id, 'resolved'), 'primary') : btn('Reabrir', set(x.id, 'open'))) : ''))) : empty('No hay alertas en este estado.'));
+  };
+
+  // ── Privacidad ──
+  const DRK = { access: 'Acceso a sus datos', rectification: 'Corrección', deletion: 'Eliminación' };
+  const DRS = { open: 'Abierta', in_progress: 'En curso', done: 'Completada', rejected: 'Rechazada' };
+  V.privacy = async () => {
+    const q = qs();
+    const d = await api('/api/admin/privacy/requests' + (q.get('status') ? '?status=' + q.get('status') : ''));
+    const upd = (x, status) => async () => {
+      if (x.kind === 'deletion' && status === 'done' && !confirm('Completar una solicitud de eliminación anonimiza la cuenta de forma irreversible. ¿Continuar?')) return;
+      const note = prompt('Nota de resolución (opcional):'); if (note === null) return;
+      try { await api('/api/admin/privacy/requests/' + x.id, { method: 'POST', body: { status, note } }); flash('Solicitud actualizada.', true); route(); } catch (e) { flash(e.message); }
+    };
+    main.replaceChildren(el('h1', { text: 'Privacidad y solicitudes de datos' }),
+      el('div', { class: 'panel small' }, el('ul', {},
+        el('li', { text: 'Cada persona puede descargar sus datos y pedir correcciones desde su perfil; borrar la cuenta la anonimiza en el acto.' }),
+        el('li', { text: 'Las IP no se guardan completas: solo un hash en las sesiones, que se borra a los 30 días.' }),
+        el('li', { text: 'No se infiere ubicación. País e idioma son los que cada persona elige.' }),
+        el('li', { text: 'Ver una ficha con correo y cada exportación quedan registrados en la auditoría.' }))),
+      el('div', { class: 'tabs' }, [['', 'Pendientes y recientes'], ['open', 'Abiertas'], ['in_progress', 'En curso'], ['done', 'Completadas'], ['rejected', 'Rechazadas']].map(([k, t]) =>
+        el('a', { href: '#privacy' + (k ? '?status=' + k : ''), class: (q.get('status') || '') === k ? 'active' : '', text: t }))),
+      d.items.length ? table(['Recibida', 'Cuenta', 'Tipo', 'Mensaje', 'Estado', ''], d.items.map((x) => el('tr', {}, el('td', { text: fmt(x.created_at) }),
+        el('td', {}, x.user_id ? el('a', { href: '#player/' + x.user_id, text: x.username || x.user_id }) : NA), el('td', { text: DRK[x.kind] || x.kind }),
+        el('td', { text: x.message || '' }), el('td', {}, el('span', { class: 'pill', text: DRS[x.status] }), x.resolution_note ? el('div', { class: 'small muted', text: x.resolution_note + (x.resolved_by_name ? ' · ' + x.resolved_by_name : '') }) : ''),
+        el('td', {}, ['open', 'in_progress'].includes(x.status) ? [x.status === 'open' ? btn('Tomar', upd(x, 'in_progress')) : '', btn('Completar', upd(x, 'done'), 'primary'), btn('Rechazar', upd(x, 'rejected'))] : '')))) : empty('No hay solicitudes en este estado.'));
+  };
+
+  // ── Exportaciones ──
+  V.exports = async () => {
+    const q = qs();
+    const R = [
+      ['users', 'Usuarios registrados', 'players.read', 'Una fila por cuenta con sus estadísticas. Sin contraseñas ni tokens.'],
+      ['games', 'Partidas', 'games.read', 'Una fila por partida, con estado, intentos, pistas y tiempos.'],
+      ['daily', 'Resumen diario', 'analytics.read', 'Partidas por día, idioma, país, variante y modo.'],
+      ['countries', 'Países', 'analytics.read', 'Jugadores, partidas y cuentas por país elegido.'],
+      ['languages', 'Idiomas y variantes', 'analytics.read', 'Partidas y jugadores por idioma y variante.'],
+      ['clues', 'Rendimiento de crípticos', 'analytics.read', 'Resolución, abandono, tiempos y reportes por críptico.'],
+      ['retention', 'Cohortes de retención', 'analytics.read', 'D1, D7 y D30 por semana.'],
+      ['imports', 'Fuentes e importaciones', 'sources.read', 'Estado y resultados por fuente externa.'],
+      ['submissions', 'Propuestas de usuarios', 'submissions.read', 'Propuestas con estado y cantidad de decisiones.'],
+    ];
+    const email = el('input', { type: 'checkbox', id: 'exp-email' });
+    const per = filterBar(q);
+    const link = (k) => { const p = new URLSearchParams(apiQs(q, PERIOD_KEYS)); if (k === 'users' && email.checked) p.set('include_email', '1'); return '/api/admin/export/' + k + '.csv' + (String(p) ? '?' + p : ''); };
+    const rows = R.filter((r) => can(r[2])).map(([k, t, , desc]) => {
+      const a = el('a', { class: 'btn', href: link(k), text: 'Descargar CSV' });
+      if (k === 'users') email.addEventListener('change', () => { a.href = link(k); });
+      return el('tr', {}, el('td', {}, el('strong', { text: t }), el('div', { class: 'small muted', text: desc })), el('td', {}, a));
+    });
+    main.replaceChildren(el('h1', { text: 'Exportaciones' }),
+      el('p', { class: 'muted small', text: 'Cada descarga queda en la auditoría con quién, cuándo, filtros y si incluyó datos personales. Las celdas se protegen contra fórmulas de hoja de cálculo. Período y filtros se aplican a los informes de estadísticas.' }),
+      per, can('export.pii') ? el('label', { class: 'check' }, email, 'Incluir correos en «Usuarios» (dato personal: usalo solo si es necesario)') : '',
+      table(['Informe', ''], rows));
   };
 
   async function catalogList(fixed, title) {
@@ -393,10 +1016,15 @@
   V.users = async () => {
     const d = await api('/api/admin/users');
     const u = el('input', { placeholder: 'usuario' }); const p = el('input', { type: 'password', placeholder: 'contraseña (10+)', autocomplete: 'new-password' });
-    const r = el('select', {}, ['moderator', 'editor', 'owner'].map((x) => el('option', { value: x, text: x })));
+    const ROLES = (meta && meta.roles) || { moderator: 'Moderador', analyst: 'Analista de estadísticas', editor: 'Administrador de contenido', owner: 'Superadministrador' };
+    const r = el('select', { 'aria-label': 'Rol' }, ['moderator', 'analyst', 'editor', 'owner'].map((x) => el('option', { value: x, text: ROLES[x] || x })));
     main.replaceChildren(el('h1', { text: 'Equipo' }), el('p', { class: 'muted', text: d.players + ' jugadores con cuenta.' }),
-      el('div', { class: 'panel' }, el('h3', { text: 'Roles' }), el('ul', {}, el('li', { text: 'owner: todo, incluida la configuración y el equipo.' }), el('li', { text: 'editor: catálogo, fuentes e importaciones.' }), el('li', { text: 'moderator: propuestas de usuarios y reportes.' }))),
-      table(['Usuario', 'Rol', 'Estado', 'Último acceso', ''], d.items.map((x) => el('tr', {}, el('td', { text: x.username }), el('td', { text: x.role }), el('td', { text: x.disabled ? 'desactivado' : 'activo' }), el('td', { text: fmt(x.last_login_at) }),
+      el('div', { class: 'panel' }, el('h3', { text: 'Roles' }), el('ul', {}, el('li', { text: (ROLES.owner || 'owner') + ': todo, incluida la configuración, el equipo, los datos personales y la auditoría.' }),
+        el('li', { text: (ROLES.editor || 'editor') + ': catálogo, fuentes, importaciones, estadísticas y alertas (sin datos personales).' }),
+        el('li', { text: (ROLES.moderator || 'moderator') + ': propuestas de usuarios y reportes.' }),
+        el('li', { text: (ROLES.analyst || 'analyst') + ': estadísticas, usuarios y partidas en modo lectura, sin correos ni acciones.' })),
+        el('p', { class: 'small muted', text: 'Los permisos se verifican en el servidor en cada operación.' })),
+      table(['Usuario', 'Rol', 'Estado', 'Último acceso', ''], d.items.map((x) => el('tr', {}, el('td', { text: x.username }), el('td', { text: ROLES[x.role] || x.role }), el('td', { text: x.disabled ? 'desactivado' : 'activo' }), el('td', { text: fmt(x.last_login_at) }),
         el('td', {}, x.id !== me.id ? btn(x.disabled ? 'Reactivar' : 'Desactivar', act(() => api('/api/admin/users/' + x.id, { method: 'PATCH', body: { disabled: !x.disabled } }))) : '(vos)')))),
       el('h2', { text: 'Agregar integrante' }), el('div', { class: 'toolbar' }, u, p, r, btn('Crear', act(() => api('/api/admin/users', { method: 'POST', body: { username: u.value, password: p.value, role: r.value } }), 'Cuenta creada.'), 'primary')));
   };
@@ -419,12 +1047,19 @@
     if (!me) return;
     const [name, arg] = location.hash.replace(/^#/, '').split('?')[0].split('/');
     const view = V[name || 'dashboard'] ? (name || 'dashboard') : 'dashboard';
-    document.querySelectorAll('#admin-nav a').forEach((a) => a.classList.toggle('active', a.getAttribute('href') === '#' + view));
+    const PARENT = { player: 'players', game: 'games', clue: 'catalog', submission: 'submissions', source: 'sources' };
+    const navKey = PARENT[view] || view;
+    document.querySelectorAll('#admin-nav a').forEach((a) => {
+      const on = a.getAttribute('href') === '#' + navKey;
+      a.classList.toggle('active', on); if (on) { a.setAttribute('aria-current', 'page'); $('#nav-current').textContent = '· ' + a.textContent; } else a.removeAttribute('aria-current');
+    });
+    $('#nav-toggle').setAttribute('aria-expanded', 'false');
     try { await V[view](arg); main.focus({ preventScroll: true }); } catch (e) {
       if (e.status === 401) return loginView('La sesión expiró.');
       main.replaceChildren(el('p', { class: 'flash bad', text: e.status === 403 ? 'Tu rol no tiene permiso para esta sección.' : 'Error: ' + e.message }));
     }
   }
   window.addEventListener('hashchange', route);
+  $('#nav-toggle').addEventListener('click', (e) => { const b = e.currentTarget; b.setAttribute('aria-expanded', b.getAttribute('aria-expanded') === 'true' ? 'false' : 'true'); });
   boot().catch(() => loginView());
 })();

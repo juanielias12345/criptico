@@ -49,7 +49,7 @@ async function createUser(db, { username, password, email, role = 'player', disp
   if (problems.length) throw new HttpError(400, 'weak_password', 'La contraseña es débil.', { problems });
   const mail = email ? String(email).trim().toLowerCase() : null;
   if (mail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(mail)) throw new HttpError(400, 'invalid_email');
-  if (!['player', 'moderator', 'editor', 'owner'].includes(role)) throw new HttpError(400, 'invalid_role');
+  if (!['player', ...STAFF_ROLES].includes(role)) throw new HttpError(400, 'invalid_role');
   if (await db.get('SELECT 1 FROM users WHERE username = ? OR (email IS NOT NULL AND email = ?)', [u, mail])) {
     throw new HttpError(409, 'user_exists', 'Ese usuario o correo ya está registrado.');
   }
@@ -108,13 +108,24 @@ function publicUser(u) {
 // Permisos por rol. El panel solo muestra lo que el rol permite, pero la
 // comprobación real ocurre en cada ruta del servidor.
 const PERMISSIONS = {
+  // Superadministrador: todo, incluidos datos personales, configuración y permisos.
   owner: ['dashboard', 'catalog.read', 'catalog.write', 'catalog.delete', 'sources.read', 'sources.write', 'imports.review',
-    'submissions.read', 'submissions.moderate', 'reports.manage', 'languages.write', 'settings.write', 'users.manage', 'audit.read', 'jobs.run'],
-  editor: ['dashboard', 'catalog.read', 'catalog.write', 'sources.read', 'sources.write', 'imports.review', 'reports.manage', 'jobs.run'],
+    'submissions.read', 'submissions.moderate', 'reports.manage', 'languages.write', 'settings.write', 'users.manage', 'audit.read', 'jobs.run',
+    'analytics.read', 'players.read', 'players.pii', 'players.manage', 'privacy.manage', 'games.read', 'alerts.read', 'alerts.manage',
+    'export.data', 'export.pii'],
+  // Administrador de contenido: catálogo, fuentes e importaciones, y el rendimiento de los crípticos.
+  editor: ['dashboard', 'catalog.read', 'catalog.write', 'sources.read', 'sources.write', 'imports.review', 'reports.manage', 'jobs.run',
+    'analytics.read', 'alerts.read', 'export.data'],
+  // Moderador: propuestas de usuarios y reportes; sin datos personales ni estadísticas de usuarios.
   moderator: ['dashboard', 'catalog.read', 'submissions.read', 'submissions.moderate', 'reports.manage'],
+  // Analista: estadísticas agregadas, partidas y fichas de usuario sin correo electrónico.
+  analyst: ['dashboard', 'catalog.read', 'analytics.read', 'players.read', 'games.read', 'alerts.read', 'export.data'],
   player: [],
 };
 
+const ROLE_LABELS = { owner: 'Superadministrador', editor: 'Administrador de contenido', moderator: 'Moderador', analyst: 'Analista de estadísticas', player: 'Jugador' };
+const STAFF_ROLES = ['owner', 'editor', 'moderator', 'analyst'];
+
 const can = (user, perm) => !!user && (PERMISSIONS[user.role] || []).includes(perm);
 
-module.exports = { hashPassword, verifyPassword, createUser, login, logout, sessionFromToken, passwordProblems, PERMISSIONS, can, publicUser };
+module.exports = { ROLE_LABELS, STAFF_ROLES, hashPassword, verifyPassword, createUser, login, logout, sessionFromToken, passwordProblems, PERMISSIONS, can, publicUser };

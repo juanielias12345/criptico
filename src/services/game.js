@@ -7,6 +7,7 @@ const N = require('../lib/normalize');
 const { publicClue, solutionView } = require('./clues');
 const { getSetting } = require('./settings');
 const { uuid, now, parseJson, HttpError, sha256 } = require('./util');
+const track = require('./tracking');
 
 const MODES = {
   quick: {}, infinite: {}, practice: { noStats: true }, streak: {}, shared: {}, archive: {},
@@ -103,14 +104,21 @@ async function startGame(db, { playerId, choice, mode = 'infinite', category, di
   }
   if (!clue) return { player_id: player.id, clue: null, notice: notice || { kind: 'empty', alternatives: [] } };
 
-  const gameId = uuid();
-  await db.run('INSERT INTO games(id, player_id, clue_id, mode, play_variant, country_code) VALUES (?,?,?,?,?,?)',
-    [gameId, player.id, clue.id, mode, choice || null, country || null]);
+  const gameId = await insertGame(db, { playerId: player.id, clueId: clue.id, mode, variant: choice, country });
   return {
     player_id: player.id, game_id: gameId, clue: publicClue(clue), notice, recycled,
     max_hints: await getSetting(db, 'game.max_hints'),
     timed_seconds: mode === 'timed' ? await getSetting(db, 'game.timed_seconds') : null,
   };
+}
+
+async function insertGame(db, { playerId, clueId, mode, variant, country, dailyDate, restartOf }) {
+  const id = uuid(); const at = now();
+  await db.run(`INSERT INTO games(id, player_id, clue_id, mode, play_variant, country_code, daily_date, started_at, last_activity_at, status)
+    VALUES (?,?,?,?,?,?,?,?,?, 'started')`, [id, playerId, clueId, mode, variant || null, country || null, dailyDate || null, at, at]);
+  await track.event(db, id, 'start', restartOf ? { restart_of: restartOf } : null);
+  await track.bumpPlayerDay(db, playerId, { games: 1 }, at);
+  return id;
 }
 
 async function loadGame(db, gameId, playerId) {
@@ -120,10 +128,21 @@ async function loadGame(db, gameId, playerId) {
   return { g, clue };
 }
 
-async function finish(db, g, result) {
-  const duration = Date.now() - Date.parse(g.started_at);
-  await db.run('UPDATE games SET finished_at = ?, result = ?, duration_ms = ? WHERE id = ? AND finished_at IS NULL',
-    [now(), result, duration, g.id]);
+const FINAL = { solved: ['solved', 'solved'], revealed: ['revealed', 'revealed'], skipped: ['abandoned', 'skipped'], timeout: ['expired', 'timeout'] };
+
+// Cierra la partida una sola vez (la condición finished_at IS NULL evita dobles cierres).
+async function finish(db, g, result, extra = {}) {
+  const at = Date.now();
+  const duration = at - Date.parse(g.started_at);
+  const delta = await track.activeDelta(db, g, at);
+  const [status, reason] = FINAL[result];
+  const r = await db.run(`UPDATE games SET finished_at = ?, result = ?, duration_ms = ?, status = ?, end_reason = ?, last_activity_at = ?,
+    active_ms = active_ms + ?, attempts = attempts + ? WHERE id = ? AND finished_at IS NULL`,
+  [new Date(at).toISOString(), result, duration, status, reason, new Date(at).toISOString(), delta, extra.attempt ? 1 : 0, g.id]);
+  if (!r.changes) return false;
+  await track.event(db, g.id, { solved: 'guess_correct', revealed: 'reveal', skipped: 'skip', timeout: 'timeout' }[result], extra.data || null);
+  if (result === 'solved') await track.bumpPlayerDay(db, g.player_id, { solved: 1 });
+  return true;
 }
 
 // Comparación de respuestas: se ignoran mayúsculas, espacios, signos y tildes
@@ -138,23 +157,42 @@ async function guess(db, { gameId, playerId, answer }) {
     return { correct: key === clue.answer_key, finished: true, result: g.result, solution: solutionView(clue) };
   }
   const accepted = [clue.answer_key, ...parseJson(clue.alt_answers, [])];
-  const attempts = g.attempts + 1;
-  await db.run('UPDATE games SET attempts = ? WHERE id = ?', [attempts, g.id]);
+  const cur = await track.resumeIfAbandoned(db, g);
   if (accepted.includes(key)) {
-    await finish(db, g, 'solved');
+    await finish(db, cur, 'solved', { attempt: true });
+    const attempts = (await db.get('SELECT attempts FROM games WHERE id = ?', [g.id])).attempts;
     return { correct: true, attempts, hints_used: g.hints_used, solution: solutionView(clue), daily: g.daily_date ? await dailySummary(db, g.daily_date, lang) : null };
   }
   const feedback = [];
   if (key.length !== clue.answer_key.length) feedback.push({ code: 'length', expected: clue.answer_key.length, got: key.length });
   else if (key.replace(/Ñ/g, 'N') === clue.answer_key.replace(/Ñ/g, 'N')) feedback.push({ code: 'enye' });
-  return { correct: false, attempts, feedback };
+  // El mismo intento repetido (por ejemplo, un reenvío tras un corte de conexión) no se cuenta dos veces.
+  const delta = await track.activeDelta(db, cur);
+  const r = await db.run(`UPDATE games SET attempts = attempts + 1, wrong_attempts = wrong_attempts + 1, last_wrong_key = ?, status = 'in_progress',
+    active_ms = active_ms + ?, last_activity_at = ? WHERE id = ? AND finished_at IS NULL AND (last_wrong_key IS NULL OR last_wrong_key <> ?)`,
+  [key, delta, now(), g.id, key]);
+  await track.event(db, g.id, r.changes ? 'guess_wrong' : 'guess_repeat', { length: key.length });
+  const attempts = (await db.get('SELECT attempts FROM games WHERE id = ?', [g.id])).attempts;
+  return { correct: false, attempts, feedback, repeated: !r.changes };
 }
 
-async function hint(db, { gameId, playerId }) {
+// «level» es la pista que el navegador pide (1, 2…). Si ya se entregó, se devuelve
+// sin sumar: un reenvío por un corte de conexión o un doble clic no cuenta dos veces.
+async function hint(db, { gameId, playerId, level: wanted }) {
   const { g, clue } = await loadGame(db, gameId, playerId);
   const max = await getSetting(db, 'game.max_hints');
+  if (Number.isInteger(wanted) && wanted >= 1 && wanted <= g.hints_used) {
+    return { hints: buildHints(clue, g.hints_used), hints_used: g.hints_used, max_hints: max, repeated: true };
+  }
   const level = Math.min(g.hints_used + 1, max);
-  if (!g.finished_at && g.hints_used < max) await db.run('UPDATE games SET hints_used = ? WHERE id = ?', [level, g.id]);
+  if (!g.finished_at && g.hints_used < max) {
+    const cur = await track.resumeIfAbandoned(db, g);
+    const delta = await track.activeDelta(db, cur);
+    // Condición sobre el valor leído: dos pedidos simultáneos no suman dos pistas.
+    const r = await db.run(`UPDATE games SET hints_used = ?, status = 'in_progress', active_ms = active_ms + ?, last_activity_at = ?
+      WHERE id = ? AND hints_used = ? AND finished_at IS NULL`, [level, delta, now(), g.id, g.hints_used]);
+    if (r.changes) await track.event(db, g.id, 'hint', { level });
+  }
   return { hints: buildHints(clue, level), hints_used: level, max_hints: max };
 }
 
@@ -190,9 +228,8 @@ async function skip(db, { gameId, playerId, reason }) {
 async function restart(db, { gameId, playerId }) {
   const { g, clue } = await loadGame(db, gameId, playerId);
   if (g.result === 'solved') throw new HttpError(409, 'already_solved');
-  const id = uuid();
-  await db.run('INSERT INTO games(id, player_id, clue_id, mode, play_variant, country_code, daily_date) VALUES (?,?,?,?,?,?,?)',
-    [id, playerId, g.clue_id, g.mode, g.play_variant, g.country_code, g.daily_date]);
+  if (!g.finished_at) await finish(db, g, 'skipped', { data: { restarted: true } });
+  const id = await insertGame(db, { playerId, clueId: g.clue_id, mode: g.mode, variant: g.play_variant, country: g.country_code, dailyDate: g.daily_date, restartOf: g.id });
   return { game_id: id, clue: publicClue(clue) };
 }
 
@@ -231,9 +268,9 @@ async function startDaily(db, { playerId, choice, country }) {
   const clue = await db.get('SELECT * FROM clues WHERE id = ?', [clueId]);
   let gameId = prev && prev.id;
   if (!prev) {
-    gameId = uuid();
-    await db.run('INSERT INTO games(id, player_id, clue_id, mode, play_variant, country_code, daily_date) VALUES (?,?,?,?,?,?,?)',
-      [gameId, player.id, clueId, 'daily', choice || null, country || null, date]);
+    gameId = await insertGame(db, { playerId: player.id, clueId, mode: 'daily', variant: choice, country, dailyDate: date });
+  } else if (!prev.finished_at) {
+    await track.resumeIfAbandoned(db, prev);
   }
   return {
     player_id: player.id, game_id: gameId, date, clue: publicClue(clue), max_hints: await getSetting(db, 'game.max_hints'),
@@ -304,4 +341,9 @@ function achievements(s, langs) {
   return a;
 }
 
-module.exports = { startGame, guess, hint, reveal, skip, restart, startDaily, ensureDaily, dailySummary, playerStats, ensurePlayer, resolveVariant, buildHints, MODES, today };
+async function pingGame(db, { gameId, playerId }) {
+  const { g } = await loadGame(db, gameId, playerId);
+  return track.ping(db, g);
+}
+
+module.exports = { pingGame, startGame, guess, hint, reveal, skip, restart, startDaily, ensureDaily, dailySummary, playerStats, ensurePlayer, resolveVariant, buildHints, MODES, today };

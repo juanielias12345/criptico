@@ -14,6 +14,8 @@ const { cleanupRateLimits } = require('./ratelimit');
 const { logError } = require('./audit');
 const { generate } = require('../lib/generator');
 const { now } = require('./util');
+const analytics = require('./analytics');
+const alerts = require('./alerts');
 
 const LEASE_MINUTES = 10;
 
@@ -62,8 +64,20 @@ const HANDLERS = {
     await db.run('DELETE FROM error_log WHERE created_at < ?', [cut(90)]);
     await db.run('DELETE FROM job_runs WHERE started_at < ?', [cut(30)]);
     await db.run('DELETE FROM players WHERE user_id IS NULL AND last_seen_at < ? AND id NOT IN (SELECT player_id FROM games)', [cut(gamesDays)]);
+    await db.run('DELETE FROM game_events WHERE created_at < ?', [cut(await getSetting(db, 'retention.game_events_days'))]);
+    await db.run('DELETE FROM traffic_daily WHERE day < ?', [cut(await getSetting(db, 'retention.traffic_days')).slice(0, 10)]);
+    await db.run('DELETE FROM player_days WHERE day < ?', [cut(gamesDays).slice(0, 10)]);
+    await db.run("DELETE FROM alerts WHERE status = 'resolved' AND resolved_at < ?", [cut(180)]);
+    // Las sesiones guardan un hash de IP solo para seguridad; tras 30 días se borra.
+    await db.run('UPDATE sessions SET ip_hash = NULL WHERE created_at < ?', [cut(30)]);
     await cleanupRateLimits(db);
     return { ok: true };
+  },
+  async analytics_rollup(db) {
+    return analytics.refresh(db, { force: true });
+  },
+  async alerts_scan(db) {
+    return alerts.scan(db);
   },
   async recover_stuck(db) {
     // Ejecuciones que quedaron "running" por una caída del proceso.

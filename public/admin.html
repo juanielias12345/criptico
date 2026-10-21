@@ -7,22 +7,34 @@
 <title>Panel · Play Crípticos</title>
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="preload" href="/fonts/instrument-sans-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="/css/app.css?v=2026-10-21c">
-<link rel="stylesheet" href="/css/admin.css?v=2026-10-21c">
+<link rel="stylesheet" href="/css/app.css?v=2026-10-21d">
+<link rel="stylesheet" href="/css/admin.css?v=2026-10-21d">
 </head>
 <body class="admin">
 <header class="site-header">
   <div class="bar">
     <a class="brand" href="#dashboard"><svg class="logo-mark" viewBox="0 0 32 32" aria-hidden="true" focusable="false"><rect width="32" height="32" fill="var(--accent)"/><path d="M10.5 7.5 25 16 10.5 24.5z" fill="var(--accent-ink)" stroke="var(--accent-ink)" stroke-width="1.6" stroke-linejoin="round"/><rect x="12.4" y="14" width="4" height="4" fill="var(--accent)"/></svg><span class="brand-name"><span class="brand-first">Play</span> Crípticos</span><span class="admin-tag">Panel</span></a>
     <span class="admin-who" id="who"></span>
-    <div class="header-tools"><a class="btn small" href="/" target="_blank" rel="noopener">Ver sitio ↗</a><button class="btn small" type="button" id="logout" hidden>Salir</button></div>
+    <div class="header-tools"><a class="btn small" href="/" target="_blank" rel="noopener" aria-label="Ver sitio"><span class="hide-xs">Ver sitio </span>↗</a><button class="btn small" type="button" id="logout" hidden>Salir</button></div>
   </div>
 </header>
 <div class="admin-wrap">
+  <button class="btn admin-nav-toggle" type="button" id="nav-toggle" aria-controls="admin-nav" aria-expanded="false" hidden>Secciones <span id="nav-current"></span></button>
   <nav class="admin-nav" id="admin-nav" aria-label="Secciones del panel" hidden>
     <a href="#dashboard" data-perm="dashboard">Resumen</a>
+    <a href="#alerts" data-perm="alerts.read">Alertas</a>
+    <p class="nav-group">Análisis</p>
+    <a href="#geo" data-perm="analytics.read">Regiones e idiomas</a>
+    <a href="#funnel" data-perm="analytics.read">Embudo y retención</a>
+    <a href="#cluestats" data-perm="analytics.read">Rendimiento de crípticos</a>
+    <a href="#exports" data-perm="export.data">Exportaciones</a>
+    <p class="nav-group">Personas</p>
+    <a href="#players" data-perm="players.read">Usuarios</a>
+    <a href="#games" data-perm="games.read">Partidas</a>
+    <a href="#privacy" data-perm="privacy.manage">Privacidad</a>
     <p class="nav-group">Catálogo</p>
     <a href="#catalog" data-perm="catalog.read">Crípticos</a>
+    <a href="#catstats" data-perm="catalog.read">Estadísticas del catálogo</a>
     <a href="#new" data-perm="catalog.write">Nuevo críptico</a>
     <a href="#generated" data-perm="catalog.write">Generados en revisión</a>
     <a href="#reports" data-perm="reports.manage">Errores informados</a>
@@ -31,6 +43,7 @@
     <a href="#sources" data-perm="sources.read">Fuentes</a>
     <a href="#imports" data-perm="sources.read">Elementos importados</a>
     <a href="#runs" data-perm="sources.read">Sincronizaciones</a>
+    <a href="#importstats" data-perm="sources.read">Estado de fuentes</a>
     <p class="nav-group sub">Propuestas de usuarios <small>siempre con aprobación manual</small></p>
     <a href="#submissions" data-perm="submissions.read">Moderación</a>
     <p class="nav-group">Configuración</p>
@@ -42,6 +55,6 @@
   </nav>
   <main id="admin-main" tabindex="-1"><p class="muted">Cargando…</p></main>
 </div>
-<script src="/js/admin.js?v=2026-10-21c" defer></script>
+<script src="/js/admin.js?v=2026-10-21d" defer></script>
 </body>
 </html>

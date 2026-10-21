@@ -5,7 +5,7 @@ npm test          # unidad e integración (servidor real + base temporal)
 npm run test:e2e  # navegador Chromium sin interfaz
 ```
 
-Último resultado (21/10/2026, Node 22, Linux): **50/50** en `npm test` y **7/7** en `npm run test:e2e`.
+Último resultado (21/10/2026, Node 22, Linux): **64/64** en `npm test` y **12/12** en `npm run test:e2e`.
 
 ## Cobertura de las 25 pruebas obligatorias
 
@@ -47,3 +47,21 @@ npm run test:e2e  # navegador Chromium sin interfaz
 - Las pruebas de navegador usan solo Chromium; no se probó en Safari ni Firefox.
 - No se probó contra Turso real ni en Vercel: falta crear esas cuentas. El código usa el mismo cliente (`@libsql/client`) que en las pruebas.
 - Los homófonos en inglés dependen de una tabla curada; los que no estén en ella quedan como “sin verificar” y van a revisión humana.
+
+## Panel de administración: las 20 pruebas pedidas
+
+| # | Prueba | Dónde |
+| --- | --- | --- |
+| 1–3 | Registro, país e idioma elegidos | panel «#1 #2 #3 registro de cuenta…» |
+| 4, 5, 7 | Partida iniciada, resuelta y tiempo correcto | panel «#4 #5 #7…» |
+| 6 | Partida no resuelta según su estado real (abandono por inactividad, reanudación, error, revelada, pasada) | panel «#6…» |
+| 8, 19 | Pistas, revelaciones e intentos repetidos sin duplicar | panel «#8 #19…» |
+| 9, 10 | Indicadores = registros; filtros por país, idioma, variante y período | panel «#9 #10…» |
+| 11 | Correo visible solo para roles autorizados | panel «#11…», e2e «el rol analista no ve correos ni acciones» |
+| 12 | Una persona no ve estadísticas privadas de otra | panel «#12…» |
+| 13 | Moderador o analista no ejecutan acciones de superadministrador | panel «#13…» |
+| 14, 15 | Propuestas siempre con aprobación manual | panel «#14 #15…» |
+| 16 | Exportaciones con permisos y auditadas | panel «#16…» |
+| 17 | Solicitudes de datos y estadísticas agregadas que se mantienen | panel «#17…» |
+| 18 | Panel en escritorio y móvil | e2e «#18 panel de administración en escritorio y móvil» |
+| 20 | Alertas con umbrales, sin duplicados; tareas que se recuperan | panel «#20…» |

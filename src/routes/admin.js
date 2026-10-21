@@ -4,7 +4,7 @@
 // cada acción que modifica datos queda en el registro de auditoría.
 
 const express = require('express');
-const { can, createUser } = require('../services/auth');
+const { can, createUser, STAFF_ROLES } = require('../services/auth');
 const clues = require('../services/clues');
 const subs = require('../services/submissions');
 const importer = require('../services/importer');
@@ -53,7 +53,8 @@ module.exports = function admin() {
   const r = express.Router();
   r.use((req, res, next) => { res.set('Cache-Control', 'no-store'); next(); });
 
-  r.get('/me', need('dashboard'), (req, res) => res.json({ user: req.user, permissions: require('../services/auth').PERMISSIONS[req.user.role] }));
+  r.get('/me', need('dashboard'), (req, res) => res.json({ user: req.user, permissions: require('../services/auth').PERMISSIONS[req.user.role],
+    role_label: require('../services/auth').ROLE_LABELS[req.user.role] }));
   r.get('/dashboard', need('dashboard'), a(async (req, res) => res.json(await dashboard(req.app.locals.db))));
 
   // ── Catálogo ──
@@ -154,6 +155,10 @@ module.exports = function admin() {
     const events = await db.all(`SELECT e.*, u.username AS actor FROM submission_events e LEFT JOIN users u ON u.id = e.actor_id
       WHERE e.submission_id = ? ORDER BY e.id`, [s.id]);
     delete s.tracking_token; delete s.ip_hash;
+    // El correo del autor solo lo ve quien tiene acceso a datos personales.
+    if (!can(req.user, 'players.pii')) delete s.author_email;
+    s.duplicates = await db.all(`SELECT d.similarity, d.kind, d.resolved, c.id AS clue_id, c.clue_text, c.answer FROM duplicate_flags d JOIN clues c ON c.id = d.clue_id
+      WHERE d.subject_kind = 'submission' AND d.subject_id = ?`, [s.id]);
     res.json({ submission: { ...s, checks: parseJson(s.checks, []), wordplay: parseJson(s.wordplay, null) }, events });
   }));
 
@@ -337,11 +342,11 @@ module.exports = function admin() {
   // ── Equipo, auditoría y tareas ──
   r.get('/users', need('users.manage'), a(async (req, res) => {
     res.json({ items: await req.app.locals.db.all(`SELECT id, username, email, role, disabled, created_at, last_login_at FROM users
-      WHERE role <> 'player' ORDER BY created_at`), players: (await req.app.locals.db.get("SELECT COUNT(*) AS n FROM users WHERE role = 'player'")).n });
+      WHERE role <> 'player' ORDER BY created_at`), players: (await req.app.locals.db.get("SELECT COUNT(*) AS n FROM users WHERE role = 'player' AND deleted_at IS NULL")).n });
   }));
   r.post('/users', need('users.manage'), a(async (req, res) => {
     const b = req.body || {};
-    if (!['moderator', 'editor', 'owner'].includes(b.role)) throw new HttpError(400, 'invalid_role');
+    if (!STAFF_ROLES.includes(b.role)) throw new HttpError(400, 'invalid_role');
     const u = await createUser(req.app.locals.db, { username: b.username, password: b.password, email: b.email, role: b.role });
     await log(req, 'user.create', 'user', u.id, { role: b.role });
     res.status(201).json(u);
@@ -352,7 +357,7 @@ module.exports = function admin() {
     const u = await db.get('SELECT * FROM users WHERE id = ?', [req.params.id]);
     if (!u) throw new HttpError(404, 'not_found');
     const role = b.role !== undefined ? b.role : u.role;
-    if (!['player', 'moderator', 'editor', 'owner'].includes(role)) throw new HttpError(400, 'invalid_role');
+    if (!['player', ...STAFF_ROLES].includes(role)) throw new HttpError(400, 'invalid_role');
     await db.run('UPDATE users SET role = ?, disabled = ? WHERE id = ?', [role, b.disabled !== undefined ? (b.disabled ? 1 : 0) : u.disabled, u.id]);
     if (b.disabled) await db.run('DELETE FROM sessions WHERE user_id = ?', [u.id]);
     await log(req, 'user.edit', 'user', u.id, b);
@@ -375,6 +380,8 @@ module.exports = function admin() {
   r.get('/errors', need('dashboard'), a(async (req, res) => {
     res.json({ items: await req.app.locals.db.all('SELECT * FROM error_log ORDER BY id DESC LIMIT 200') });
   }));
+
+  r.use(require('./admin-panel')({ need, log }));
 
   return r;
 };

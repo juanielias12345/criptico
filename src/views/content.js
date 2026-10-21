@@ -41,14 +41,17 @@ module.exports = {
 <li><strong>Preferencias:</strong> país, idioma y tema se guardan en tu navegador solo si marcás «Recordar en este dispositivo».</li>
 <li><strong>Cuenta opcional:</strong> nombre de usuario y contraseña (guardada con hash scrypt; nunca en texto plano). El correo es opcional.</li>
 <li><strong>Propuestas:</strong> el contenido que envíes y, si lo indicás, el nombre público con el que querés aparecer.</li>
-<li><strong>Seguridad:</strong> para limitar abusos usamos un hash de la dirección IP con una sal secreta; no guardamos la IP.</li>
+<li><strong>Partidas:</strong> de cada partida registramos el críptico, cuándo empezó y terminó, los intentos, las pistas, si se reveló la respuesta y un tiempo activo estimado (mientras la pestaña está visible y hay interacción). No guardamos lo que escribís como respuesta.</li>
+<li><strong>Visitas:</strong> contamos visitas de forma agregada por día, idioma y país elegido, sin cookies ni identificadores. Si tu navegador envía «Do Not Track» o «Global Privacy Control», no se cuentan.</li>
+<li><strong>Seguridad:</strong> para limitar abusos usamos un hash de la dirección IP con una sal secreta; no guardamos la IP. El hash asociado a una sesión se borra a los 30 días.</li>
+<li><strong>Ubicación:</strong> no la inferimos. Solo usamos el país que elegís.</li>
 </ul>
 <h2>Para qué</h2>
 <p>Para que el juego funcione, evitar repeticiones, mostrar estadísticas, moderar propuestas y proteger el sitio. No vendemos datos ni usamos publicidad personalizada. No hay rastreadores de terceros.</p>
 <h2>Cuánto tiempo</h2>
-<p>Las partidas se conservan hasta 400 días; los registros de seguridad, hasta 2 años; las sesiones vencen solas. Podés borrar tu cuenta desde tu perfil en cualquier momento.</p>
+<p>Las partidas se conservan hasta 400 días; el detalle de eventos de cada partida, 180 días; los registros de seguridad, hasta 2 años; las sesiones vencen solas. Podés borrar tu cuenta desde tu perfil en cualquier momento: se eliminan tus datos personales y tus partidas quedan solo en estadísticas anónimas.</p>
 <h2>Tus derechos</h2>
-<p>Podés pedir acceso, corrección o eliminación de tus datos escribiendo al contacto del responsable del sitio.</p>`,
+<p>Desde tu perfil podés descargar una copia de tus datos, pedir una corrección o eliminar tu cuenta. También podés escribir al contacto del responsable del sitio.</p>`,
     terms: `
 <p><em>Base adaptable: revisala antes de publicar en cada mercado.</em></p>
 <h2>Uso del sitio</h2>
@@ -100,14 +103,17 @@ module.exports = {
 <li><strong>Preferences:</strong> country, language and theme are stored in your browser only if you tick "Remember on this device".</li>
 <li><strong>Optional account:</strong> username and password (stored as a scrypt hash, never in plain text). Email is optional.</li>
 <li><strong>Submissions:</strong> what you send and, if you choose, a public name.</li>
-<li><strong>Security:</strong> to limit abuse we use a salted hash of your IP address; we don't store the address itself.</li>
+<li><strong>Games:</strong> for each game we record the clue, when it started and ended, attempts, hints, whether the answer was revealed and an estimated active time (while the tab is visible and you interact). We don't store what you type as an answer.</li>
+<li><strong>Visits:</strong> counted in aggregate per day, language and chosen country, with no cookies or identifiers. If your browser sends Do Not Track or Global Privacy Control, they aren't counted.</li>
+<li><strong>Security:</strong> to limit abuse we use a salted hash of your IP address; we don't store the address itself. The hash attached to a session is erased after 30 days.</li>
+<li><strong>Location:</strong> we don't infer it. We only use the country you choose.</li>
 </ul>
 <h2>Why</h2>
 <p>To run the game, avoid repeats, show statistics, moderate submissions and protect the site. We don't sell data, show targeted ads or use third-party trackers.</p>
 <h2>How long</h2>
-<p>Games are kept for up to 400 days, security logs for up to 2 years, and sessions expire automatically. You can delete your account from your profile at any time.</p>
+<p>Games are kept for up to 400 days, per-game event details for 180 days, security logs for up to 2 years, and sessions expire automatically. You can delete your account from your profile at any time: your personal data is erased and your games remain only in anonymous statistics.</p>
 <h2>Your rights</h2>
-<p>You can request access, correction or deletion of your data by contacting the site operator.</p>`,
+<p>From your profile you can download a copy of your data, request a correction or delete your account. You can also contact the site operator.</p>`,
     terms: `
 <p><em>Adaptable template: review before launching in each market.</em></p>
 <h2>Using the site</h2>

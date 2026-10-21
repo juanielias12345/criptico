@@ -79,10 +79,28 @@ const DEFAULT_SETTINGS = {
   'publishing.semantic_duplicate_threshold': 0.6,
   'retention.games_days': 400,
   'retention.audit_days': 730,
+  'retention.game_events_days': 180,
+  'retention.traffic_days': 730,
+  // Seguimiento de partidas (ver docs/PANEL.md)
+  'analytics.abandon_minutes': 30,
+  'analytics.active_gap_seconds': 120,
+  // Umbrales de alertas
+  'alerts.min_sample': 20,
+  'alerts.errors_per_hour': 20,
+  'alerts.source_failures': 3,
+  'alerts.solve_rate_drop_points': 15,
+  'alerts.abandon_rate_rise_points': 15,
+  'alerts.clue_min_plays': 10,
+  'alerts.clue_solve_rate_min': 10,
+  'alerts.clue_wrong_answer_reports': 2,
+  'alerts.pending_submissions_max': 25,
+  'alerts.pending_submission_days': 7,
+  'alerts.failed_admin_logins_per_hour': 10,
 };
 
 const JOBS = [
   ['import_sources', 15], ['daily_challenge', 60], ['generate_clues', 1440], ['cleanup', 1440], ['recover_stuck', 10],
+  ['analytics_rollup', 60], ['alerts_scan', 60],
 ];
 
 async function seedReference(db) {

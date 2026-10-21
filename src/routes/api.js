@@ -10,7 +10,9 @@ const { getSetting } = require('../services/settings');
 const { hit } = require('../services/ratelimit');
 const { tick } = require('../services/jobs');
 const { audit } = require('../services/audit');
-const { HttpError, uuid, parseJson } = require('../services/util');
+const { HttpError, uuid, parseJson, now } = require('../services/util');
+const track = require('../services/tracking');
+const people = require('../services/people');
 
 const a = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
 
@@ -58,7 +60,10 @@ module.exports = function api() {
   async function linkPlayer(req, res, playerId) {
     const db = req.app.locals.db;
     if (playerId && playerId !== req.playerId) cookie(res, req.app.locals.config, 'pid', playerId, { maxAge: 400 * 86400 });
-    if (req.user && playerId) await db.run('UPDATE players SET user_id = ? WHERE id = ? AND user_id IS NULL', [req.user.id, playerId]);
+    if (req.user && playerId) {
+      await db.run('UPDATE players SET user_id = ? WHERE id = ? AND user_id IS NULL', [req.user.id, playerId]);
+      await db.run('UPDATE users SET last_active_at = ? WHERE id = ?', [now(), req.user.id]);
+    }
   }
 
   r.post('/game/start', a(async (req, res) => {
@@ -76,13 +81,37 @@ module.exports = function api() {
   }));
 
   const needPlayer = (req) => { if (!req.playerId) throw new HttpError(404, 'game_not_found'); return req.playerId; };
-  r.post('/game/:id/guess', a(async (req, res) => {
+  // Si una acción de la partida falla por un error del servidor, se anota en la partida
+  // («interrumpida por error técnico» si después no hay más actividad).
+  const g = (scope, fn) => (req, res, next) => Promise.resolve(fn(req, res)).catch(async (e) => {
+    if (!(e instanceof HttpError) && /^[0-9a-f-]{36}$/.test(req.params.id)) await track.markError(req.app.locals.db, req.params.id, scope);
+    next(e);
+  });
+  r.post('/game/:id/guess', g('guess', async (req, res) => {
     res.json(await game.guess(req.app.locals.db, { gameId: req.params.id, playerId: needPlayer(req), answer: String((req.body || {}).answer || '').slice(0, 80) }));
   }));
-  r.post('/game/:id/hint', a(async (req, res) => res.json(await game.hint(req.app.locals.db, { gameId: req.params.id, playerId: needPlayer(req) }))));
-  r.post('/game/:id/reveal', a(async (req, res) => res.json(await game.reveal(req.app.locals.db, { gameId: req.params.id, playerId: needPlayer(req) }))));
-  r.post('/game/:id/skip', a(async (req, res) => res.json(await game.skip(req.app.locals.db, { gameId: req.params.id, playerId: needPlayer(req), reason: (req.body || {}).reason }))));
-  r.post('/game/:id/restart', a(async (req, res) => res.json(await game.restart(req.app.locals.db, { gameId: req.params.id, playerId: needPlayer(req) }))));
+  r.post('/game/:id/hint', g('hint', async (req, res) => res.json(await game.hint(req.app.locals.db, { gameId: req.params.id, playerId: needPlayer(req), level: Number((req.body || {}).level) || undefined }))));
+  r.post('/game/:id/reveal', g('reveal', async (req, res) => res.json(await game.reveal(req.app.locals.db, { gameId: req.params.id, playerId: needPlayer(req) }))));
+  r.post('/game/:id/skip', g('skip', async (req, res) => res.json(await game.skip(req.app.locals.db, { gameId: req.params.id, playerId: needPlayer(req), reason: (req.body || {}).reason }))));
+  r.post('/game/:id/restart', g('restart', async (req, res) => res.json(await game.restart(req.app.locals.db, { gameId: req.params.id, playerId: needPlayer(req) }))));
+  r.post('/game/:id/ping', g('ping', async (req, res) => res.json(await game.pingGame(req.app.locals.db, { gameId: req.params.id, playerId: needPlayer(req) }))));
+
+  // Visitas agregadas: solo un contador por día, idioma de la interfaz y país elegido.
+  // Sin cookies ni identificadores; se respeta «Do Not Track» y «Global Privacy Control».
+  r.post('/visit', a(async (req, res) => {
+    const b = req.body || {};
+    if (req.headers.dnt === '1' || req.headers['sec-gpc'] === '1') return res.status(204).end();
+    if (!(await hit(req.app.locals.db, 'visit:' + req.ipHash, 120, 'hour')).allowed) return res.status(204).end();
+    const ui = ['es', 'en'].includes(b.ui) ? b.ui : '';
+    const country = COUNTRY_RE.test(b.country || '') ? b.country : '';
+    const day = now().slice(0, 10);
+    const kinds = ['pageview', ...(b.first === true ? ['new_visitor'] : [])];
+    for (const kind of kinds) {
+      await req.app.locals.db.run(`INSERT INTO traffic_daily(day, kind, ui_lang, country, n) VALUES (?,?,?,?,1)
+        ON CONFLICT(day, kind, ui_lang, country) DO UPDATE SET n = n + 1`, [day, kind, ui, country]);
+    }
+    res.status(204).end();
+  }));
 
   // ── Archivo ──
   r.get('/clues', a(async (req, res) => {
@@ -157,7 +186,14 @@ module.exports = function api() {
     const db = req.app.locals.db;
     if (!(await hit(db, 'login:' + req.ipHash, 20, 'hour')).allowed) throw new HttpError(429, 'rate_limited');
     const b = req.body || {};
-    const s = await auth.login(db, { username: b.username, password: b.password, ipHash: req.ipHash, userAgent: req.headers['user-agent'], adminOnly: b.admin === true });
+    let s;
+    try {
+      s = await auth.login(db, { username: b.username, password: b.password, ipHash: req.ipHash, userAgent: req.headers['user-agent'], adminOnly: b.admin === true });
+    } catch (e) {
+      // Los intentos fallidos en el panel quedan en la auditoría (sin la contraseña) para detectar abusos.
+      if (b.admin === true) await audit(db, { action: 'admin.login_failed', details: { reason: e.code, username: String(b.username || '').slice(0, 60) }, ipHash: req.ipHash });
+      throw e;
+    }
     const hours = s.user.role === 'player' ? 30 * 24 : 12;
     cookie(res, req.app.locals.config, 'sid', s.token, { maxAge: hours * 3600 });
     if (req.playerId) await db.run('UPDATE players SET user_id = ? WHERE id = ? AND user_id IS NULL', [s.user.id, req.playerId]);
@@ -185,8 +221,9 @@ module.exports = function api() {
   }));
   r.put('/me/prefs', a(async (req, res) => {
     const u = needUser(req); const b = req.body || {};
-    await req.app.locals.db.run('UPDATE users SET country_code = ?, play_variant = ?, ui_language = ? WHERE id = ?',
-      [COUNTRY_RE.test(b.country || '') ? b.country : null, CHOICE_RE.test(b.choice || '') ? b.choice : null, ['es', 'en'].includes(b.ui) ? b.ui : null, u.id]);
+    const tz = typeof b.timezone === 'string' && /^[A-Za-z_]+(\/[A-Za-z0-9_+\-]+){0,2}$/.test(b.timezone) ? b.timezone.slice(0, 60) : null;
+    await req.app.locals.db.run('UPDATE users SET country_code = ?, play_variant = ?, ui_language = ?, timezone = COALESCE(?, timezone) WHERE id = ?',
+      [COUNTRY_RE.test(b.country || '') ? b.country : null, CHOICE_RE.test(b.choice || '') ? b.choice : null, ['es', 'en'].includes(b.ui) ? b.ui : null, tz, u.id]);
     res.json({ ok: true });
   }));
   r.get('/me/favorites', a(async (req, res) => {
@@ -218,14 +255,31 @@ module.exports = function api() {
     await db.run('UPDATE notifications SET read_at = ? WHERE user_id = ? AND read_at IS NULL', [new Date().toISOString(), u.id]);
     res.json({ items: rows.map((n) => ({ ...n, payload: parseJson(n.payload, {}) })) });
   }));
-  // Borrado de cuenta a pedido de la persona (derecho de supresión).
+  // Borrado de cuenta a pedido de la persona (derecho de supresión): la cuenta se
+  // anonimiza y queda constancia en las solicitudes de datos.
   r.delete('/me/account', a(async (req, res) => {
     const u = needUser(req); const db = req.app.locals.db;
     if (u.role !== 'player') throw new HttpError(400, 'staff_account', 'Las cuentas de administración se eliminan desde el panel.');
-    await db.run('UPDATE submissions SET user_id = NULL WHERE user_id = ?', [u.id]);
-    await db.run('DELETE FROM users WHERE id = ?', [u.id]);
+    await db.run("INSERT INTO data_requests(id, user_id, kind, status, resolution_note, resolved_at) VALUES (?,?, 'deletion', 'done', 'Eliminada por la persona desde su cuenta.', ?)",
+      [uuid(), u.id, now()]);
+    await people.anonymizeUser(db, u.id);
     cookie(res, req.app.locals.config, 'sid', '', { maxAge: 0 });
     res.json({ ok: true });
+  }));
+  // Derecho de acceso: copia descargable de los datos propios.
+  r.get('/me/export', a(async (req, res) => {
+    const u = needUser(req);
+    res.set('Cache-Control', 'no-store');
+    res.set('Content-Disposition', 'attachment; filename="mis-datos.json"');
+    res.json(await people.exportOwnData(req.app.locals.db, u.id, req.playerId ? [req.playerId] : []));
+  }));
+  r.post('/me/data-requests', a(async (req, res) => {
+    const u = needUser(req); const b = req.body || {};
+    res.status(201).json(await people.createDataRequest(req.app.locals.db, u.id, { kind: b.kind, message: b.message }));
+  }));
+  r.get('/me/data-requests', a(async (req, res) => {
+    const u = needUser(req);
+    res.json({ items: await req.app.locals.db.all('SELECT id, kind, status, created_at, resolved_at, resolution_note FROM data_requests WHERE user_id = ? ORDER BY created_at DESC', [u.id]) });
   }));
 
   // ── Tareas programadas (Vercel Cron) ──
