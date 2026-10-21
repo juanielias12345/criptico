@@ -183,7 +183,7 @@ test('archivo con filtros y paginación; informe de errores con límite', async 
   assert.ok(r.json.items.every((x) => x.difficulty === 1 && x.language === 'es' && x.answer === undefined));
   const page = await c.get('/es/archivo?lang=en&page=1');
   assert.equal(page.status, 200);
-  assert.match(page.text, /clue-card/);
+  assert.match(page.text, /clue-row/);
   const id = r.json.items[0].id;
   assert.equal((await c.post(`/api/clues/${id}/report`, { reason: 'typo', message: 'prueba' })).status, 200);
   assert.equal((await c.post(`/api/clues/${id}/report`, { reason: 'nope' })).status, 400);

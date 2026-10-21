@@ -6,14 +6,17 @@
 <meta name="robots" content="noindex, nofollow">
 <title>Panel · Cripta</title>
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="preload" href="/fonts/instrument-sans-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="/css/app.css">
 <link rel="stylesheet" href="/css/admin.css">
 </head>
 <body class="admin">
 <header class="site-header">
-  <a class="brand" href="#dashboard"><svg class="logo-mark" viewBox="0 0 32 32" aria-hidden="true"><rect x="2" y="2" width="28" height="28" rx="7" fill="currentColor"/><path d="M9 11h6v6H9zM17 15h6v6h-6z" fill="var(--bg)"/></svg><span>Panel</span></a>
-  <span class="muted small" id="who"></span>
-  <div class="header-tools"><a class="chip" href="/" target="_blank" rel="noopener">Ver sitio ↗</a><button class="chip" id="logout" hidden>Salir</button></div>
+  <div class="bar">
+    <a class="brand" href="#dashboard"><svg class="logo-mark" viewBox="0 0 32 32" aria-hidden="true" focusable="false"><rect width="32" height="32" fill="var(--accent)"/><path d="M21.6 11.1A7.4 7.4 0 1 0 21.6 20.9" fill="none" stroke="var(--accent-ink)" stroke-width="3.2"/><rect x="19.6" y="14" width="4" height="4" fill="var(--accent-ink)"/></svg><span class="brand-name">Cripta</span><span class="admin-tag">Panel</span></a>
+    <span class="admin-who" id="who"></span>
+    <div class="header-tools"><a class="btn small" href="/" target="_blank" rel="noopener">Ver sitio ↗</a><button class="btn small" type="button" id="logout" hidden>Salir</button></div>
+  </div>
 </header>
 <div class="admin-wrap">
   <nav class="admin-nav" id="admin-nav" aria-label="Secciones del panel" hidden>
@@ -24,11 +27,11 @@
     <a href="#generated" data-perm="catalog.write">Generados en revisión</a>
     <a href="#reports" data-perm="reports.manage">Errores informados</a>
     <a href="#duplicates" data-perm="catalog.read">Duplicados</a>
-    <p class="nav-group">Importaciones externas</p>
+    <p class="nav-group ext">Importaciones externas <small>se publican solas si pasan las reglas</small></p>
     <a href="#sources" data-perm="sources.read">Fuentes</a>
     <a href="#imports" data-perm="sources.read">Elementos importados</a>
     <a href="#runs" data-perm="sources.read">Sincronizaciones</a>
-    <p class="nav-group">Propuestas de usuarios</p>
+    <p class="nav-group sub">Propuestas de usuarios <small>siempre con aprobación manual</small></p>
     <a href="#submissions" data-perm="submissions.read">Moderación</a>
     <p class="nav-group">Configuración</p>
     <a href="#languages" data-perm="dashboard">Idiomas</a>

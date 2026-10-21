@@ -273,6 +273,7 @@ async function playerStats(db, { playerIds }) {
   s.current_streak = run;
   s.solve_rate = s.played ? Math.round((s.solved / s.played) * 100) : 0;
   s.mechanisms_solved = [...mechs];
+  s.languages = [...langs];
   s.daily_streak = dayStreak(dailyDays);
   s.achievements = achievements(s, langs);
   return s;

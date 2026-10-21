@@ -124,3 +124,93 @@ module.exports = {
 <p>We do our best to make every clue correct, but mistakes can happen. Please report them from the game.</p>`,
   },
 };
+
+// ── Ejemplos editoriales ──
+// Todos salen del catálogo semilla validado (seed/): el juego de palabras
+// produce la respuesta y la definición está en un extremo de la pista.
+// Cada pista se describe en partes: '' texto, 'def' definición, 'ind' indicador, 'enum' longitud.
+const P = (...parts) => parts.map((p) => (Array.isArray(p) ? p : [p, '']));
+
+module.exports.EXAMPLES = {
+  es: {
+    specimen: { parts: P('Ramo ', ['revuelto', 'ind'], ' para ', ['el sentimiento', 'def'], [' (4)', 'enum']), from: 'RAMO', to: 'AMOR' },
+    home_try: { parts: P(['Queso solo', ''], ' ', ['esconde', 'ind'], ' ', ['un animal del bosque', 'def'], [' (3)', 'enum']), answer: 'OSO',
+      hint: 'Fijate en las letras de «queso solo», sin el espacio.',
+      steps: ['«un animal del bosque» es la definición.', '«esconde» avisa que la respuesta está escrita dentro de la pista.', 'quesO SOlo → OSO.'] },
+  },
+  en: {
+    specimen: { parts: P(['Cheater', ''], ' ', ['reformed', 'ind'], ' as ', ['an educator', 'def'], [' (7)', 'enum']), from: 'CHEATER', to: 'TEACHER' },
+    home_try: { parts: P(['Partly', 'ind'], ' honest ', ['home for birds', 'def'], [' (4)', 'enum']), answer: 'NEST',
+      hint: 'Look at the letters of "honest".',
+      steps: ['"home for birds" is the definition.', '"Partly" says the answer is hidden inside the clue.', 'hoNEST → NEST.'] },
+  },
+};
+
+module.exports.LESSONS = {
+  es: [
+    { kicker: 'Primeros pasos', title: 'Qué es un críptico',
+      text: 'Una pista con dos caras. Una parte es una definición normal; la otra, un juego de palabras que llega a la misma respuesta. Cuando las dos coinciden, no hay dudas.',
+      tries: [{ parts: P('Ramo ', ['revuelto', 'ind'], ' para ', ['el sentimiento', 'def'], [' (4)', 'enum']), answer: 'AMOR', hint: 'La definición es «el sentimiento».',
+        steps: ['«el sentimiento» es la definición.', '«revuelto» indica un anagrama de RAMO.', 'RAMO reordenado → AMOR.'] }] },
+    { kicker: 'La clave', title: 'Cómo encontrar la definición',
+      text: 'Está siempre en un extremo: al principio o al final. Probá leer la pista cortándola en dos y preguntate qué mitad suena a diccionario.',
+      tries: [{ parts: P('Trapo ', ['roto', 'ind'], ' en ', ['el alumbramiento', 'def'], [' (5)', 'enum']), answer: 'PARTO', hint: '«el alumbramiento» es un nacimiento.',
+        steps: ['La definición está al final: «el alumbramiento».', '«roto» indica que las letras de TRAPO se reordenan.', 'TRAPO → PARTO.'] }] },
+    { kicker: 'Mecanismo', title: 'Anagramas', signals: ['loco', 'revuelto', 'alterado', 'roto', 'movido'],
+      text: 'Una palabra que sugiere desorden avisa que hay que reordenar letras que ya están en la pista. Las letras tienen que ser exactamente las mismas.',
+      tries: [{ parts: P('Jamón ', ['loco', 'ind'], ' para ', ['una religiosa', 'def'], [' (5)', 'enum']), answer: 'MONJA', hint: 'Reordená J-A-M-O-N.',
+        steps: ['«una religiosa» es la definición.', '«loco» indica un anagrama de JAMÓN.', 'JAMON → MONJA.'] }] },
+    { kicker: 'Mecanismo', title: 'Palabras ocultas', signals: ['esconde', 'oculta', 'contiene', 'en parte'],
+      text: 'La respuesta está escrita, letra por letra, dentro de la pista. Suele atravesar el espacio entre dos palabras.',
+      tries: [{ parts: P('Alemán gordo ', ['oculta', 'ind'], ' ', ['una fruta tropical', 'def'], [' (5)', 'enum']), answer: 'MANGO', hint: 'Mirá el final de «Alemán» y el principio de «gordo».',
+        steps: ['«una fruta tropical» es la definición.', '«oculta» indica una palabra escondida.', 'aleMÁN GOrdo → MANGO.'] }] },
+    { kicker: 'Mecanismo', title: 'Inversiones', signals: ['de vuelta', 'al revés', 'que vuelve', 'regresa'],
+      text: 'Una palabra se lee de atrás para adelante. El indicador sugiere un regreso o un giro.',
+      tries: [{ parts: P('Oído que ', ['vuelve', 'ind'], ' con ', ['rencor', 'def'], [' (4)', 'enum']), answer: 'ODIO', hint: 'Leé OÍDO al revés.',
+        steps: ['«rencor» es la definición.', '«vuelve» indica una inversión.', 'OIDO al revés → ODIO.'] }] },
+    { kicker: 'Mecanismos', title: 'Inserciones y eliminaciones', signals: ['guarda', 'abraza', 'sin principio', 'pierde'],
+      text: 'En una inserción, un fragmento va dentro de otro. En una eliminación, a una palabra le sacás letras: la primera, la última o alguna en especial.',
+      tries: [
+        { parts: P('Peso que ', ['guarda', 'ind'], ' al rey: ', ['un recluso', 'def'], [' (5)', 'enum']), answer: 'PRESO', hint: 'En los crípticos, «rey» suele ser R.',
+          steps: ['«un recluso» es la definición.', '«guarda» indica que algo va dentro de PESO.', 'rey = R; P(R)ESO → PRESO.'] },
+        { parts: P('Saludo ', ['sin principio', 'ind'], ' forma ', ['una onda en el mar', 'def'], [' (3)', 'enum']), answer: 'OLA', hint: '¿Qué saludo de cuatro letras conocés?',
+          steps: ['«una onda en el mar» es la definición.', '«sin principio» indica sacar la primera letra.', 'HOLA sin la H → OLA.'] }] },
+    { kicker: 'Avanzado', title: 'Piezas que se suman', signals: ['y', 'con', 'junto a'],
+      text: 'En una charada la respuesta se arma uniendo piezas, cada una con su propia mini definición. Los crípticos más difíciles combinan varios mecanismos a la vez.',
+      tries: [{ parts: P('Astro rey ', ['y', 'ind'], ' cubo de juego para ', ['un militar', 'def'], [' (7)', 'enum']), answer: 'SOLDADO', hint: 'El astro rey tiene tres letras.',
+        steps: ['«un militar» es la definición.', 'astro rey = SOL; cubo de juego = DADO.', 'SOL + DADO → SOLDADO.'] }] },
+  ],
+  en: [
+    { kicker: 'First steps', title: 'What a cryptic clue is',
+      text: 'A clue with two faces. One part is a plain definition; the other is wordplay that reaches the same answer. When both agree, there is no doubt.',
+      tries: [{ parts: P(['Cheater', ''], ' ', ['reformed', 'ind'], ' as ', ['an educator', 'def'], [' (7)', 'enum']), answer: 'TEACHER', hint: 'The definition is "an educator".',
+        steps: ['"an educator" is the definition.', '"reformed" signals an anagram of CHEATER.', 'CHEATER rearranged → TEACHER.'] }] },
+    { kicker: 'The key', title: 'How to find the definition',
+      text: 'It is always at one end: the start or the finish. Try splitting the clue in two and ask which half sounds like a dictionary.',
+      tries: [{ parts: P('Garden ', ['wrecked', 'ind'], ": that's ", ['a risk', 'def'], [' (6)', 'enum']), answer: 'DANGER', hint: 'The definition is at the end.',
+        steps: ['"a risk" is the definition, at the end.', '"wrecked" signals an anagram of GARDEN.', 'GARDEN → DANGER.'] }] },
+    { kicker: 'Device', title: 'Anagrams', signals: ['scrambled', 'reformed', 'wrecked', 'arrangement'],
+      text: 'A word suggesting disorder tells you to rearrange letters already in the clue. The letters must match exactly.',
+      tries: [{ parts: P('Runes ', ['scrambled', 'ind'], ' for ', ['a carer', 'def'], [' (5)', 'enum']), answer: 'NURSE', hint: 'Rearrange R-U-N-E-S.',
+        steps: ['"a carer" is the definition.', '"scrambled" signals an anagram of RUNES.', 'RUNES → NURSE.'] }] },
+    { kicker: 'Device', title: 'Hidden words', signals: ['hides', 'partly', 'in', 'some'],
+      text: 'The answer is written, letter by letter, inside the clue — often across the gap between two words.',
+      tries: [{ parts: P('Sailor Ryan ', ['hides', 'ind'], ' ', ['a British truck', 'def'], [' (5)', 'enum']), answer: 'LORRY', hint: 'Look across "Sailor Ryan".',
+        steps: ['"a British truck" is the definition.', '"hides" signals a hidden word.', 'saiLOR RYan → LORRY.'] }] },
+    { kicker: 'Device', title: 'Reversals', signals: ['turned back', 'returned', 'sent back', 'over'],
+      text: 'A word is read backwards. The indicator suggests a return or a turn.',
+      tries: [{ parts: P('Evil ', ['turned back', 'ind'], ' to ', ['exist', 'def'], [' (4)', 'enum']), answer: 'LIVE', hint: 'Read EVIL backwards.',
+        steps: ['"exist" is the definition.', '"turned back" signals a reversal.', 'EVIL reversed → LIVE.'] }] },
+    { kicker: 'Devices', title: 'Containers and deletions', signals: ['holding', 'around', 'loses', 'without'],
+      text: 'In a container, one piece goes inside another. In a deletion, you remove letters from a word: the first, the last, or a specific one.',
+      tries: [
+        { parts: P('Beer ', ['holding', 'ind'], ' a ', ['coat', 'def'], [' (5)', 'enum']), answer: 'PAINT', hint: 'A glass of beer is a…',
+          steps: ['"coat" is the definition.', '"holding" signals that A goes inside a word for beer.', 'PINT holding A → P(A)INT → PAINT.'] },
+        { parts: P('Grain ', ['loses', 'ind'], ' west for ', ['warmth', 'def'], [' (4)', 'enum']), answer: 'HEAT', hint: 'West = W.',
+          steps: ['"warmth" is the definition.', '"loses west" means remove W.', 'WHEAT without W → HEAT.'] }] },
+    { kicker: 'Advanced', title: 'Pieces that add up', signals: ['and', 'with', 'by'],
+      text: 'In a charade the answer is built from pieces, each with its own mini definition. The hardest clues combine several devices at once.',
+      tries: [{ parts: P(['Floor covering', 'def'], ': vehicle ', ['and', 'ind'], ' animal companion', [' (6)', 'enum']), answer: 'CARPET', hint: 'Vehicle = CAR.',
+        steps: ['"Floor covering" is the definition, at the start.', 'vehicle = CAR; animal companion = PET.', 'CAR + PET → CARPET.'] }] },
+  ],
+};

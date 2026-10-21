@@ -137,6 +137,58 @@ test('revelar muestra solución y explicación; compartir no revela la respuesta
   await ctx.close();
 });
 
+test('un error de conexión no borra la respuesta escrita', async () => {
+  const { ctx, page } = await newPage();
+  await playReady(page);
+  await page.goto(env.base + '/es/jugar');
+  await page.locator('#clue-text').waitFor();
+  await page.route('**/guess', (r) => r.abort('internetdisconnected'));
+  await page.fill('#answer', 'MIRESPUESTA');
+  await page.click('#check-btn');
+  await page.locator('#feedback.error').waitFor();
+  assert.equal(await page.inputValue('#answer'), 'MIRESPUESTA');
+  await page.unroute('**/guess');
+  await page.click('#check-btn');
+  await page.locator('#feedback.bad, #feedback.warn').waitFor();
+  await ctx.close();
+});
+
+test('ejemplos interactivos de la portada y de las lecciones', async () => {
+  const { ctx, page, errors } = await newPage();
+  await playReady(page);
+  await page.goto(env.base + '/es');
+  const box = page.locator('.try').first();
+  await box.locator('input').fill('lobo');
+  await box.locator('button[type=submit]').click();
+  await box.locator('.feedback').filter({ hasText: /./ }).waitFor();
+  assert.ok(!(await box.getAttribute('class')).includes('solved'));
+  await box.locator('input').fill('oso');
+  await box.locator('button[type=submit]').click();
+  await page.locator('.try.solved').first().waitFor();
+  await page.goto(env.base + '/es/ayuda');
+  assert.equal(await page.locator('.lesson').count(), 7);
+  const first = page.locator('.lesson .try').first();
+  await first.locator('input').fill('amor');
+  await first.locator('button[type=submit]').click();
+  await page.locator('.lesson .try.solved').first().waitFor();
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('todas las páginas cargan sin errores en tema claro y oscuro', async () => {
+  for (const colorScheme of ['light', 'dark']) {
+    const { ctx, page, errors } = await newPage({ colorScheme });
+    await playReady(page);
+    for (const path of ['/es', '/es/jugar', '/es/diario', '/es/archivo', '/es/archivo?mech=anagrama', '/es/contribuir', '/es/propuesta', '/es/ayuda', '/es/perfil', '/es/cuenta', '/es/privacidad', '/en', '/en/play', '/en/archive', '/en/help', '/admin']) {
+      const r = await page.goto(env.base + path);
+      assert.equal(r.status(), 200, path);
+      await page.waitForLoadState('networkidle');
+    }
+    assert.deepEqual(errors, [], colorScheme);
+    await ctx.close();
+  }
+});
+
 test('móvil: sin desplazamiento horizontal en las páginas principales', async () => {
   const { ctx, page } = await newPage({ viewport: { width: 360, height: 740 }, isMobile: true, hasTouch: true });
   await playReady(page);

@@ -88,7 +88,7 @@
         el('div', { class: 'panel' }, el('h3', { text: 'Variantes elegidas' }), table(['Variante', 'Partidas'], d.variants.map((x) => el('tr', {}, el('td', { text: x.variant }), el('td', { text: x.games }))))),
         el('div', { class: 'panel' }, el('h3', { text: 'Países más activos' }), table(['País', 'Partidas'], d.countries.map((x) => el('tr', {}, el('td', { text: x.country }), el('td', { text: x.games }))))),
         el('div', { class: 'panel' }, el('h3', { text: 'Publicados por origen' }), table(['Origen', 'Crípticos'], d.published_by_origin.map((x) => el('tr', {}, el('td', { text: LABELS[x.origin] }), el('td', { text: x.n })))))),
-      el('div', { class: 'panel' }, el('h3', { text: 'Actividad (30 días)' }), table(['Día', 'Partidas', 'Jugadores', ''], d.activity.map((x) => el('tr', {}, el('td', { text: x.day }), el('td', { text: x.games }), el('td', { text: x.players }), el('td', { style: 'width:40%' }, el('div', { class: 'bar', style: 'width:' + Math.round((x.games / maxDay) * 100) + '%' })))))),
+      el('div', { class: 'panel' }, el('h3', { text: 'Actividad (30 días)' }), table(['Día', 'Partidas', 'Jugadores', ''], d.activity.map((x) => el('tr', {}, el('td', { text: x.day }), el('td', { text: x.games }), el('td', { text: x.players }), el('td', { style: 'width:40%' }, el('div', { class: 'admin-bar', style: 'width:' + Math.round((x.games / maxDay) * 100) + '%' })))))),
       el('div', { class: 'panel' }, el('h3', { text: 'Tareas programadas' }), table(['Tarea', 'Estado', 'Última', 'Próxima', 'Error'], d.jobs.map((j) => el('tr', {}, el('td', { text: j.name }), el('td', {}, j.last_status ? pill(j.last_status) : '—'), el('td', { text: fmt(j.last_run_at) }), el('td', { text: fmt(j.next_run_at) }), el('td', { text: j.last_error || '' }))))),
       d.last_errors.length ? el('div', { class: 'panel' }, el('h3', { text: 'Últimos errores' }), table(['Ámbito', 'Mensaje', 'Fecha'], d.last_errors.map((e) => el('tr', {}, el('td', { text: e.scope }), el('td', { text: e.message }), el('td', { text: fmt(e.created_at) }))))) : '');
   };
@@ -98,7 +98,8 @@
     const params = new URLSearchParams(Object.assign({}, Object.fromEntries(q), fixed || {}));
     const d = await api('/api/admin/clues?' + params);
     const search = el('input', { type: 'search', placeholder: 'Buscar pista o respuesta', value: q.get('q') || '' });
-    const mk = (name, opts) => { const s = el('select', { name }, el('option', { value: '', text: name }), opts.map((o) => el('option', { value: o, selected: q.get(name) === o, text: LABELS[o] || o }))); return s; };
+    const FILTER_NAMES = { status: 'Estado: todos', origin: 'Origen: todos', language_code: 'Idioma: todos', validation_status: 'Validación: toda' };
+    const mk = (name, opts) => { const s = el('select', { name, 'aria-label': FILTER_NAMES[name] }, el('option', { value: '', text: FILTER_NAMES[name] }), opts.map((o) => el('option', { value: o, selected: q.get(name) === o, text: LABELS[o] || o }))); return s; };
     const sStatus = mk('status', ['published', 'draft', 'review', 'disabled']);
     const sOrigin = mk('origin', ['original', 'generated', 'external', 'community']);
     const sLang = mk('language_code', ['es', 'en', 'fr', 'pt', 'it', 'de']);

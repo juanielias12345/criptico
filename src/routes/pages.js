@@ -1,7 +1,7 @@
 'use strict';
 
 const express = require('express');
-const { layout, esc, href } = require('../views/layout');
+const { layout, esc, href, ICON } = require('../views/layout');
 const CONTENT = require('../views/content');
 const { t, ROUTES, UI_LANGS, pickUiLang } = require('../i18n');
 const { publicClue } = require('../services/clues');
@@ -10,20 +10,60 @@ const { today } = require('../services/game');
 const a = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
 
 const altFor = (route, rest = '') => Object.fromEntries(UI_LANGS.map((l) => [l, href(l, route, rest)]));
+const MECHS = ['anagram', 'hidden', 'reversal', 'container', 'deletion', 'charade', 'homophone', 'double_definition', 'initials'];
 
 function categoryName(cats, slug, lang) {
   const c = cats.find((x) => x.slug === slug);
   return c ? (lang === 'es' ? c.name_es : c.name_en) : slug;
 }
 
-function clueCard(c, lang, cats) {
+const plural = (lang, n, one, many) => (n === 1 ? t(lang, one) : t(lang, many).replace('{n}', n));
+const dots = (n) => `<span class="dots" aria-hidden="true">${[1, 2, 3, 4, 5].map((i) => `<i${i <= n ? ' class="on"' : ''}></i>`).join('')}</span>`;
+
+// Separa "texto (4)" en texto y longitud para componer la pista.
+function clueWithEnum(text) {
+  const m = String(text).match(/^(.*?)(\s*\([\d,\s-]+\))\s*$/);
+  return m ? `${esc(m[1])}<span class="enum">${esc(m[2])}</span>` : esc(text);
+}
+
+// Pista descrita por partes (ejemplos editoriales).
+function partsHtml(parts) {
+  return parts.map(([txt, role]) => (role === 'enum' ? `<span class="enum">${esc(txt)}</span>` : role ? `<span data-r="${role}">${esc(txt)}</span>` : esc(txt))).join('');
+}
+
+// Ejemplo resoluble. Sin JavaScript funciona con <details>; con JavaScript suma el campo de respuesta.
+function tryWidget(ex, lang, { label } = {}) {
+  return `<div class="try" data-answer="${esc(ex.answer)}" data-ok="${esc(t(lang, 'try_ok'))}" data-bad="${esc(t(lang, 'try_bad'))}">
+  <p class="clue-text" lang="${lang}">${partsHtml(ex.parts)}</p>
+  <form class="try-row" hidden><label class="sr-only" for="${'t' + ex.answer}">${esc(label || t(lang, 'try_label'))}</label>
+    <input id="${'t' + ex.answer}" autocomplete="off" autocapitalize="characters" spellcheck="false" enterkeyhint="go" maxlength="${ex.answer.length + 6}" placeholder="${esc(t(lang, 'answer_placeholder'))}">
+    <button class="btn ink" type="submit">${esc(t(lang, 'check'))}</button></form>
+  <p class="feedback" role="status"></p>
+  <div class="try-actions">
+    <details class="reveal"><summary>${esc(t(lang, 'lesson_hint'))}</summary><div class="small">${esc(ex.hint)}</div></details>
+    <details class="reveal solution-details"><summary>${esc(t(lang, 'try_reveal'))}</summary><div class="try-out"><p class="answer">${esc(ex.answer)}</p>
+      <ol class="explain">${ex.steps.map((s) => `<li>${esc(s)}</li>`).join('')}</ol></div></details>
+  </div>
+</div>`;
+}
+
+function clueRow(c, lang, cats, { solved, fresh, daily } = {}) {
   const pub = publicClue(c);
-  return `<li class="clue-card">
+  const tags = [
+    solved ? `<span class="tag solved">✓ ${esc(t(lang, 'tag_solved'))}</span>` : '',
+    fresh ? `<span class="tag new">${esc(t(lang, 'tag_new'))}</span>` : '',
+    daily ? `<span class="tag">${esc(t(lang, 'tag_daily'))} · <time datetime="${esc(daily)}">${esc(daily)}</time></span>` : '',
+    c.origin === 'community' ? `<span class="tag">${esc(t(lang, 'tag_community'))}</span>` : '',
+  ].join('');
+  return `<li class="clue-row">
     <a href="${href(lang, 'clue', '/' + encodeURIComponent(pub.slug))}">
-      <span class="clue-text" lang="${esc(pub.language)}">${esc(pub.clue)}</span>
-      <span class="meta">${esc(t(lang, 'mech_' + pub.mechanism))} · ${esc(t(lang, 'diff_' + pub.difficulty))} · ${esc(categoryName(cats, pub.category, lang))}${pub.variant ? ' · ' + esc(pub.variant) : ''}</span>
+      <span class="clue-text" lang="${esc(pub.language)}">${clueWithEnum(pub.clue)}</span>
+      <span class="meta-line"><span>${esc(t(lang, 'mech_' + pub.mechanism))}</span><span title="${esc(t(lang, 'diff_' + pub.difficulty))}">${dots(pub.difficulty)} <span class="sr-only">${esc(t(lang, 'diff_' + pub.difficulty))}</span></span><span>${esc(categoryName(cats, pub.category, lang))}</span>${pub.variant ? `<span>${esc(pub.variant)}</span>` : ''}${tags}</span>
+      <span class="go">${ICON.arrow}</span>
     </a></li>`;
 }
+
+const skeleton = '<div class="sheet"><div class="skeleton" aria-hidden="true"><i class="mid"></i><i class="big"></i><i class="big"></i><i class="tiles"></i></div></div>';
 
 module.exports = function pages() {
   const r = express.Router();
@@ -59,101 +99,212 @@ module.exports = function pages() {
     const R = ROUTES[lang];
     const P = (route) => `/${lang}${R[route] ? '/' + R[route] : ''}`;
     const render = (req, res, opts) => res.send(layout({ lang, config: req.app.locals.config, ...opts }));
+    const ex = CONTENT.EXAMPLES[lang];
 
+    // ── Inicio ──
     r.get(`/${lang}`, a(async (req, res) => {
       const db = req.app.locals.db;
       const totals = await db.all("SELECT language_code AS l, COUNT(*) AS n FROM clues WHERE status = 'published' GROUP BY language_code");
       const total = totals.reduce((s, x) => s + x.n, 0);
-      const mechs = ['anagram', 'hidden', 'reversal', 'container', 'deletion', 'charade', 'homophone', 'double_definition'];
+      const variants = (await db.get('SELECT COUNT(*) AS n FROM language_variants WHERE enabled = 1')).n;
+      const mechCounts = Object.fromEntries((await db.all("SELECT mechanism AS m, COUNT(*) AS n FROM clues WHERE status = 'published' AND language_code = ? GROUP BY mechanism", [lang])).map((x) => [x.m, x.n]));
+      const mechs = MECHS.filter((m) => mechCounts[m]);
+      const sp = ex.specimen;
+      const order = [...sp.to];
+      const used = new Set();
+      const tiles = [...sp.from].map((ch, i) => {
+        let to = order.findIndex((c, k) => c === ch && !used.has(k)); used.add(to);
+        return `<span data-from="${i}" data-to="${to}" data-n="${i + 1}">${esc(ch)}</span>`;
+      });
       render(req, res, {
         page: 'home', path: P('home'), alternates: altFor('home'),
         jsonLd: { '@context': 'https://schema.org', '@type': 'WebSite', name: req.app.locals.config.siteName, url: req.app.locals.config.siteUrl, inLanguage: ['es', 'en'] },
         body: `
 <section class="hero">
-  <h1>${esc(t(lang, 'home_title'))}</h1>
-  <p class="lead">${esc(t(lang, 'home_lead'))}</p>
-  <div class="actions">
-    <a class="btn primary big" href="${P('play')}">${esc(t(lang, 'home_cta'))}</a>
-    <a class="btn ghost" href="${P('daily')}">${esc(t(lang, 'home_daily'))}</a>
+  <div>
+    <p class="eyebrow">${esc(t(lang, 'home_eyebrow'))}</p>
+    <h1>${esc(t(lang, 'home_title_a'))} <em>${esc(t(lang, 'home_title_b'))}</em></h1>
+    <p class="lead">${esc(t(lang, 'home_lead'))}</p>
+    <div class="hero-actions">
+      <a class="btn primary big" href="${P('play')}" id="play-now">${esc(t(lang, 'home_cta'))} <span class="arrow" aria-hidden="true">→</span></a>
+      <a class="link-btn" href="${P('archive')}">${esc(t(lang, 'home_explore'))}</a>
+    </div>
+    ${total ? `<ul class="hero-facts" aria-label="${lang === 'es' ? 'Catálogo' : 'Catalogue'}">
+      <li><b>${total}</b><span>${esc(t(lang, 'fact_clues'))}</span></li>
+      <li><b>${totals.length}</b><span>${esc(t(lang, 'fact_langs'))}</span></li>
+      <li><b>${variants}</b><span>${esc(t(lang, 'fact_variants'))}</span></li>
+    </ul>` : ''}
   </div>
-  <p class="muted small">${total} ${lang === 'es' ? 'crípticos publicados en' : 'clues published in'} ${totals.length} ${lang === 'es' ? (totals.length === 1 ? 'idioma' : 'idiomas') : (totals.length === 1 ? 'language' : 'languages')}.</p>
-</section>
-<section class="how">
-  <h2>${esc(t(lang, 'home_how'))}</h2>
-  <ol class="steps"><li>${esc(t(lang, 'home_how_1'))}</li><li>${esc(t(lang, 'home_how_2'))}</li><li>${esc(t(lang, 'home_how_3'))}</li></ol>
-  <figure class="example">
-    <figcaption>${esc(t(lang, 'home_example'))}</figcaption>
-    <blockquote class="clue-text">${esc(t(lang, 'home_example_clue'))}</blockquote>
-    <p>${esc(t(lang, 'home_example_expl'))}</p>
+  <figure class="specimen" data-label="${esc(t(lang, 'spec_label'))}">
+    <p class="clue-text" lang="${lang}">${partsHtml(sp.parts).replace(/data-r="def"/, 'data-r="def" class="m-def"').replace(/data-r="ind"/, 'data-r="ind" class="m-ind"')}</p>
+    <ul class="notes">
+      <li><span class="key def" aria-hidden="true"></span><span><b>${esc(t(lang, 'spec_def'))}.</b> ${esc(t(lang, 'spec_def_txt'))}</span></li>
+      <li><span class="key ind" aria-hidden="true"></span><span><b>${esc(t(lang, 'spec_ind'))}.</b> ${esc(t(lang, 'spec_ind_txt'))}</span></li>
+    </ul>
+    <div class="shuffle${sp.from.length > 5 ? ' long' : ''}" role="img" aria-label="${esc(sp.from)} → ${esc(sp.to)}">${tiles.join('')}</div>
   </figure>
 </section>
-<section class="mechs">
-  <ul class="mech-grid">${mechs.map((m) => `<li><strong>${esc(t(lang, 'mech_' + m))}</strong><span>${esc(t(lang, 'mechhelp_' + m))}</span></li>`).join('')}</ul>
+
+<section class="section" aria-labelledby="how-t">
+  <div class="section-head"><div><p class="eyebrow">01</p><h2 id="how-t">${esc(t(lang, 'home_how'))}</h2></div><p class="lead">${esc(t(lang, 'home_how_lead'))}</p></div>
+  <ol class="steps">
+    <li><h3>${esc(t(lang, 'step1_t'))}</h3><p>${esc(t(lang, 'step1'))}</p></li>
+    <li><h3>${esc(t(lang, 'step2_t'))}</h3><p>${esc(t(lang, 'step2'))}</p></li>
+    <li><h3>${esc(t(lang, 'step3_t'))}</h3><p>${esc(t(lang, 'step3'))}</p></li>
+  </ol>
+</section>
+
+<section class="section" aria-labelledby="try-t">
+  <div class="try-box">
+    <div><p class="eyebrow">02</p><h2 id="try-t">${esc(t(lang, 'try_title'))}</h2><p class="lead">${esc(t(lang, 'try_lead'))}</p>
+      <p><a class="btn" href="${P('play')}">${esc(t(lang, 'try_more'))} <span class="arrow" aria-hidden="true">→</span></a></p></div>
+    ${tryWidget(ex.home_try, lang)}
+  </div>
+</section>
+
+${mechs.length ? `<section class="section" aria-labelledby="mech-t">
+  <div class="section-head"><div><p class="eyebrow">03</p><h2 id="mech-t">${esc(t(lang, 'mech_title'))}</h2></div><p class="lead">${esc(t(lang, 'mech_lead'))}</p></div>
+  <ul class="mech-index">${mechs.map((m) => `<li><a href="${P('archive')}?mechanism=${m}"><span class="name">${esc(t(lang, 'mech_' + m))}</span><span class="n">${esc(plural(lang, mechCounts[m], 'n_clue', 'n_clues'))}</span><span class="what">${esc(t(lang, 'mechhelp_' + m))}</span></a></li>`).join('')}</ul>
+</section>` : ''}
+
+<section class="section duo" aria-label="${esc(t(lang, 'banner_daily_t'))}">
+  <div class="banner"><div><h2>${esc(t(lang, 'banner_daily_t'))}</h2><p>${esc(t(lang, 'banner_daily'))}</p></div><a class="btn" href="${P('daily')}">${esc(t(lang, 'banner_daily_cta'))}</a></div>
+  <div class="banner"><div><h2>${esc(t(lang, 'banner_contrib_t'))}</h2><p>${esc(t(lang, 'banner_contrib'))}</p></div><a class="btn" href="${P('contribute')}">${esc(t(lang, 'banner_contrib_cta'))}</a></div>
 </section>`,
       });
     }));
 
+    // ── Jugar ──
     r.get(P('play'), (req, res) => render(req, res, {
       page: 'play', path: P('play'), alternates: altFor('play'), title: t(lang, 'nav_play'),
       boot: { mode: req.query.mode || null },
-      body: `<section class="game-shell" id="game" aria-live="polite"><p class="muted">${esc(t(lang, 'loading'))}</p><noscript>${lang === 'es' ? 'El juego necesita JavaScript.' : 'The game needs JavaScript.'}</noscript></section>`,
+      body: `<h1 class="sr-only">${esc(t(lang, 'play_title'))}</h1>
+<section class="game" id="game">${skeleton}<noscript><p class="notice">${lang === 'es' ? 'El juego necesita JavaScript.' : 'The game needs JavaScript.'}</p></noscript></section>`,
     }));
 
+    // ── Desafío diario con calendario ──
     r.get(P('daily'), a(async (req, res) => {
       const db = req.app.locals.db;
-      const past = await db.all(`SELECT d.date, c.* FROM daily_challenges d JOIN clues c ON c.id = d.clue_id
-        WHERE d.language_code = ? AND d.date < ? AND c.status = 'published' ORDER BY d.date DESC LIMIT 30`, [lang, today()]);
-      const cats = await db.all('SELECT * FROM categories');
+      const now = today();
+      const month = /^\d{4}-(0[1-9]|1[0-2])$/.test(req.query.m || '') && req.query.m <= now.slice(0, 7) ? req.query.m : now.slice(0, 7);
+      const rows = await db.all(`SELECT d.date, c.slug FROM daily_challenges d JOIN clues c ON c.id = d.clue_id
+        WHERE d.language_code = ? AND d.date LIKE ? AND d.date < ? AND c.status = 'published' ORDER BY d.date`, [lang, month + '-%', now]);
+      const first = await db.get("SELECT MIN(date) AS d FROM daily_challenges WHERE language_code = ?", [lang]);
+      const bySlug = Object.fromEntries(rows.map((x) => [x.date, x.slug]));
+      const [y, mo] = month.split('-').map(Number);
+      const startDow = (new Date(Date.UTC(y, mo - 1, 1)).getUTCDay() + 6) % 7;     // lunes primero
+      const days = new Date(Date.UTC(y, mo, 0)).getUTCDate();
+      const loc = lang === 'es' ? 'es' : 'en-GB';
+      const monthName = new Date(Date.UTC(y, mo - 1, 1)).toLocaleDateString(loc, { month: 'long', year: 'numeric', timeZone: 'UTC' }).replace(/^./, (c) => c.toUpperCase());
+      const dows = [...Array(7)].map((_, i) => new Date(Date.UTC(2024, 0, 1 + i)).toLocaleDateString(loc, { weekday: 'short', timeZone: 'UTC' }).replace('.', ''));
+      const shift = (n) => { const d = new Date(Date.UTC(y, mo - 1 + n, 1)); return d.toISOString().slice(0, 7); };
+      const prev = shift(-1); const next = shift(1);
+      const hasPrev = first && first.d && first.d.slice(0, 7) <= prev;
+      const hasNext = next <= now.slice(0, 7);
+      const td = new Date(now + 'T00:00:00Z');
+      const cells = [];
+      for (let i = 0; i < startDow; i++) cells.push('<li class="day empty-cell" aria-hidden="true"></li>');
+      for (let d = 1; d <= days; d++) {
+        const date = `${month}-${String(d).padStart(2, '0')}`;
+        const label = new Date(date + 'T00:00:00Z').toLocaleDateString(loc, { day: 'numeric', month: 'long', timeZone: 'UTC' });
+        const isToday = date === now;
+        cells.push(bySlug[date]
+          ? `<li class="day"><a href="${href(lang, 'clue', '/' + encodeURIComponent(bySlug[date]))}" aria-label="${esc(label)}">${d}</a></li>`
+          : `<li class="day${isToday ? ' today' : ''}"${isToday ? ` aria-current="date"` : ''}><span${isToday ? '' : ' aria-hidden="true"'}>${d}</span>${isToday ? `<span class="sr-only"> ${esc(t(lang, 'cal_today'))}</span>` : ''}</li>`);
+      }
       render(req, res, {
         page: 'daily', path: P('daily'), alternates: altFor('daily'), title: t(lang, 'daily_title'),
-        body: `<header class="page-head"><h1>${esc(t(lang, 'daily_title'))}</h1><p class="lead">${esc(t(lang, 'daily_lead'))}</p></header>
-<section class="game-shell" id="game" aria-live="polite"><p class="muted">${esc(t(lang, 'loading'))}</p></section>
-${past.length ? `<section><h2>${esc(t(lang, 'past_dailies'))}</h2><ul class="clue-list">${past.map((c) => clueCard(c, lang, cats).replace('<span class="meta">', `<span class="meta"><time datetime="${esc(c.date)}">${esc(c.date)}</time> · `)).join('')}</ul></section>` : ''}`,
+        body: `<header class="daily-head">
+  <div class="daily-date" aria-hidden="true"><span class="m">${esc(td.toLocaleDateString(loc, { month: 'short', timeZone: 'UTC' }).replace('.', ''))}</span><span class="d">${td.getUTCDate()}</span><span class="w">${esc(td.toLocaleDateString(loc, { weekday: 'long', timeZone: 'UTC' }))}</span></div>
+  <div><p class="eyebrow">${esc(t(lang, 'daily_title'))}</p><h1>${esc(td.toLocaleDateString(loc, { day: 'numeric', month: 'long', timeZone: 'UTC' }))}</h1>
+  <p class="lead">${esc(t(lang, 'daily_lead'))} <span class="muted small">${esc(t(lang, 'daily_rules'))}</span></p></div>
+</header>
+<section class="game" id="game">${skeleton}</section>
+<section class="calendar" aria-labelledby="cal-t">
+  <div class="cal-head"><div><p class="eyebrow">${esc(t(lang, 'cal_title'))}</p><h2 id="cal-t">${esc(monthName)}</h2></div>
+    <div class="header-tools">
+      ${hasPrev ? `<a class="icon-btn" href="?m=${prev}" aria-label="${esc(t(lang, 'prev_month'))}" rel="prev"><span aria-hidden="true">←</span></a>` : `<span class="icon-btn off" aria-hidden="true">←</span>`}
+      ${hasNext ? `<a class="icon-btn" href="?m=${next}" aria-label="${esc(t(lang, 'next_month'))}" rel="next"><span aria-hidden="true">→</span></a>` : `<span class="icon-btn off" aria-hidden="true">→</span>`}
+    </div></div>
+  <ul class="cal-grid">${dows.map((w) => `<li class="dow" aria-hidden="true">${esc(w)}</li>`).join('')}${cells.join('')}</ul>
+  <p class="cal-legend"><span><i></i>${esc(t(lang, 'cal_available'))}</span>${rows.length ? '' : `<span>${esc(t(lang, 'cal_none'))}</span>`}</p>
+</section>`,
       });
     }));
 
+    // ── Explorar ──
     r.get(P('archive'), a(async (req, res) => {
       const db = req.app.locals.db; const q = req.query;
       const fl = /^[a-z]{2}$/.test(q.lang || '') ? q.lang : lang;
-      const where = ["status = 'published'", 'language_code = ?']; const args = [fl];
-      if (/^[a-z]{2}-[A-Z]{2}$/.test(q.variant || '')) { where.push('(variant_code IS NULL OR variant_code = ?)'); args.push(q.variant); }
-      if (/^[1-5]$/.test(q.difficulty || '')) { where.push('difficulty = ?'); args.push(Number(q.difficulty)); }
-      if (/^[a-z_]{2,40}$/.test(q.category || '')) { where.push('category = ?'); args.push(q.category); }
-      if (/^[a-z_]{2,40}$/.test(q.mechanism || '')) { where.push('mechanism = ?'); args.push(q.mechanism); }
+      const where = ["c.status = 'published'", 'c.language_code = ?']; const args = [fl];
+      const search = String(q.q || '').trim().slice(0, 60);
+      if (search) { where.push("c.clue_text LIKE ? ESCAPE '\\'"); args.push('%' + search.replace(/[\\%_]/g, (m) => '\\' + m) + '%'); }
+      if (/^[a-z]{2}-[A-Z]{2}$/.test(q.variant || '')) { where.push('(c.variant_code IS NULL OR c.variant_code = ?)'); args.push(q.variant); }
+      if (/^[1-5]$/.test(q.difficulty || '')) { where.push('c.difficulty = ?'); args.push(Number(q.difficulty)); }
+      if (/^[a-z_]{2,40}$/.test(q.category || '')) { where.push('c.category = ?'); args.push(q.category); }
+      if (/^[a-z_]{2,40}$/.test(q.mechanism || '')) { where.push('c.mechanism = ?'); args.push(q.mechanism); }
+      if (q.date === '7' || q.date === '30') { where.push('c.published_at >= ?'); args.push(new Date(Date.now() - Number(q.date) * 86400000).toISOString()); }
+      const pid = req.playerId && /^[\w-]{8,64}$/.test(req.playerId) ? req.playerId : null;
+      const hasHistory = pid ? !!(await db.get("SELECT 1 FROM games WHERE player_id = ? AND result = 'solved' LIMIT 1", [pid])) : false;
+      if (hasHistory && (q.status === 'solved' || q.status === 'unsolved')) {
+        where.push(`c.id ${q.status === 'solved' ? 'IN' : 'NOT IN'} (SELECT clue_id FROM games WHERE player_id = ? AND result = 'solved')`); args.push(pid);
+      }
       const page = Math.max(1, Math.min(1000, Number(q.page) || 1)); const per = 24;
-      const total = (await db.get(`SELECT COUNT(*) AS n FROM clues WHERE ${where.join(' AND ')}`, args)).n;
-      const rows = await db.all(`SELECT * FROM clues WHERE ${where.join(' AND ')} ORDER BY published_at DESC, id LIMIT ? OFFSET ?`, [...args, per, (page - 1) * per]);
+      const total = (await db.get(`SELECT COUNT(*) AS n FROM clues c WHERE ${where.join(' AND ')}`, args)).n;
+      const rows = await db.all(`SELECT c.* FROM clues c WHERE ${where.join(' AND ')} ORDER BY c.published_at DESC, c.id LIMIT ? OFFSET ?`, [...args, per, (page - 1) * per]);
+      const ids = rows.map((x) => x.id); const ph = ids.map(() => '?').join(',') || "''";
+      const solved = new Set(pid && ids.length ? (await db.all(`SELECT DISTINCT clue_id FROM games WHERE player_id = ? AND result = 'solved' AND clue_id IN (${ph})`, [pid, ...ids])).map((x) => x.clue_id) : []);
+      const dailies = Object.fromEntries(ids.length ? (await db.all(`SELECT clue_id, MAX(date) AS d FROM daily_challenges WHERE clue_id IN (${ph}) AND date < ? GROUP BY clue_id`, [...ids, today()])).map((x) => [x.clue_id, x.d]) : []);
+      // "Nuevo": entre los diez últimos publicados y con menos de 14 días. Nada inventado.
+      const fresh = new Set((await db.all("SELECT id FROM clues WHERE status = 'published' AND language_code = ? AND published_at >= ? ORDER BY published_at DESC LIMIT 10",
+        [fl, new Date(Date.now() - 14 * 86400000).toISOString()])).map((x) => x.id));
       const cats = await db.all('SELECT * FROM categories WHERE enabled = 1 ORDER BY slug');
       const langs = await db.all('SELECT code, name_native FROM languages WHERE enabled = 1 ORDER BY sort_order');
       const variants = await db.all('SELECT code, name_native FROM language_variants WHERE enabled = 1 AND language_code = ? ORDER BY code', [fl]);
-      const mechs = ['anagram', 'hidden', 'reversal', 'container', 'deletion', 'charade', 'homophone', 'double_definition', 'initials'];
+      const mechCounts = Object.fromEntries((await db.all("SELECT mechanism AS m, COUNT(*) AS n FROM clues WHERE status = 'published' AND language_code = ? GROUP BY mechanism", [fl])).map((x) => [x.m, x.n]));
       const sel = (v, cur) => (String(v) === String(cur || '') ? ' selected' : '');
-      const qs = (p) => { const u = new URLSearchParams({ ...q, page: String(p) }); return '?' + u.toString(); };
+      const qs = (over) => { const u = new URLSearchParams(Object.entries({ ...q, ...over }).filter(([, v]) => v !== '' && v != null)); const s = u.toString(); return s ? '?' + s : P('archive'); };
       const pages = Math.max(1, Math.ceil(total / per));
-      const filtered = q.variant || q.difficulty || q.category || q.mechanism;
+      const filtered = search || q.variant || q.difficulty || q.category || q.mechanism || q.date || q.status;
+      const opt = (name, label, options) => `<label class="field"><span>${esc(label)}</span><select name="${name}">${options}</select></label>`;
       render(req, res, {
         page: 'archive', path: P('archive') + (page > 1 ? `?page=${page}` : ''), alternates: altFor('archive'), title: t(lang, 'archive_title'), noindex: !!filtered,
-        body: `<header class="page-head"><h1>${esc(t(lang, 'archive_title'))}</h1><p class="lead">${esc(t(lang, 'archive_lead'))}</p></header>
-<form class="filters" method="get" action="${P('archive')}">
-  <label>${esc(t(lang, 'language'))}<select name="lang">${langs.map((l) => `<option value="${l.code}"${sel(l.code, fl)}>${esc(l.name_native)}</option>`).join('')}</select></label>
-  <label>${esc(t(lang, 'variant'))}<select name="variant"><option value="">${esc(t(lang, 'any'))}</option>${variants.map((v) => `<option value="${v.code}"${sel(v.code, q.variant)}>${esc(v.name_native)}</option>`).join('')}</select></label>
-  <label>${esc(t(lang, 'difficulty'))}<select name="difficulty"><option value="">${esc(t(lang, 'any'))}</option>${[1, 2, 3, 4, 5].map((d) => `<option value="${d}"${sel(d, q.difficulty)}>${esc(t(lang, 'diff_' + d))}</option>`).join('')}</select></label>
-  <label>${esc(t(lang, 'category'))}<select name="category"><option value="">${esc(t(lang, 'all_categories'))}</option>${cats.map((c) => `<option value="${c.slug}"${sel(c.slug, q.category)}>${esc(lang === 'es' ? c.name_es : c.name_en)}</option>`).join('')}</select></label>
-  <label>${esc(t(lang, 'mechanism'))}<select name="mechanism"><option value="">${esc(t(lang, 'any'))}</option>${mechs.map((m) => `<option value="${m}"${sel(m, q.mechanism)}>${esc(t(lang, 'mech_' + m))}</option>`).join('')}</select></label>
-  <button class="btn" type="submit">${esc(t(lang, 'filter'))}</button>
-</form>
-<p class="muted small">${total} ${lang === 'es' ? 'resultados' : 'results'}</p>
-${rows.length ? `<ul class="clue-list">${rows.map((c) => clueCard(c, lang, cats)).join('')}</ul>` : `<p class="empty">${esc(t(lang, 'no_results'))}</p>`}
-${pages > 1 ? `<nav class="pager" aria-label="${esc(t(lang, 'page'))}">${page > 1 ? `<a class="btn ghost" rel="prev" href="${esc(qs(page - 1))}">${esc(t(lang, 'prev'))}</a>` : ''}<span>${page} / ${pages}</span>${page < pages ? `<a class="btn ghost" rel="next" href="${esc(qs(page + 1))}">${esc(t(lang, 'next_page'))}</a>` : ''}</nav>` : ''}`,
+        body: `<header class="page-head"><p class="eyebrow">${esc(t(lang, 'nav_archive'))}</p><h1>${esc(t(lang, 'archive_title'))}</h1><p class="lead">${esc(t(lang, 'archive_lead'))}</p></header>
+<div class="explore">
+  <form class="filters" method="get" action="${P('archive')}" role="search" id="filters">
+    <label class="field search"><span>${esc(t(lang, 'search'))}</span><span class="search-wrap">${ICON.search}<input type="search" name="q" value="${esc(search)}" placeholder="${esc(t(lang, 'search_ph'))}" maxlength="60"></span></label>
+    <button type="button" class="btn small filter-toggle" aria-expanded="false" aria-controls="more-filters">${esc(t(lang, 'filters_btn'))}</button>
+    <fieldset class="collapsible" id="more-filters"><legend class="sr-only">${esc(t(lang, 'filters_btn'))}</legend>
+      ${opt('lang', t(lang, 'language'), langs.map((l) => `<option value="${l.code}"${sel(l.code, fl)}>${esc(l.name_native)}</option>`).join(''))}
+      ${opt('variant', t(lang, 'variant'), `<option value="">${esc(t(lang, 'any'))}</option>${variants.map((v) => `<option value="${v.code}"${sel(v.code, q.variant)}>${esc(v.name_native)}</option>`).join('')}`)}
+      ${opt('difficulty', t(lang, 'difficulty'), `<option value="">${esc(t(lang, 'any'))}</option>${[1, 2, 3, 4, 5].map((d) => `<option value="${d}"${sel(d, q.difficulty)}>${esc(t(lang, 'diff_' + d))}</option>`).join('')}`)}
+      ${opt('category', t(lang, 'category'), `<option value="">${esc(t(lang, 'all_categories'))}</option>${cats.map((c) => `<option value="${c.slug}"${sel(c.slug, q.category)}>${esc(lang === 'es' ? c.name_es : c.name_en)}</option>`).join('')}`)}
+      ${opt('mechanism', t(lang, 'mechanism'), `<option value="">${esc(t(lang, 'any'))}</option>${MECHS.map((m) => `<option value="${m}"${sel(m, q.mechanism)}>${esc(t(lang, 'mech_' + m))}</option>`).join('')}`)}
+      ${opt('date', t(lang, 'date_f'), `<option value="">${esc(t(lang, 'date_any'))}</option><option value="7"${sel('7', q.date)}>${esc(t(lang, 'date_7'))}</option><option value="30"${sel('30', q.date)}>${esc(t(lang, 'date_30'))}</option>`)}
+      ${hasHistory ? opt('status', t(lang, 'status_f'), `<option value="">${esc(t(lang, 'st_all'))}</option><option value="solved"${sel('solved', q.status)}>${esc(t(lang, 'st_solved_f'))}</option><option value="unsolved"${sel('unsolved', q.status)}>${esc(t(lang, 'st_unsolved'))}</option>`) : ''}
+      <div class="filters-actions"><button class="btn ink" type="submit">${esc(t(lang, 'filter'))}</button>${filtered ? `<a class="link-btn" href="${P('archive')}">${esc(t(lang, 'clear'))}</a>` : ''}</div>
+    </fieldset>
+  </form>
+  <div>
+    <nav class="mech-chips" aria-label="${esc(t(lang, 'mechanism'))}">
+      <a class="chip" href="${esc(qs({ mechanism: '', page: '' }))}"${!q.mechanism ? ' aria-current="true"' : ''}>${esc(t(lang, 'st_all'))}</a>
+      ${MECHS.filter((m) => mechCounts[m]).map((m) => `<a class="chip" href="${esc(qs({ mechanism: m, page: '' }))}"${q.mechanism === m ? ' aria-current="true"' : ''}>${esc(t(lang, 'mech_' + m))} <span class="count">${mechCounts[m]}</span></a>`).join('')}
+    </nav>
+    <div class="results-bar"><span>${esc(plural(lang, total, 'results_1', 'results_n'))}</span>${pages > 1 ? `<span>${esc(t(lang, 'page'))} ${page} / ${pages}</span>` : ''}</div>
+    ${rows.length ? `<ul class="clue-list">${rows.map((c) => clueRow(c, lang, cats, { solved: solved.has(c.id), fresh: fresh.has(c.id), daily: dailies[c.id] })).join('')}</ul>`
+    : `<div class="empty"><p class="serif">${esc(t(lang, 'no_results'))}</p><p>${esc(t(lang, 'no_results_hint'))}</p><a class="btn" href="${P('archive')}">${esc(t(lang, 'clear'))}</a></div>`}
+    ${pages > 1 ? `<nav class="pager" aria-label="${esc(t(lang, 'page'))}">${page > 1 ? `<a class="btn" rel="prev" href="${esc(qs({ page: page - 1 }))}">← ${esc(t(lang, 'prev'))}</a>` : '<span></span>'}<span class="pos">${page} / ${pages}</span>${page < pages ? `<a class="btn" rel="next" href="${esc(qs({ page: page + 1 }))}">${esc(t(lang, 'next_page'))} →</a>` : '<span></span>'}</nav>` : ''}
+  </div>
+</div>`,
       });
     }));
 
+    // ── Página de un críptico ──
     r.get(`${P('clue')}/:slug`, a(async (req, res, next) => {
       const db = req.app.locals.db;
       const c = await db.get("SELECT * FROM clues WHERE slug = ? AND status = 'published'", [req.params.slug]);
       if (!c) return next();
       const pub = publicClue(c);
-      const cats = await db.all('SELECT * FROM categories');
       const canonicalLang = UI_LANGS.includes(c.language_code) ? c.language_code : lang;
       const source = c.source_id ? await db.get('SELECT name, url FROM sources WHERE id = ?', [c.source_id]) : null;
       render(req, res, {
@@ -163,32 +314,51 @@ ${pages > 1 ? `<nav class="pager" aria-label="${esc(t(lang, 'page'))}">${page > 
         boot: { slug: c.slug, clueLang: c.language_code, clueVariant: c.variant_code },
         jsonLd: { '@context': 'https://schema.org', '@type': 'CreativeWork', name: pub.clue, inLanguage: c.language_code,
           genre: 'cryptic crossword clue', isAccessibleForFree: true, ...(source ? { isBasedOn: c.source_url || source.url } : {}) },
-        body: `<nav class="crumbs"><a href="${P('archive')}">${esc(t(lang, 'archive_title'))}</a></nav>
-<article class="clue-page">
-  <p class="meta">${esc(t(lang, 'mech_' + pub.mechanism))} · ${esc(t(lang, 'diff_' + pub.difficulty))} · ${esc(categoryName(cats, pub.category, lang))}${pub.variant ? ' · ' + esc(pub.variant) : ''}</p>
-  <section class="game-shell" id="game" aria-live="polite"><h1 class="clue-text" lang="${esc(c.language_code)}">${esc(pub.clue)}</h1></section>
-  ${source ? `<p class="attribution">${esc(t(lang, 'source'))}: <a href="${esc(c.source_url || source.url)}" rel="noopener nofollow">${esc(c.attribution || source.name)}</a>${c.license_id ? ` · ${esc(c.license_id)}` : ''}</p>` : ''}
-  ${pub.author && c.origin === 'community' ? `<p class="attribution">${esc(t(lang, 'by'))} ${esc(pub.author)}</p>` : ''}
-</article>`,
+        body: `<nav class="crumbs" aria-label="${lang === 'es' ? 'Ruta' : 'Breadcrumb'}"><a href="${P('archive')}">${esc(t(lang, 'archive_title'))}</a> / ${esc(t(lang, 'mech_' + pub.mechanism))}</nav>
+<article class="game" id="game"><div class="sheet"><h1 class="clue-text" lang="${esc(c.language_code)}">${clueWithEnum(pub.clue)}</h1></div></article>
+${source ? `<p class="attribution">${esc(t(lang, 'source'))}: <a href="${esc(c.source_url || source.url)}" rel="noopener nofollow">${esc(c.attribution || source.name)}</a>${c.license_id ? ` · ${esc(c.license_id)}` : ''}</p>` : ''}
+${pub.author && c.origin === 'community' ? `<p class="attribution">${esc(t(lang, 'by'))} ${esc(pub.author)}</p>` : ''}`,
       });
     }));
 
+    // ── Proponer ──
     r.get(P('contribute'), a(async (req, res) => {
       const db = req.app.locals.db;
+      const steps = ['sent', 'pending', 'in_review', 'needs_changes', 'approved', 'published'];
       render(req, res, {
         page: 'contribute', path: P('contribute'), alternates: altFor('contribute'), title: t(lang, 'contribute_title'),
         boot: { categories: await db.all('SELECT slug, name_es, name_en FROM categories WHERE enabled = 1 ORDER BY slug') },
-        body: `<header class="page-head"><h1>${esc(t(lang, 'contribute_title'))}</h1><p class="lead">${esc(t(lang, 'contribute_lead'))}</p></header>
-<section id="contribute-root"></section>`,
+        body: `<header class="page-head"><p class="eyebrow">${esc(t(lang, 'nav_contribute'))}</p><h1>${esc(t(lang, 'contribute_title'))}</h1><p class="lead">${esc(t(lang, 'contribute_lead'))}</p></header>
+<div class="contribute">
+  <section id="contribute-root">${skeleton}</section>
+  <aside class="aside-card" aria-labelledby="pub-t"><h2 id="pub-t">${esc(t(lang, 'c_aside_t'))}</h2><p>${esc(t(lang, 'c_aside'))}</p>
+    <ol class="timeline">${steps.map((s) => `<li class="${s === 'needs_changes' ? 'branch' : ''}"><span><b>${esc(t(lang, s === 'sent' ? 'st_sent' : 'st_' + s))}</b>${esc(t(lang, 'st_' + s + '_d'))}</span></li>`).join('')}</ol>
+    <p class="small"><a href="${P('submission')}">${esc(t(lang, 'status_title'))} →</a></p>
+  </aside>
+</div>`,
       });
     }));
 
     r.get(P('submission'), (req, res) => render(req, res, {
       page: 'submission', path: P('submission'), alternates: altFor('submission'), title: t(lang, 'status_title'), noindex: true,
-      body: `<header class="page-head"><h1>${esc(t(lang, 'status_title'))}</h1></header><section id="submission-root"></section>`,
+      body: `<header class="page-head"><p class="eyebrow">${esc(t(lang, 'nav_contribute'))}</p><h1>${esc(t(lang, 'status_title'))}</h1><p class="lead">${esc(t(lang, 'status_lead'))}</p></header><section id="submission-root" class="sub-view"></section>`,
     }));
 
-    for (const key of ['help', 'privacy', 'terms']) {
+    // ── Cómo jugar: lecciones con ejemplos resolubles ──
+    r.get(P('help'), (req, res) => render(req, res, {
+      page: 'help', path: P('help'), alternates: altFor('help'), title: t(lang, 'help_title'),
+      body: `<header class="page-head"><p class="eyebrow">${esc(t(lang, 'nav_help'))}</p><h1>${esc(t(lang, 'help_title'))}</h1><p class="lead">${esc(t(lang, 'help_lead'))}</p></header>
+<div class="lessons">${CONTENT.LESSONS[lang].map((l, i) => `<section class="lesson" aria-labelledby="l${i}">
+  <div class="lesson-num"><small>${esc(l.kicker)}</small></div>
+  <div class="body"><h2 id="l${i}">${esc(l.title)}</h2><p>${esc(l.text)}</p>
+    ${l.signals ? `<p class="small muted signals-label">${esc(t(lang, 'lesson_signals'))}</p><ul class="signals">${l.signals.map((s) => `<li>${esc(s)}</li>`).join('')}</ul>` : ''}
+    ${l.tries.map((x) => tryWidget(x, lang, { label: t(lang, 'lesson_try') })).join('')}
+  </div></section>`).join('')}</div>
+<section class="section"><article class="prose">${CONTENT[lang].help}</article></section>
+<section class="banner"><div><h2>${esc(t(lang, 'try_more'))}</h2><p>${esc(t(lang, 'play_lead'))}</p></div><a class="btn" href="${P('play')}">${esc(t(lang, 'home_cta'))}</a></section>`,
+    }));
+
+    for (const key of ['privacy', 'terms']) {
       r.get(P(key), (req, res) => render(req, res, {
         page: key, path: P(key), alternates: altFor(key), title: t(lang, key + '_title'),
         body: `<article class="prose"><h1>${esc(t(lang, key + '_title'))}</h1>${CONTENT[lang][key]}</article>`,
@@ -197,12 +367,12 @@ ${pages > 1 ? `<nav class="pager" aria-label="${esc(t(lang, 'page'))}">${page > 
 
     r.get(P('profile'), (req, res) => render(req, res, {
       page: 'profile', path: P('profile'), alternates: altFor('profile'), title: t(lang, 'profile_title'), noindex: true,
-      body: `<header class="page-head"><h1>${esc(t(lang, 'profile_title'))}</h1></header><section id="profile-root"><p class="muted">${esc(t(lang, 'loading'))}</p></section>`,
+      body: `<header class="page-head"><p class="eyebrow">${esc(t(lang, 'nav_profile'))}</p><h1>${esc(t(lang, 'profile_title'))}</h1><p class="lead">${esc(t(lang, 'profile_lead'))}</p></header><section id="profile-root">${skeleton}</section>`,
     }));
 
     r.get(P('account'), (req, res) => render(req, res, {
       page: 'account', path: P('account'), alternates: altFor('account'), title: t(lang, 'account_title'), noindex: true,
-      body: `<header class="page-head"><h1>${esc(t(lang, 'account_title'))}</h1><p class="lead">${esc(t(lang, 'account_lead'))}</p></header><section id="account-root"></section>`,
+      body: `<header class="page-head"><p class="eyebrow">${esc(t(lang, 'nav_account'))}</p><h1>${esc(t(lang, 'account_title'))}</h1><p class="lead">${esc(t(lang, 'account_lead'))}</p></header><section id="account-root"></section>`,
     }));
   }
 
@@ -210,7 +380,8 @@ ${pages > 1 ? `<nav class="pager" aria-label="${esc(t(lang, 'page'))}">${page > 
     if (req.path.startsWith('/api')) return next();
     const lang = req.path.startsWith('/en') ? 'en' : 'es';
     res.status(404).send(layout({ lang, config: req.app.locals.config, page: 'notfound', path: req.path, noindex: true, title: '404',
-      body: `<section class="hero"><h1>404</h1><p class="lead">${lang === 'es' ? 'No encontramos esta página.' : "We couldn't find that page."}</p><a class="btn primary" href="/${lang}">${esc(t(lang, 'home_cta'))}</a></section>` }));
+      body: `<section class="lost"><p class="eyebrow">404</p><h1>${esc(t(lang, 'not_found'))}</h1><p class="lead">${esc(t(lang, 'not_found_lead'))}</p>
+<div class="hero-actions"><a class="btn primary big" href="${href(lang, 'play')}">${esc(t(lang, 'home_cta'))}</a><a class="link-btn" href="${href(lang, 'archive')}">${esc(t(lang, 'home_explore'))}</a></div></section>` }));
   });
 
   return r;
