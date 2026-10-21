@@ -1,6 +1,6 @@
 # Formato de un críptico
 
-Un críptico tiene una **definición** y un **juego de palabras** que llevan a la misma respuesta. En Cripta el juego de palabras se describe como un árbol JSON. El validador lo resuelve, comprueba que dé exactamente la respuesta y genera la explicación paso a paso a partir de ese árbol.
+Un críptico tiene una **definición** y un **juego de palabras** que llevan a la misma respuesta. En Play Crípticos el juego de palabras se describe como un árbol JSON. El validador lo resuelve, comprueba que dé exactamente la respuesta y genera la explicación paso a paso a partir de ese árbol.
 
 ## Campos
 

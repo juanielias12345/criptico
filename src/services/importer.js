@@ -11,7 +11,7 @@ const { getSetting } = require('./settings');
 const { logError } = require('./audit');
 const { uuid, now, sha256, parseJson, HttpError } = require('./util');
 
-const USER_AGENT = 'CriptaBot/1.0 (+importador de fuentes autorizadas)';
+const USER_AGENT = 'PlayCripticosBot/1.0 (+importador de fuentes autorizadas)';
 const MAX_BYTES = 5 * 1024 * 1024;
 const ALLOWED_METHODS = new Set(['json_feed', 'rss', 'csv', 'api', 'manual_upload']);
 

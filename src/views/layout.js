@@ -25,9 +25,15 @@ function href(lang, route, rest = '') {
 
 const LOGO = `<svg class="logo-mark" viewBox="0 0 32 32" aria-hidden="true" focusable="false">
   <rect width="32" height="32" fill="var(--accent)"/>
-  <path d="M21.6 11.1A7.4 7.4 0 1 0 21.6 20.9" fill="none" stroke="var(--accent-ink)" stroke-width="3.2"/>
-  <rect x="19.6" y="14" width="4" height="4" fill="var(--accent-ink)"/>
+  <path d="M10.5 7.5 25 16 10.5 24.5z" fill="var(--accent-ink)" stroke="var(--accent-ink)" stroke-width="1.6" stroke-linejoin="round"/>
+  <rect x="12.4" y="14" width="4" height="4" fill="var(--accent)"/>
 </svg>`;
+
+// Nombre de la marca: la primera palabra ("Play") va en itálica y en el color de acento.
+const brandName = (site) => {
+  const [first, ...rest] = String(site).split(' ');
+  return rest.length ? `<span class="brand-name"><span class="brand-first">${esc(first)}</span> ${esc(rest.join(' '))}</span>` : `<span class="brand-name">${esc(site)}</span>`;
+};
 
 // Iconos de trazo propios (24 × 24, 1.6 px), coherentes entre sí.
 const ICON = {
@@ -76,7 +82,7 @@ ${jsonLd ? `<script type="application/ld+json">${JSON.stringify(jsonLd).replace(
 <a class="skip-link" href="#main">${lang === 'es' ? 'Saltar al contenido' : 'Skip to content'}</a>
 <header class="site-header">
   <div class="bar">
-    <a class="brand" href="${href(lang, 'home')}" aria-label="${esc(site)} — ${lang === 'es' ? 'inicio' : 'home'}">${LOGO}<span class="brand-name">${esc(site)}</span></a>
+    <a class="brand" href="${href(lang, 'home')}" aria-label="${esc(site)} — ${lang === 'es' ? 'inicio' : 'home'}">${LOGO}${brandName(site)}</a>
     <nav class="main-nav" id="main-nav" aria-label="${lang === 'es' ? 'Principal' : 'Main'}">
       <ul id="nav-links">
         ${nav.map(([r, k]) => `<li><a href="${href(lang, r)}"${page === r || (r === 'archive' && page === 'clue') ? ' aria-current="page"' : ''}>${esc(t(lang, k))}</a></li>`).join('')}
@@ -96,7 +102,7 @@ ${body}
 <footer class="site-footer">
   <div class="inner">
     <div class="about">
-      <a class="brand" href="${href(lang, 'home')}">${LOGO}<span class="brand-name">${esc(site)}</span></a>
+      <a class="brand" href="${href(lang, 'home')}">${LOGO}${brandName(site)}</a>
       <p>${esc(t(lang, 'footer_made'))}</p>
     </div>
     <nav aria-label="${lang === 'es' ? 'Jugar' : 'Play'}">

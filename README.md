@@ -1,4 +1,4 @@
-# Cripta — crípticos ilimitados
+# Play Crípticos — crípticos ilimitados
 
 Plataforma web para jugar crípticos (pistas de palabras cruzadas crípticas) sin límite, en español e inglés, con variantes regionales (es-AR, es-ES, es-MX, en-GB, en-US) y preparada para sumar francés, portugués, italiano y alemán.
 

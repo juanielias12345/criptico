@@ -1,4 +1,4 @@
-/* Cripta: script público. Sin dependencias ni paso de compilación. */
+/* Play Crípticos: script público. Sin dependencias ni paso de compilación. */
 (function () {
   'use strict';
 

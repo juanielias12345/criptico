@@ -1,6 +1,6 @@
 # Fuentes externas
 
-Cripta solo importa contenido de fuentes que lo permiten. **No hace scraping de sitios que no lo autorizan, respeta `robots.txt`, no elude CAPTCHAs ni bloqueos y nunca republica contenido sin licencia o permiso.**
+Play Crípticos solo importa contenido de fuentes que lo permiten. **No hace scraping de sitios que no lo autorizan, respeta `robots.txt`, no elude CAPTCHAs ni bloqueos y nunca republica contenido sin licencia o permiso.**
 
 ## Alta de una fuente
 
@@ -34,7 +34,7 @@ Además, la base de datos rechaza publicar un críptico externo si la fuente o l
 
 ## Comportamiento de la descarga
 
-- Agente identificado (`User-Agent: CriptaBot`), con tiempo límite.
+- Agente identificado (`User-Agent: PlayCripticosBot`), con tiempo límite.
 - Consulta `robots.txt` antes de descargar (salvo método `api`) y se detiene si lo prohíbe.
 - Un 401/403 o la falta de credencial detienen la fuente sin reintentar; un 429 respeta `Retry-After`; los errores temporales se reintentan con espera creciente.
 - Cada elemento se guarda una sola vez por `(fuente, id)`: volver a importar no duplica.

@@ -1,9 +1,9 @@
-# Sistema de diseño de Cripta
+# Sistema de diseño de Play Crípticos
 
 Todo vive en `public/css/app.css` (sitio) y `public/css/admin.css` (panel), sin paso de compilación.
 
 ## Identidad
-- Marca: cuadrado bermellón con una «C» abierta y un casillero: la pista y la letra que falta.
+- Marca: cuadrado bermellón con un triángulo de «play» y un casillero vacío adentro (la letra que falta). Nombre «Play Crípticos», con «Play» en itálica bermellón.
 - Papel marfil, tinta casi negra y un único acento bermellón. Verde solo para «correcto»; ocre para «todavía no» y pistas.
 - Tipografías propias del sitio (OFL, en `public/fonts`): Fraunces para pistas y títulos, Instrument Sans para la interfaz.
 

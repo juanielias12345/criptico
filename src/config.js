@@ -10,7 +10,7 @@ function loadConfig(env = process.env) {
   const cfg = {
     production,
     port: Number(env.PORT) || 3000,
-    siteName: env.SITE_NAME || 'Cripta',
+    siteName: env.SITE_NAME || 'Play Crípticos',
     siteUrl: (env.SITE_URL || `http://localhost:${Number(env.PORT) || 3000}`).replace(/\/$/, ''),
     databaseUrl: env.DATABASE_URL || `file:${path.join(process.cwd(), 'data', 'criptico.db')}`,
     databaseAuthToken: env.DATABASE_AUTH_TOKEN || undefined,

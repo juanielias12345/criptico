@@ -29,7 +29,7 @@ La aplicación corre en Vercel como una función de Node (`api/index.js`) y guar
 | `IP_HASH_SALT` | Sí | Cadena aleatoria de 16+ caracteres |
 | `CRON_SECRET` | Sí | Cadena aleatoria de 16+ caracteres; Vercel la envía al cron |
 | `NODE_ENV` | Recomendada | `production` (Vercel ya la define) |
-| `SITE_NAME` | No | Nombre visible (por defecto “Cripta”) |
+| `SITE_NAME` | No | Nombre visible (por defecto “Play Crípticos”) |
 | `EDITORIAL_NAME` | No | Firma del catálogo propio |
 | `SOURCE_<NOMBRE>_TOKEN` | No | Credenciales de fuentes externas, una por fuente |
 
