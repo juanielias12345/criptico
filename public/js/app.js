@@ -152,19 +152,30 @@
     const id = 'p' + Math.random().toString(36).slice(2, 8);
     const search = el('input', { type: 'search', placeholder, 'aria-label': placeholder, 'aria-controls': id, autocomplete: 'off' });
     const list = el('div', { class: 'options', role: 'listbox', id, 'aria-label': label, tabindex: '-1' });
-    const current = el('p', { class: 'current' });
+    const currentText = el('span', { class: 'current-text' });
+    // La elección se ve como un botón; la lista se abre al tocarlo y se cierra al elegir.
+    const toggle = el('button', { type: 'button', class: 'picker-toggle', 'aria-expanded': 'false', 'aria-controls': id + '-pop' },
+      currentText, el('span', { class: 'change', text: t('prefs_change') }));
+    const pop = el('div', { class: 'picker-pop', id: id + '-pop', hidden: true }, search, list);
     let cur = selected;
-    const norm = (s) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+    const norm = (s) => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    const setOpen = (open) => {
+      pop.hidden = !open; toggle.setAttribute('aria-expanded', String(open));
+      if (open) {
+        search.value = ''; render(); search.focus();
+        const s = list.querySelector('[aria-selected="true"]'); if (s) list.scrollTop = s.offsetTop - list.offsetTop - 60;
+      }
+    };
     function render() {
       const q = norm(search.value.trim());
       list.textContent = '';
       const it0 = items.find((x) => x.value === cur);
-      current.textContent = it0 ? it0.label : '—';
+      currentText.textContent = it0 ? it0.label : '—';
       for (const it of items) {
         if (q && !norm(it.label + ' ' + it.value).includes(q)) continue;
         const opt = el('div', { class: 'opt' + (it.sub ? ' sub' : ''), role: 'option', tabindex: '0', 'aria-selected': String(it.value === cur), 'aria-disabled': it.disabled ? 'true' : null, 'data-value': it.value },
           el('span', { text: it.label }), it.extra ? el('span', { class: 'count', text: it.extra }) : null);
-        const choose = () => { if (it.disabled) return; cur = it.value; onSelect(it.value); render(); const s = list.querySelector('[aria-selected="true"]'); if (s) s.focus(); };
+        const choose = () => { if (it.disabled) return; cur = it.value; onSelect(it.value); render(); setOpen(false); toggle.focus(); };
         opt.addEventListener('click', choose);
         opt.addEventListener('keydown', (e) => {
           if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); choose(); }
@@ -175,11 +186,13 @@
       }
       if (!list.children.length) list.append(el('p', { class: 'opt', text: '—', 'aria-disabled': 'true' }));
     }
+    toggle.addEventListener('click', () => setOpen(pop.hidden));
     search.addEventListener('input', render);
     search.addEventListener('keydown', (e) => { if (e.key === 'ArrowDown' && list.firstElementChild) { e.preventDefault(); list.firstElementChild.focus(); } });
+    // Escape cierra la lista sin cerrar todo el diálogo.
+    pop.addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); setOpen(false); toggle.focus(); } });
     render();
-    setTimeout(() => { const s = list.querySelector('[aria-selected="true"]'); if (s) list.scrollTop = s.offsetTop - list.offsetTop - 60; }, 0);
-    return el('div', { class: 'picker' }, el('span', { class: 'label' }, label), current, el('p', { class: 'small muted', text: why }), search, list);
+    return el('div', { class: 'picker' }, el('span', { class: 'label' }, label), toggle, el('p', { class: 'small muted', text: why }), pop);
   }
 
   async function openPrefs({ first } = {}) {

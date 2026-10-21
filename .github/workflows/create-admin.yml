@@ -37,4 +37,4 @@ jobs:
           ADMIN_USERNAME: ${{ inputs.username }}
           ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
           ADMIN_ROLE: ${{ inputs.role }}
-          SITE_URL: https://criptico.vercel.app
+          SITE_URL: https://playcripticos.com

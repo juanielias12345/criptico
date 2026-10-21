@@ -35,8 +35,12 @@ async function newPage(opts = {}) {
 
 async function choose(dialog, pickerIndex, search, value) {
   const picker = dialog.locator('.picker').nth(pickerIndex);
+  await picker.locator('.picker-toggle').click();
   await picker.locator('input[type=search]').fill(search);
   await picker.locator(`.opt[data-value="${value}"]`).click();
+  // Al elegir, la lista se cierra y el botón muestra la elección.
+  assert.equal(await picker.locator('.picker-pop').isHidden(), true);
+  assert.equal(await picker.locator('.picker-toggle').getAttribute('aria-expanded'), 'false');
 }
 
 test('primera visita: diálogo con detección; país e idioma son independientes y se recuerdan', async () => {

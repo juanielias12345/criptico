@@ -562,7 +562,14 @@ dialog::backdrop { background: var(--scrim); }
 .picker { display: grid; gap: var(--s-2); align-content: start; }
 .picker .label { display: flex; align-items: center; gap: 8px; }
 .picker .label small { font-weight: 400; color: var(--ink-3); }
-.picker .current { font: 500 var(--t-lg)/1.2 var(--font-display); }
+.picker-toggle { display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); width: 100%; min-height: 52px; padding: 10px 14px; border: var(--b-ink); border-radius: var(--r-1); background: var(--sheet); color: var(--ink); cursor: pointer; text-align: left; }
+.picker-toggle:hover { background: var(--paper-2); }
+.picker-toggle .current-text { font: 500 var(--t-lg)/1.2 var(--font-display); }
+.picker-toggle .change { flex: none; font: 600 var(--t-xs)/1 var(--font-ui); letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); }
+.picker-toggle .change::after { content: ""; display: inline-block; width: 6px; height: 6px; margin-left: 8px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; transform: translateY(-2px) rotate(45deg); transition: transform var(--d-1) var(--ease); }
+.picker-toggle[aria-expanded="true"] .change::after { transform: translateY(1px) rotate(-135deg); }
+.picker-pop { display: grid; gap: var(--s-2); }
+.picker-pop[hidden] { display: none; }
 .picker .options { height: 220px; overflow: auto; border: var(--b-1); background: var(--sheet); overscroll-behavior: contain; }
 .picker .opt { display: flex; gap: 8px; align-items: center; padding: 11px 12px; cursor: pointer; border-bottom: var(--b-1); font-size: var(--t-sm); min-height: 44px; }
 .picker .opt:last-child { border-bottom: none; }

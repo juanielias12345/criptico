@@ -1,6 +1,20 @@
 'use strict';
 
+const fs = require('fs');
+const path = require('path');
+const crypto = require('crypto');
 const { t, ROUTES, T } = require('../i18n');
+
+// Versión de los archivos estáticos: cambia en cada despliegue para que nadie
+// quede con un CSS o JS viejo en caché junto a páginas nuevas.
+const ASSET_V = (() => {
+  if (process.env.VERCEL_GIT_COMMIT_SHA) return process.env.VERCEL_GIT_COMMIT_SHA.slice(0, 10);
+  try {
+    const h = crypto.createHash('sha256');
+    for (const f of ['css/app.css', 'js/app.js']) h.update(fs.readFileSync(path.join(__dirname, '..', '..', 'public', f)));
+    return h.digest('hex').slice(0, 10);
+  } catch { return Date.now().toString(36); }
+})();
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
@@ -55,7 +69,7 @@ ${noindex ? '<meta name="robots" content="noindex">' : ''}
 <link rel="preload" href="/fonts/instrument-sans-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="manifest" href="/manifest.webmanifest">
-<link rel="stylesheet" href="/css/app.css">
+<link rel="stylesheet" href="/css/app.css?v=${ASSET_V}">
 ${jsonLd ? `<script type="application/ld+json">${JSON.stringify(jsonLd).replace(/</g, '\\u003c')}</script>` : ''}
 </head>
 <body data-page="${esc(page)}">
@@ -106,7 +120,7 @@ ${body}
 </footer>
 <div id="dialog-root"></div>
 <script type="application/json" id="boot">${bootData}</script>
-<script src="/js/app.js" defer></script>
+<script src="/js/app.js?v=${ASSET_V}" defer></script>
 </body>
 </html>`;
 }
