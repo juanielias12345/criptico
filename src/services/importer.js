@@ -139,24 +139,28 @@ function sameSite(a, b) {
 
 function conditionChecks({ source, license, item, report, duplicates, allowAsserted }) {
   const c = [];
-  const add = (ok, code, msg) => c.push({ level: ok ? 'ok' : 'error', code, msg });
-  add(source.status === 'active', 'source_enabled', 'La fuente está habilitada.');
-  add(!!source.admin_approved_by, 'source_admin_approved', 'Un administrador revisó y aprobó la fuente.');
+  const add = (ok, code, okMsg, failMsg) => c.push({ level: ok ? 'ok' : 'error', code, msg: ok ? okMsg : failMsg });
+  add(source.status === 'active', 'source_enabled', 'La fuente está habilitada.', 'La fuente no está habilitada.');
+  add(!!source.admin_approved_by, 'source_admin_approved', 'Un administrador revisó y aprobó la fuente.', 'La fuente no fue aprobada por un administrador.');
   add(!!(license && license.allows_republish && source.republish_allowed && source.content_type === 'clues'), 'license_allows_republish',
-    'La licencia o el permiso permiten republicar el contenido.');
-  add(!!source.access_authorized && ALLOWED_METHODS.has(source.access_method), 'access_method_authorized', 'El método de obtención está autorizado.');
+    'La licencia o el permiso permiten republicar el contenido.', 'No hay licencia ni permiso que permita republicar.');
+  add(!!source.access_authorized && ALLOWED_METHODS.has(source.access_method), 'access_method_authorized',
+    'El método de obtención está autorizado.', 'El método de obtención no está autorizado.');
   const needsAttribution = source.attribution_required || (license && license.requires_attribution);
-  add(!needsAttribution || !!(source.attribution_text && source.attribution_text.trim()), 'attribution_ok', 'Se cumplen las condiciones de atribución.');
-  add(report.errors === 0, 'no_critical_errors', 'La pista, la respuesta y la explicación no tienen errores críticos.');
-  add(report.errors === 0 && (report.status === 'verified' || allowAsserted), 'validation_passed',
-    report.status === 'asserted' && !allowAsserted ? 'Tiene afirmaciones semánticas sin comprobar: requiere revisión humana.' : 'Supera las validaciones automáticas.');
+  add(!needsAttribution || !!(source.attribution_text && source.attribution_text.trim()), 'attribution_ok',
+    'Se cumplen las condiciones de atribución.', 'Falta el texto de atribución exigido.');
+  add(report.errors === 0, 'no_critical_errors', 'La pista, la respuesta y la explicación no tienen errores críticos.', 'Hay errores críticos en la pista, la respuesta o la explicación.');
+  add(report.errors === 0 && (report.status === 'verified' || allowAsserted), 'validation_passed', 'Supera las validaciones automáticas.',
+    report.errors ? 'No supera las validaciones automáticas.' : 'Tiene afirmaciones semánticas sin comprobar: requiere revisión humana.');
   const lang = N.baseLang(item.language || source.language_code);
   const variantOk = !item.variant || String(item.variant).startsWith(lang + '-') || item.variant === lang;
-  add(lang === source.language_code && variantOk && !!N.enumerationInClue(item.clue || ''), 'language_format_ok', 'Idioma, región y formato correctos.');
-  add(!duplicates.length, 'not_duplicate', 'No hay duplicados.');
-  add(!!(item.url && sameSite(item.url, source.url)), 'provenance_verifiable', 'La procedencia es verificable (URL de origen en el dominio de la fuente).');
+  add(lang === source.language_code && variantOk && !!N.enumerationInClue(item.clue || ''), 'language_format_ok',
+    'Idioma, región y formato correctos.', 'El idioma, la región o el formato no coinciden con la fuente.');
+  add(!duplicates.length, 'not_duplicate', 'No hay duplicados.', 'Hay un críptico igual o muy parecido en el catálogo.');
+  add(!!(item.url && sameSite(item.url, source.url)), 'provenance_verifiable', 'La procedencia es verificable (URL de origen en el dominio de la fuente).',
+    'La procedencia no es verificable: falta la URL de origen o no pertenece al dominio de la fuente.');
   const unsafe = report.checks.some((x) => x.code === 'unsafe_content');
-  add(!unsafe, 'integrity_ok', 'No hay problemas de seguridad ni de integridad.');
+  add(!unsafe, 'integrity_ok', 'No hay problemas de seguridad ni de integridad.', 'El contenido incluye HTML, enlaces o caracteres no permitidos.');
   return c;
 }
 

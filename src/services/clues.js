@@ -58,6 +58,13 @@ async function buildClue(db, input) {
   return { row, report: { ...report, errors, status: row.validation_status } };
 }
 
+// La dirección pública sale del texto de la pista, nunca de la respuesta:
+// compartir un enlace o ver el archivo no debe revelar la solución.
+function slugBase(row) {
+  const words = N.slugify(N.stripEnumeration(row.clue_text || '')).split('-').filter(Boolean).slice(0, 6);
+  return `${words.join('-') || 'criptico'}-${row.language_code}`;
+}
+
 async function uniqueSlug(db, base) {
   let slug = N.slugify(base) || 'criptico';
   for (let i = 0; i < 50; i++) {
@@ -74,7 +81,7 @@ const CLUE_COLUMNS = ['id', 'slug', 'clue_text', 'answer', 'answer_key', 'alt_an
 
 async function insertClue(db, row, { actorKind, actorId }) {
   const id = row.id || uuid();
-  const full = { ...row, id, slug: row.slug || await uniqueSlug(db, `${row.answer}-${row.language_code}`) };
+  const full = { ...row, id, slug: row.slug || await uniqueSlug(db, slugBase(row)) };
   if (full.status === 'published' && !full.published_at) full.published_at = now();
   const cols = CLUE_COLUMNS.filter((c) => full[c] !== undefined);
   await db.run(`INSERT INTO clues(${cols.join(',')}) VALUES (${cols.map(() => '?').join(',')})`, cols.map((c) => full[c]));

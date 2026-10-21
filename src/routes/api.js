@@ -1,5 +1,6 @@
 'use strict';
 
+const crypto = require('crypto');
 const express = require('express');
 const game = require('../services/game');
 const subs = require('../services/submissions');
@@ -228,10 +229,15 @@ module.exports = function api() {
   }));
 
   // ── Tareas programadas (Vercel Cron) ──
+  const sameSecret = (a, b) => {
+    const x = crypto.createHash('sha256').update(String(a)).digest();
+    const y = crypto.createHash('sha256').update(String(b)).digest();
+    return crypto.timingSafeEqual(x, y);
+  };
   const cron = a(async (req, res) => {
     const { config, db } = req.app.locals;
     const given = (req.headers.authorization || '').replace(/^Bearer\s+/i, '');
-    if (!config.cronSecret || given !== config.cronSecret) throw new HttpError(401, 'unauthorized');
+    if (!config.cronSecret || !sameSecret(given, config.cronSecret)) throw new HttpError(401, 'unauthorized');
     res.json({ ran: await tick(db) });
   });
   r.get('/cron/tick', cron);

@@ -8,8 +8,8 @@
     "dev": "node --watch src/server.js",
     "db:setup": "node scripts/db-setup.js",
     "admin:create": "node scripts/create-admin.js",
-    "test": "node --test --test-concurrency=1 test/",
-    "test:e2e": "node --test test/e2e/",
+    "test": "node --test --test-concurrency=1 \"test/*.test.js\"",
+    "test:e2e": "node --test \"test/e2e/*.test.js\"",
     "vercel-build": "node scripts/db-setup.js"
   },
   "license": "UNLICENSED",
