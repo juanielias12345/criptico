@@ -123,9 +123,18 @@ module.exports = function pages() {
     res.type('application/xml').send(`<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${body}</urlset>`);
   }));
 
+  // El panel se sirve con la versión del despliegue en los enlaces a sus archivos,
+  // para que el navegador nunca se quede con un admin.js viejo.
+  let adminHtml = null;
   r.get('/admin', (req, res) => {
+    if (!adminHtml) {
+      const { ASSET_V } = require('../views/layout');
+      adminHtml = require('fs').readFileSync(require('path').join(__dirname, '..', '..', 'public', 'admin.html'), 'utf8')
+        .replace(/\?v=[\w.-]+/g, '?v=' + ASSET_V);
+    }
     res.set('X-Robots-Tag', 'noindex, nofollow');
-    res.sendFile(require('path').join(__dirname, '..', '..', 'public', 'admin.html'));
+    res.set('Cache-Control', 'no-cache');
+    res.type('html').send(adminHtml);
   });
 
   // Títulos y descripciones para buscadores: apuntan a «crípticos», «crucigrama críptico» y «críptico del día».
