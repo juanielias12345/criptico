@@ -9,6 +9,8 @@ const { today } = require('../services/game');
 const PROFILE = require('../services/profile');
 const PTEXT = require('../views/profile-text');
 const { cardText } = require('../views/share-card');
+const GUIDE = require('../views/guide');
+const { indicators: ES_INDICATORS } = require('../lib/lang/es');
 
 const a = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
 
@@ -66,12 +68,18 @@ function clueRow(c, lang, cats, { solved, fresh, daily } = {}) {
     </a></li>`;
 }
 
+// Migas de pan en datos estructurados (schema.org BreadcrumbList).
+const breadcrumbs = (siteUrl, items) => ({ '@type': 'BreadcrumbList',
+  itemListElement: items.map(([name, path], i) => ({ '@type': 'ListItem', position: i + 1, name, item: siteUrl + path })) });
+
 const skeleton = '<div class="sheet"><div class="skeleton" aria-hidden="true"><i class="mid"></i><i class="big"></i><i class="big"></i><i class="tiles"></i></div></div>';
 
 module.exports = function pages() {
   const r = express.Router();
 
   r.get('/', (req, res) => {
+    // Con un solo idioma de interfaz la portada es siempre la misma: redirección permanente.
+    if (UI_LANGS.length === 1) return res.redirect(301, `/${UI_LANGS[0]}`);
     res.set('Vary', 'Accept-Language');
     res.redirect(302, `/${pickUiLang(req.headers['accept-language'])}`);
   });
@@ -86,6 +94,10 @@ module.exports = function pages() {
     const db = req.app.locals.db;
     const urls = [];
     for (const l of UI_LANGS) for (const route of ['home', 'play', 'daily', 'archive', 'contribute', 'help', 'privacy', 'terms', 'credits']) urls.push(href(l, route));
+    for (const l of UI_LANGS.filter((x) => GUIDE[x])) {
+      urls.push(href(l, 'guide'));
+      for (const m of Object.values(GUIDE[l].mechs)) urls.push(href(l, 'guide', '/' + m.slug));
+    }
     // Solo páginas con contenido real: crípticos publicados, en el idioma de la interfaz que les corresponde.
     const clues = await db.all("SELECT slug, language_code, updated_at FROM clues WHERE status = 'published' AND language_code IN (SELECT code FROM languages WHERE enabled = 1) ORDER BY published_at DESC LIMIT 45000");
     const body = urls.map((u) => `<url><loc>${esc(siteUrl + u)}</loc></url>`).join('')
@@ -337,17 +349,27 @@ ${mechs.length ? `<section class="section" aria-labelledby="mech-t">
       const pub = publicClue(c);
       const canonicalLang = UI_LANGS.includes(c.language_code) ? c.language_code : lang;
       const source = c.source_id ? await db.get('SELECT name, url FROM sources WHERE id = ?', [c.source_id]) : null;
+      // Enlaces internos: crípticos del mismo mecanismo, para que buscadores y jugadores sigan navegando.
+      const related = await db.all("SELECT * FROM clues WHERE status = 'published' AND language_code = ? AND mechanism = ? AND id <> ? ORDER BY (id > ?) DESC, id LIMIT 6",
+        [c.language_code, c.mechanism, c.id, c.id]);
+      const cats = related.length ? await db.all('SELECT * FROM categories WHERE enabled = 1') : [];
+      const G = GUIDE[lang] && GUIDE[lang].mechs[pub.mechanism];
+      const crumbs = [[t(lang, 'archive_title'), P('archive')], [t(lang, 'mech_' + pub.mechanism), G ? href(lang, 'guide', '/' + G.slug) : P('archive')], [pub.clue, href(canonicalLang, 'clue', '/' + c.slug)]];
       render(req, res, {
         page: 'clue', path: href(canonicalLang, 'clue', '/' + c.slug), title: pub.clue,
         description: `${t(lang, 'mech_' + pub.mechanism)} · ${t(lang, 'diff_' + pub.difficulty)} — ${pub.clue}`,
         alternates: { [canonicalLang]: href(canonicalLang, 'clue', '/' + c.slug) },
         boot: { slug: c.slug, clueLang: c.language_code, clueVariant: c.variant_code },
-        jsonLd: { '@context': 'https://schema.org', '@type': 'CreativeWork', name: pub.clue, inLanguage: c.language_code,
-          genre: 'cryptic crossword clue', isAccessibleForFree: true, ...(source ? { isBasedOn: c.source_url || source.url } : {}) },
+        jsonLd: { '@context': 'https://schema.org', '@graph': [
+          { '@type': 'CreativeWork', name: pub.clue, inLanguage: c.language_code,
+            genre: 'cryptic crossword clue', isAccessibleForFree: true, ...(source ? { isBasedOn: c.source_url || source.url } : {}) },
+          breadcrumbs(req.app.locals.config.siteUrl, crumbs)] },
         body: `<nav class="crumbs" aria-label="${lang === 'es' ? 'Ruta' : 'Breadcrumb'}"><a href="${P('archive')}">${esc(t(lang, 'archive_title'))}</a> / ${esc(t(lang, 'mech_' + pub.mechanism))}</nav>
 <article class="game" id="game"><div class="sheet"><h1 class="clue-text" lang="${esc(c.language_code)}">${clueWithEnum(pub.clue)}</h1></div></article>
 ${source ? `<p class="attribution">${esc(t(lang, 'source'))}: <a href="${esc(c.source_url || source.url)}" rel="noopener nofollow">${esc(c.attribution || source.name)}</a>${c.license_id ? ` · ${esc(c.license_id)}` : ''}</p>` : ''}
-${pub.author && c.origin === 'community' ? `<p class="attribution">${esc(t(lang, 'by'))} ${esc(pub.author)}</p>` : ''}`,
+${pub.author && c.origin === 'community' ? `<p class="attribution">${esc(t(lang, 'by'))} ${esc(pub.author)}</p>` : ''}
+${G ? `<section class="section about-mech" aria-labelledby="mech-h"><h2 id="mech-h">${esc(t(lang, 'mech_' + pub.mechanism))}</h2><p>${esc(t(lang, 'mechhelp_' + pub.mechanism))} <a href="${href(lang, 'guide', '/' + G.slug)}">${esc(GUIDE[lang].guide_link)}</a></p></section>` : ''}
+${related.length ? `<section class="section" aria-labelledby="rel-h"><h2 id="rel-h">${esc(GUIDE[lang] ? GUIDE[lang].related_t : t(lang, 'try_more'))}</h2><ul class="clue-list">${related.map((x) => clueRow(x, lang, cats)).join('')}</ul></section>` : ''}`,
       });
     }));
 
@@ -385,8 +407,54 @@ ${pub.author && c.origin === 'community' ? `<p class="attribution">${esc(t(lang,
     ${l.tries.map((x) => tryWidget(x, lang, { label: t(lang, 'lesson_try') })).join('')}
   </div></section>`).join('')}</div>
 <section class="section"><article class="prose">${CONTENT[lang].help}</article></section>
+${GUIDE[lang] ? `<section class="banner section"><div><h2>${esc(GUIDE[lang].title)}</h2><p>${esc(GUIDE[lang].lead)}</p></div><a class="btn" href="${P('guide')}">${esc(t(lang, 'nav_guide'))}</a></section>` : ''}
 <section class="banner"><div><h2>${esc(t(lang, 'try_more'))}</h2><p>${esc(t(lang, 'play_lead'))}</p></div><a class="btn" href="${P('play')}">${esc(t(lang, 'home_cta'))}</a></section>`,
     }));
+
+    // ── Guía de mecanismos: índice y una página por mecanismo ──
+    const G = GUIDE[lang];
+    if (G) {
+      const site = (req) => req.app.locals.config.siteUrl;
+      const countsFor = async (db) => Object.fromEntries((await db.all("SELECT mechanism AS m, COUNT(*) AS n FROM clues WHERE status = 'published' AND language_code = ? GROUP BY mechanism", [lang])).map((x) => [x.m, x.n]));
+      r.get(P('guide'), a(async (req, res) => {
+        const counts = await countsFor(req.app.locals.db);
+        render(req, res, {
+          page: 'guide', path: P('guide'), alternates: { [lang]: P('guide') }, title: G.title, seoTitle: G.seoTitle, description: G.description,
+          jsonLd: { '@context': 'https://schema.org', '@graph': [
+            { '@type': 'Article', headline: G.title, description: G.description, inLanguage: lang, isAccessibleForFree: true },
+            breadcrumbs(site(req), [[t(lang, 'nav_help'), P('help')], [G.title, P('guide')]])] },
+          body: `<header class="page-head"><p class="eyebrow">${esc(t(lang, 'nav_help'))}</p><h1>${esc(G.title)}</h1><p class="lead">${esc(G.lead)}</p></header>
+<ul class="mech-index">${MECHS.filter((m) => G.mechs[m]).map((m) => `<li><a href="${P('guide')}/${G.mechs[m].slug}"><span class="name">${esc(t(lang, 'mech_' + m))}</span><span class="n">${counts[m] ? esc(plural(lang, counts[m], 'n_clue', 'n_clues')) : ''}</span><span class="what">${esc(t(lang, 'mechhelp_' + m))}</span></a></li>`).join('')}</ul>
+<section class="banner section"><div><h2>${esc(t(lang, 'help_title'))}</h2><p>${esc(t(lang, 'help_lead'))}</p></div><a class="btn" href="${P('help')}">${esc(t(lang, 'nav_help'))}</a></section>`,
+        });
+      }));
+      for (const m of MECHS.filter((x) => G.mechs[x])) {
+        const M = G.mechs[m];
+        const path = `${P('guide')}/${M.slug}`;
+        const words = [...new Set(M.ind.flatMap((k) => (lang === 'es' ? ES_INDICATORS[k] || [] : [])))];
+        r.get(path, a(async (req, res) => {
+          const db = req.app.locals.db;
+          const [rows, cats, counts] = await Promise.all([
+            db.all("SELECT * FROM clues WHERE status = 'published' AND language_code = ? AND mechanism = ? ORDER BY difficulty, published_at DESC LIMIT 10", [lang, m]),
+            db.all('SELECT * FROM categories WHERE enabled = 1'), countsFor(db)]);
+          const name = t(lang, 'mech_' + m);
+          render(req, res, {
+            page: 'guide', path, alternates: { [lang]: path }, title: name, seoTitle: M.seoTitle, description: M.description,
+            jsonLd: { '@context': 'https://schema.org', '@graph': [
+              { '@type': 'Article', headline: M.seoTitle.split(' | ')[0], description: M.description, inLanguage: lang, isAccessibleForFree: true },
+              breadcrumbs(site(req), [[t(lang, 'nav_help'), P('help')], [G.title, P('guide')], [name, path]])] },
+            body: `<nav class="crumbs" aria-label="Ruta"><a href="${P('guide')}">${esc(G.title)}</a> / ${esc(name)}</nav>
+<header class="page-head"><p class="eyebrow">${esc(G.title)}</p><h1>${esc(M.seoTitle.split(' | ')[0])}</h1></header>
+<article class="prose">${M.intro.map((x) => `<p>${esc(x)}</p>`).join('')}</article>
+<section class="section" aria-labelledby="ex-h"><h2 id="ex-h">${esc(G.example_t)}</h2>${tryWidget(M.example, lang)}</section>
+${words.length ? `<section class="section" aria-labelledby="ind-h"><h2 id="ind-h">${esc(G.indicators_t)}</h2><p class="small muted">${esc(G.indicators_note)}</p><ul class="signals">${words.map((w) => `<li>${esc(w)}</li>`).join('')}</ul></section>` : ''}
+${rows.length ? `<section class="section" aria-labelledby="more-h"><h2 id="more-h">${esc(G.more_t)}</h2><ul class="clue-list">${rows.map((x) => clueRow(x, lang, cats)).join('')}</ul>
+<p><a class="btn" href="${P('archive')}?mechanism=${m}">${esc(G.all_t)}${counts[m] ? ` (${counts[m]})` : ''}</a></p></section>` : ''}
+<nav class="section" aria-labelledby="oth-h"><h2 id="oth-h">${esc(G.others_t)}</h2><ul class="signals">${MECHS.filter((x) => x !== m && G.mechs[x]).map((x) => `<li><a href="${P('guide')}/${G.mechs[x].slug}">${esc(t(lang, 'mech_' + x))}</a></li>`).join('')}</ul></nav>`,
+          });
+        }));
+      }
+    }
 
     for (const key of ['privacy', 'terms', 'credits']) {
       r.get(P(key), (req, res) => render(req, res, {

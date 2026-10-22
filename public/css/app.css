@@ -125,7 +125,7 @@ p { margin: 0 0 var(--s-3); text-wrap: pretty; }
 .brand-name { font: 600 1.45rem/1 var(--font-display); letter-spacing: -.02em; white-space: nowrap; }
 .brand-first { font-style: italic; font-weight: 500; color: var(--accent); }
 @media (max-width: 420px) { .site-header .bar { gap: var(--s-2); } .brand { gap: 7px; } .site-header .brand-name { font-size: 1.12rem; } .site-header .logo-mark { width: 26px; height: 26px; } .prefs-btn { padding: 0 10px 0 8px; gap: 6px; } .header-tools { gap: 6px; } }
-@media (max-width: 379px) { .prefs-btn span { display: none; } .prefs-btn { width: 38px; padding: 0; justify-content: center; } }
+@media (max-width: 419px) { .prefs-btn span { display: none; } .prefs-btn { width: 38px; padding: 0; justify-content: center; } }
 .main-nav { flex: 1; display: flex; justify-content: center; }
 .main-nav ul { list-style: none; display: flex; gap: var(--s-1); margin: 0; padding: 0; }
 .main-nav a { display: block; padding: 8px 12px; text-decoration: none; color: var(--ink-2); font-weight: 500; position: relative; border-radius: var(--r-1); }

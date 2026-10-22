@@ -258,7 +258,7 @@
     const p0 = getPrefs();
     api('/api/visit', { method: 'POST', body: { ui: L, country: p0 && p0.country, first: !p0 }, keepalive: true }).catch(() => {});
   }
-  if (!getPrefs() && ['home', 'play', 'daily', 'clue'].includes(BOOT.page)) openPrefs({ first: true });
+  if (!getPrefs() && ['play', 'daily'].includes(BOOT.page)) openPrefs({ first: true });
 
   // ── Utilidades de texto ──
   const stripAccents = (s) => s.normalize('NFD').replace(/[̀-ͯ]/g, '');

@@ -226,8 +226,34 @@ test('páginas públicas: SEO básico, hreflang y caracteres especiales (#23)', 
   assert.ok(sm.text.includes('/c/' + clue.slug));
   assert.match((await c.get('/robots.txt')).text, /Disallow: \/admin/);
   const redirect = await c.get('/', { 'accept-language': 'en-GB,en;q=0.9' });
-  assert.equal(redirect.status, 302);
+  assert.equal(redirect.status, 301, 'con un solo idioma la portada redirige en forma permanente');
   assert.equal(redirect.headers.get('location'), '/es');
+  // Enlaces internos y migas de pan en la página del críptico.
+  assert.match(page.text, /"@type":"BreadcrumbList"/);
+  assert.match(page.text, /href="\/es\/mecanismos\/[a-z-]+"/);
+});
+
+test('SEO: guía de mecanismos con una página por mecanismo, en el sitemap y enlazada', async () => {
+  const c = client(env.base);
+  const idx = await c.get('/es/mecanismos');
+  assert.equal(idx.status, 200);
+  assert.match(idx.text, /<title>Mecanismos de los crípticos/);
+  const slugs = [...idx.text.matchAll(/href="\/es\/mecanismos\/([a-z-]+)"/g)].map((m) => m[1]);
+  assert.equal(new Set(slugs).size, 9);
+  const sm = (await c.get('/sitemap.xml')).text;
+  for (const s of slugs) {
+    const p = await c.get('/es/mecanismos/' + s);
+    assert.equal(p.status, 200, s);
+    assert.match(p.text, /<h1>/);
+    assert.match(p.text, /"@type":"Article"/);
+    assert.match(p.text, /<link rel="canonical" href="http:\/\/localhost\/es\/mecanismos\//);
+    assert.ok(sm.includes('/es/mecanismos/' + s), 'en el sitemap: ' + s);
+  }
+  const ana = (await c.get('/es/mecanismos/anagrama')).text;
+  assert.match(ana, /revuelto/, 'muestra los indicadores');
+  assert.match(ana, /href="\/es\/c\//, 'enlaza crípticos para practicar');
+  assert.match((await c.get('/es/ayuda')).text, /href="\/es\/mecanismos"/);
+  assert.equal((await c.get('/es/mecanismos/no-existe')).status, 404);
 });
 
 test('solo español: el inglés no se ofrece, /en redirige y los crípticos en inglés no se muestran ni se borran', async () => {

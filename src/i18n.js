@@ -5,9 +5,9 @@
 
 const ROUTES = {
   es: { home: '', play: 'jugar', daily: 'diario', archive: 'archivo', clue: 'c', contribute: 'contribuir', submission: 'propuesta',
-    help: 'ayuda', privacy: 'privacidad', terms: 'condiciones', credits: 'creditos', profile: 'perfil', account: 'cuenta' },
+    help: 'ayuda', guide: 'mecanismos', privacy: 'privacidad', terms: 'condiciones', credits: 'creditos', profile: 'perfil', account: 'cuenta' },
   en: { home: '', play: 'play', daily: 'daily', archive: 'archive', clue: 'c', contribute: 'contribute', submission: 'submission',
-    help: 'help', privacy: 'privacy', terms: 'terms', credits: 'credits', profile: 'profile', account: 'account' },
+    help: 'help', guide: 'devices', privacy: 'privacy', terms: 'terms', credits: 'credits', profile: 'profile', account: 'account' },
 };
 
 const T = {
@@ -178,7 +178,7 @@ function pickUiLang(acceptLanguage) {
 Object.assign(T.es, {
   same_guess: "Ya probaste esa respuesta.",
   nav_archive: 'Explorar', nav_daily: 'Diario', nav_help: 'Cómo jugar', nav_prefs: 'Idioma y región',
-  footer_play: 'Jugar', footer_community: 'Comunidad', ui_language: 'Interfaz',
+  footer_play: 'Jugar', footer_community: 'Comunidad', nav_guide: 'Mecanismos', ui_language: 'Interfaz',
   footer_made: 'Crípticos originales y de fuentes con permiso, validados uno por uno. Sin anuncios ni registro obligatorio.',
   home_eyebrow: 'Crípticos sin límite', home_title_a: 'Cada pista esconde', home_title_b: 'una palabra.',
   home_lead: 'Una parte la define; la otra la arma con un juego de letras. Encontrá las dos y resolvé tantos como quieras, sin límite diario ni registro.',
@@ -233,7 +233,7 @@ Object.assign(T.es, {
 Object.assign(T.en, {
   same_guess: "You've already tried that one.",
   nav_archive: 'Explore', nav_daily: 'Daily', nav_help: 'How to play', nav_prefs: 'Language & region',
-  footer_play: 'Play', footer_community: 'Community', ui_language: 'Interface',
+  footer_play: 'Play', footer_community: 'Community', nav_guide: 'Devices', ui_language: 'Interface',
   footer_made: 'Original clues and clues from sources that gave permission, each one validated. No ads, no sign-up required.',
   home_eyebrow: 'Unlimited cryptic clues', home_title_a: 'Every clue hides', home_title_b: 'a word.',
   home_lead: 'One part defines it; the rest builds it with wordplay. Find both, and solve as many as you like — no daily limit, no sign-up.',
