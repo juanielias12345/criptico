@@ -1,0 +1,61 @@
+# AI Company HQ: planificador persistente del informe ejecutivo de 48 horas y de las
+# alertas inmediatas. Cada hora revisa en la base qué tareas de HQ están vencidas y
+# las ejecuta (el turno y los reintentos se guardan en la base: no se pierden con un
+# reinicio y no se duplican). Complementa al cron diario de Vercel. Ver docs/HQ.md.
+# También permite registrar a mano una ejecución de un agente con su evidencia.
+name: AI Company HQ
+
+on:
+  schedule:
+    - cron: '7 * * * *'
+  workflow_dispatch:
+    inputs:
+      action:
+        description: tick (tareas vencidas) o record (registrar una ejecución)
+        required: false
+        default: tick
+      agent:
+        description: 'record: id del agente (por ejemplo frontend)'
+        required: false
+        default: ''
+      status:
+        description: 'record: ok, error o cancelled'
+        required: false
+        default: ok
+      summary:
+        description: 'record: qué se hizo'
+        required: false
+        default: ''
+      evidence:
+        description: 'record: enlace verificable (commit, PR, archivo)'
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ai-company-hq
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci --omit=dev
+      - name: Ejecutar
+        run: node scripts/hq.js "$HQ_ACTION"
+        env:
+          HQ_ACTION: ${{ inputs.action || 'tick' }}
+          HQ_AGENT: ${{ inputs.agent }}
+          HQ_STATUS: ${{ inputs.status }}
+          HQ_SUMMARY: ${{ inputs.summary }}
+          HQ_EVIDENCE: ${{ inputs.evidence }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DATABASE_AUTH_TOKEN: ${{ secrets.DATABASE_AUTH_TOKEN }}
+          SITE_URL: https://playcripticos.com

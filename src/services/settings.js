@@ -22,6 +22,7 @@ function validateSetting(key, value) {
   if (Array.isArray(def) !== Array.isArray(value)) return 'invalid_type';
   if (typeof def !== typeof value) return 'invalid_type';
   if (typeof def === 'number' && (!Number.isFinite(value) || value < 0 || value > 100000)) return 'invalid_range';
+  if (key === 'hq.report_timezone') { try { new Intl.DateTimeFormat('es', { timeZone: value }); } catch { return 'invalid_timezone'; } }
   return null;
 }
 

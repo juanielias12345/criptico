@@ -2,6 +2,8 @@
 
 Este documento describe cómo funciona la empresa dentro del sistema: quién decide, qué puede hacer cada agente sin pedir permiso, cómo se aprueba algo y dónde queda registrado. Todo lo descrito acá está implementado y probado (`test/company.test.js` y la prueba de navegador «empresa: invitar a un CEO…»), salvo lo que se marca explícitamente como **pendiente**.
 
+La oficina virtual de los CEO, con el estado real de cada agente, el informe cada 48 horas y las alertas, está en `/hq` y se describe en [HQ.md](HQ.md).
+
 ## 1. Dirección
 
 | Persona | Cargo | Rol en el sistema |
