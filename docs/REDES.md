@@ -6,7 +6,7 @@ El calendario empieza el **viernes 23/10/2026 (día 0)** y termina el **lunes 21
 
 - **Críptico del día:** imagen 1080 × 1350, publicada a la mañana en Instagram y Facebook. Sale de 63 crípticos originales nuevos, validados por el validador y publicados en el catálogo (`seed/clues.es.json`), así que el enlace `playcripticos.com/es/c/<slug>` existe.
 - **Solución:**
-  - video vertical de 16 s: pista, cuenta regresiva, respuesta y explicación. Se publica en TikTok, YouTube Shorts y como reel de Instagram y Facebook;
+  - video vertical de 16 s: pista, cuenta regresiva, respuesta y explicación, con efectos de sonido propios (barrido, reloj, tics, campanita de acierto y cierre; `scripts/social/sfx.js`, sin derechos de terceros). Se publica en TikTok, YouTube Shorts y como reel de Instagram y Facebook;
   - historia de Instagram.
 - **Lunes, miércoles y viernes:** carrusel. Hay 4 ya diseñados, 9 lecciones («Cómo funciona: anagrama»…) y 13 «Así se resuelve».
 - **Sábado y domingo:** «Dos para el finde» y sus soluciones.

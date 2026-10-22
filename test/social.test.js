@@ -186,3 +186,18 @@ test('los archivos de redes se sirven pero no se indexan', async () => {
   assert.ok(vercel.headers.some((h) => h.source === '/social/(.*)' && h.headers.some((x) => x.key === 'X-Robots-Tag')));
   assert.match(vercel.functions['api/index.js'].includeFiles, /data\/social\/plan\.json/);
 });
+
+test('los videos llevan efectos de sonido propios alineados con la cuenta regresiva y la respuesta', () => {
+  const { soundtrack } = require('../scripts/social/sfx');
+  const wav = soundtrack([3, 1, 1, 1, 2.5, 5, 2.5]);
+  assert.equal(wav.toString('ascii', 0, 4), 'RIFF');
+  const samples = (wav.length - 44) / 4;
+  assert.equal(samples, 16 * 44100);
+  const peak = (from, to) => { let m = 0; for (let i = Math.floor(from * 44100); i < to * 44100; i++) m = Math.max(m, Math.abs(wav.readInt16LE(44 + i * 4))); return m; };
+  assert.ok(peak(3, 3.1) > 3000, 'tic del 3');
+  assert.ok(peak(6, 6.4) > 3000, 'campanita de la respuesta');
+  assert.ok(peak(4.6, 4.95) < 500, 'silencio entre tics');
+  // Los MP4 ya generados tienen pista de audio AAC (marca «mp4a» en el contenedor).
+  const mp4 = fs.readFileSync(path.join(__dirname, '..', 'public', 'social', 'd00', 'video.mp4'));
+  assert.ok(mp4.includes(Buffer.from('mp4a')));
+});

@@ -183,9 +183,11 @@ async function main() {
       list.push(`file '${path.join(dir, `f${frames.length - 1}.png`)}'`);
       fs.writeFileSync(path.join(dir, 'list.txt'), list.join('\n'));
       const out = path.join(OUT, r.path); fs.mkdirSync(path.dirname(out), { recursive: true });
+      // Efectos de sonido propios, alineados con cada cuadro (scripts/social/sfx.js).
+      fs.writeFileSync(path.join(dir, 'sfx.wav'), require('./sfx').soundtrack(frames.map((f) => f[1])));
       execFileSync('ffmpeg', ['-y', '-loglevel', 'error', '-f', 'concat', '-safe', '0', '-i', path.join(dir, 'list.txt'),
-        '-f', 'lavfi', '-i', 'anullsrc=channel_layout=stereo:sample_rate=44100',
-        '-vf', 'fps=30,format=yuv420p', '-c:v', 'libx264', '-preset', 'medium', '-crf', '26', '-c:a', 'aac', '-b:a', '64k', '-shortest', '-movflags', '+faststart', out]);
+        '-i', path.join(dir, 'sfx.wav'),
+        '-vf', 'fps=30,format=yuv420p', '-c:v', 'libx264', '-preset', 'medium', '-crf', '26', '-c:a', 'aac', '-b:a', '128k', '-shortest', '-movflags', '+faststart', out]);
     } else {
       const big = r.kind === 'solution';
       await shot(T[r.kind](r), path.join(OUT, r.path), 1080, big ? 1920 : 1350);
