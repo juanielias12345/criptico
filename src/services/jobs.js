@@ -84,7 +84,14 @@ const HANDLERS = {
     return require('./indexnow').submit(db, { siteUrl: ctx.siteUrl, fetchImpl: ctx.fetchImpl });
   },
   async alerts_scan(db) {
-    return alerts.scan(db);
+    const out = await alerts.scan(db);
+    out.corrections = await require('./hq').measureCorrections(db);
+    return out;
+  },
+  // Informe ejecutivo de 48 h (AI Company HQ). El intervalo de la tarea es de 48 h y el
+  // próximo turno se cuenta desde la última ejecución correcta.
+  async exec_report(db) {
+    return require('./hq-reports').runScheduled(db);
   },
   async recover_stuck(db) {
     // Ejecuciones que quedaron "running" por una caída del proceso.
@@ -92,7 +99,12 @@ const HANDLERS = {
     const r1 = await db.run("UPDATE job_runs SET status = 'abandoned', finished_at = ? WHERE status = 'running' AND started_at < ?", [now(), stale]);
     const r2 = await db.run("UPDATE import_runs SET status = 'failed', finished_at = ?, error = 'interrumpida' WHERE status = 'running' AND started_at < ?", [now(), stale]);
     await db.run('UPDATE jobs SET lease_until = NULL WHERE lease_until < ?', [now()]);
-    return { abandoned_jobs: r1.changes, abandoned_imports: r2.changes };
+    // Ejecuciones de agentes sin señal: se cierran como canceladas (no se dan por terminadas).
+    const hqStale = new Date(Date.now() - (await getSetting(db, 'hq.stale_minutes')) * 60000).toISOString();
+    const lost = await db.all("SELECT id FROM agent_runs WHERE status = 'running' AND COALESCE(heartbeat_at, started_at) < ?", [hqStale]);
+    for (const { id } of lost) await require('./hq').finishRun(db, id, { status: 'cancelled', error: 'sin señal: la ejecución se interrumpió' });
+    const reports = await require('./hq-reports').recoverStuck(db);
+    return { abandoned_jobs: r1.changes, abandoned_imports: r2.changes, abandoned_agent_runs: lost.length, interrupted_reports: reports };
   },
 };
 
@@ -109,8 +121,15 @@ async function runJob(db, name, ctx = {}) {
   const started = now();
   const run = await db.run("INSERT INTO job_runs(job_name, started_at, status) VALUES (?,?,'running')", [name, started]);
   const job = await db.get('SELECT * FROM jobs WHERE name = ?', [name]);
+  // Los agentes cuyo proceso es esta tarea registran la ejecución (prueba de actividad en HQ).
+  const hq = require('./hq');
+  const agentRuns = [];
+  for (const a of await db.all('SELECT id FROM agents WHERE runtime = ?', ['job:' + name])) {
+    agentRuns.push(await hq.startRun(db, { agentId: a.id, summary: `Tarea programada «${name}»`, stage: 'implementation', source: 'job', startedAt: started }));
+  }
   try {
     const output = await HANDLERS[name](db, ctx);
+    for (const id of agentRuns) await hq.finishRun(db, id, { status: 'ok', summary: `«${name}» terminó bien`, evidence: `job_runs #${run.lastInsertRowid}`, source: 'job' });
     await db.run("UPDATE job_runs SET status = 'success', finished_at = ?, output = ? WHERE id = ?", [now(), JSON.stringify(output).slice(0, 4000), run.lastInsertRowid]);
     await db.run(`UPDATE jobs SET lease_until = NULL, last_status = 'success', last_error = NULL, last_run_at = ?, consecutive_failures = 0,
       next_run_at = ? WHERE name = ?`, [started, new Date(Date.now() + job.interval_minutes * 60000).toISOString(), name]);
@@ -122,16 +141,18 @@ async function runJob(db, name, ctx = {}) {
     await db.run("UPDATE job_runs SET status = 'failed', finished_at = ?, output = ? WHERE id = ?", [now(), String(e.message).slice(0, 1000), run.lastInsertRowid]);
     await db.run(`UPDATE jobs SET lease_until = NULL, last_status = 'failed', last_error = ?, last_run_at = ?, consecutive_failures = ?,
       next_run_at = ? WHERE name = ?`, [String(e.message).slice(0, 500), started, failures, new Date(Date.now() + retryMin * 60000).toISOString(), name]);
+    for (const id of agentRuns) await hq.finishRun(db, id, { status: 'error', error: String(e.message).slice(0, 300), evidence: `job_runs #${run.lastInsertRowid}`, source: 'job' });
     await logError(db, 'job:' + name, e);
     return { name, status: 'failed', error: e.message };
   }
 }
 
 // Ejecuta las tareas vencidas. Lo llama el cron o el temporizador interno.
+// `only` limita la vuelta a algunas tareas (el flujo horario de GitHub corre solo las de HQ).
 async function tick(db, ctx = {}) {
   const due = await db.all('SELECT name FROM jobs WHERE enabled = 1 AND next_run_at <= ? ORDER BY next_run_at', [now()]);
   const out = [];
-  for (const { name } of due) out.push(await runJob(db, name, ctx));
+  for (const { name } of due) if (!ctx.only || ctx.only.includes(name)) out.push(await runJob(db, name, ctx));
   return out;
 }
 

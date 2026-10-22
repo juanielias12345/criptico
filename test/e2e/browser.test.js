@@ -579,3 +579,42 @@ test('redes: un botón arriba aprueba toda la semana; desde un día también se 
     assert.deepEqual(errors, []);
   } finally { await ctx.close(); }
 });
+
+test('AI Company HQ: oficina en escritorio y móvil, ficha del agente, lista e informe; otros roles no entran', async () => {
+  await env.db.run("DELETE FROM rate_limits WHERE bucket LIKE 'login:%'");
+  const owner = await staff(env, 'owner');
+  for (const viewport of [{ width: 1440, height: 900 }, { width: 375, height: 812 }]) {
+    const { ctx, page, errors } = await newPage({ viewport, ...(viewport.width < 800 ? { isMobile: true, hasTouch: true } : {}) });
+    try {
+      await adminLogin(page, owner);
+      await page.goto(env.base + '/hq');
+      await page.locator('#map g.agent[data-agent="editorial"]').waitFor();
+      assert.ok(await page.locator('#map g.agent').count() >= 40);
+      assert.ok(!(await page.textContent('body')).includes('null'));
+      const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+      assert.ok(overflow <= 0, `HQ desborda ${overflow}px a ${viewport.width}px`);
+      // Ficha del agente desde la lista (sirve igual en móvil).
+      await page.click('#v-list');
+      await page.locator('#hq-list .acard', { hasText: 'Editorial' }).first().click();
+      await page.locator('#drawer-body', { hasText: 'Calidad' }).waitFor();
+      await page.click('#drawer-close');
+      if (viewport.width > 900) {
+        // Informe manual: se genera y se abre con las secciones A–J.
+        await page.click('#b-reports');
+        await page.locator('#drawer-body button', { hasText: 'Generar un informe ahora' }).click();
+        await page.locator('#drawer-body .report h4', { hasText: 'J.' }).waitFor({ timeout: 30000 });
+        await page.click('#b-reports');
+        await page.locator('#drawer-body .chip', { hasText: 'Listo' }).first().waitFor();
+      }
+      assert.deepEqual(errors, []);
+    } finally { await ctx.close(); }
+  }
+  const editor = await staff(env, 'editor');
+  const { ctx, page } = await newPage();
+  try {
+    await adminLogin(page, editor);
+    const r = await page.goto(env.base + '/hq');
+    assert.equal(r.status(), 403);
+    assert.equal(await page.locator('#map').count(), 0);
+  } finally { await ctx.close(); }
+});

@@ -28,6 +28,7 @@ function validateSetting(key, value) {
   }
   if (key === 'agent.mechanisms' && !value.every((m) => require('../lib/agent/mechanisms').production().includes(m))) return 'invalid_mechanism';
   if (key === 'agent.concurrency' && (!Number.isInteger(value) || value < 1 || value > 8)) return 'invalid_range';
+  if (key === 'hq.report_timezone') { try { new Intl.DateTimeFormat('es', { timeZone: value }); } catch { return 'invalid_timezone'; } }
   return null;
 }
 

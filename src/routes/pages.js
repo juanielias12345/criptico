@@ -146,6 +146,25 @@ module.exports = function pages() {
     res.type('html').send(adminHtml);
   });
 
+  // AI Company HQ: la página solo se entrega con una sesión de CEO (no basta con conocer la URL).
+  // Cada apertura queda en la auditoría.
+  let hqHtml = null;
+  r.get('/hq', async (req, res, next) => {
+    try {
+      res.set('X-Robots-Tag', 'noindex, nofollow');
+      res.set('Cache-Control', 'no-store');
+      const { can } = require('../services/auth');
+      if (!req.user || req.user.role === 'player') return res.redirect(302, '/admin#hq');
+      if (!can(req.user, 'hq.read')) return res.status(403).type('text/plain').send('Acceso solo para los CEO.');
+      await require('../services/audit').audit(req.app.locals.db, { actorId: req.user.id, action: 'hq.open', targetKind: 'hq', ipHash: req.ipHash });
+      if (!hqHtml) {
+        const { ASSET_V } = require('../views/layout');
+        hqHtml = require('fs').readFileSync(require('path').join(__dirname, '..', 'views', 'hq.html'), 'utf8').replace(/\?v=[\w.-]+/g, '?v=' + ASSET_V);
+      }
+      res.type('html').send(hqHtml);
+    } catch (e) { next(e); }
+  });
+
   // Títulos y descripciones para buscadores: apuntan a «crípticos», «crucigrama críptico» y «críptico del día».
   const SEO = {
     es: {

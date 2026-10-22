@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<title>AI Company HQ · Play Crípticos</title>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="preload" href="/fonts/instrument-sans-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/css/hq.css?v=1">
+</head>
+<body class="hq">
+<a class="skip" href="#hq-list">Saltar a la lista de agentes</a>
+<header class="hq-top">
+  <a class="hq-brand" href="/hq" aria-label="AI Company HQ, inicio">
+    <svg viewBox="0 0 32 32" aria-hidden="true" focusable="false"><rect width="32" height="32" rx="7" fill="currentColor"/><path d="M8 22 16 8l8 14z" fill="none" stroke="var(--bg)" stroke-width="2.4" stroke-linejoin="round"/><circle cx="16" cy="18" r="2.4" fill="var(--bg)"/></svg>
+    <span><b>AI Company HQ</b><small>Play Crípticos</small></span>
+  </a>
+  <div class="hq-search" role="search">
+    <label class="sr" for="q">Buscar agente</label>
+    <input id="q" type="search" placeholder="Buscar agente…  ( / )" autocomplete="off" aria-controls="q-results" aria-expanded="false">
+    <ul id="q-results" class="q-results" role="listbox" hidden></ul>
+  </div>
+  <div class="hq-tools">
+    <button class="hq-btn" type="button" id="b-home" title="Centro de operaciones (H)">Centro de operaciones</button>
+    <button class="hq-btn" type="button" id="b-reports" title="Informes">Informes <span class="badge" id="unread" hidden></span></button>
+    <button class="hq-btn" type="button" id="b-feed" aria-pressed="false" title="Actividad en tiempo real">Actividad</button>
+    <span class="live" id="live" role="status" aria-live="polite">Conectando…</span>
+    <a class="hq-btn ghost" href="/admin#company">Panel</a>
+  </div>
+</header>
+
+<div class="hq-shell">
+  <nav class="floors" id="floors" aria-label="Plantas de la oficina"></nav>
+
+  <section class="stage" aria-label="Oficina virtual">
+    <div class="filters">
+      <label>Departamento <select id="f-dept"><option value="">Todos</option></select></label>
+      <label>Estado <select id="f-state"><option value="">Todos</option></select></label>
+      <div class="seg" role="group" aria-label="Vista">
+        <button type="button" id="v-map" aria-pressed="true">Oficina</button>
+        <button type="button" id="v-list" aria-pressed="false">Lista</button>
+      </div>
+    </div>
+    <div class="map-wrap" id="map-wrap">
+      <svg id="map" role="application" aria-label="Plano isométrico de la oficina. Arrastrá para moverte, rueda o pellizco para acercar." tabindex="0"></svg>
+      <div class="zoom" role="group" aria-label="Zoom">
+        <button type="button" id="z-in" aria-label="Acercar">+</button>
+        <button type="button" id="z-out" aria-label="Alejar">−</button>
+        <button type="button" id="z-fit" aria-label="Vista general (0)">⤢</button>
+      </div>
+      <div class="legend" id="legend"></div>
+    </div>
+    <div class="list-view" id="hq-list" hidden tabindex="-1"></div>
+    <div class="strip" id="strip" aria-live="polite"></div>
+  </section>
+
+  <aside class="feed" id="feed" aria-label="Actividad en tiempo real" hidden>
+    <header><h2>Actividad</h2><button class="x" type="button" id="feed-close" aria-label="Cerrar actividad">×</button></header>
+    <p class="note">Solo eventos registrados por procesos reales: ejecuciones, archivos, pruebas, errores, aprobaciones y bloqueos.</p>
+    <ol id="feed-list"></ol>
+    <button class="hq-btn small" type="button" id="feed-more">Ver anteriores</button>
+  </aside>
+
+  <aside class="drawer" id="drawer" aria-label="Detalle" hidden>
+    <button class="x" type="button" id="drawer-close" aria-label="Cerrar">×</button>
+    <div id="drawer-body"></div>
+  </aside>
+</div>
+<div class="toasts" id="toasts" aria-live="assertive"></div>
+<script src="/js/hq.js?v=1" defer></script>
+</body>
+</html>

@@ -22,6 +22,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
+      - name: Hora de inicio
+        run: echo "CI_STARTED_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_ENV"
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
@@ -34,3 +36,14 @@ jobs:
         run: npm run test:e2e
         env:
           CHROMIUM_PATH: /usr/bin/google-chrome
+      # Registro en AI Company HQ (solo en main): la corrida es la ejecución real de los
+      # agentes «Pruebas automatizadas» y «QA visual», y cada commit con «HQ-Agent:» queda
+      # como trabajo del agente indicado, con sus archivos. Si falla, no tumba las pruebas.
+      - name: Registrar en AI Company HQ
+        if: always() && github.event_name == 'push' && github.ref == 'refs/heads/main'
+        continue-on-error: true
+        run: node scripts/hq.js record-ci
+        env:
+          CI_STATUS: ${{ job.status }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DATABASE_AUTH_TOKEN: ${{ secrets.DATABASE_AUTH_TOKEN }}

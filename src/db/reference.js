@@ -165,11 +165,18 @@ const DEFAULT_SETTINGS = {
   'alerts.pending_submissions_max': 25,
   'alerts.pending_submission_days': 7,
   'alerts.failed_admin_logins_per_hour': 10,
+  // AI Company HQ (docs/HQ.md)
+  'hq.report_timezone': 'America/Argentina/Buenos_Aires', // zona horaria en la que se muestran los informes
+  'hq.stale_minutes': 30,              // una ejecución sin señal por más tiempo se muestra como «Desconectado»
+  'hq.agent_failure_streak': 3,        // errores seguidos que disparan alerta y propuesta de corrección
+  'hq.monthly_budget_usd': 0,          // 0 = sin presupuesto configurado
+  'hq.integration_failure_streak': 3,  // fallos seguidos de una integración o tarea que disparan alerta crítica
 };
 
 const JOBS = [
   ['import_sources', 15], ['daily_challenge', 60], ['generate_clues', 1440], ['cleanup', 1440], ['recover_stuck', 10],
   ['analytics_rollup', 60], ['alerts_scan', 60], ['social_schedule', 60], ['indexnow', 1440],
+  ['exec_report', 2880],
 ];
 
 async function seedReference(db) {
@@ -199,6 +206,7 @@ async function seedReference(db) {
   }
   // Centro de operaciones: agentes, backlog, riesgos e integraciones de la auditoría inicial.
   await require('../services/company').seedCompany(db);
+  await require('../services/hq').seedHq(db);
 }
 
 module.exports = { seedReference, DEFAULT_SETTINGS, CATEGORY_ALIASES, VARIANTS };
