@@ -221,3 +221,8 @@ td.heat[data-v="4"] { background: color-mix(in srgb, var(--series-1) 45%, transp
 .social-media figure { margin: 0; display: grid; gap: 4px; flex: none; }
 .social-media img, .social-media video { width: 220px; height: auto; border: var(--b-1); background: var(--paper-2); }
 .inline-form { display: inline-flex; gap: var(--s-2); flex-wrap: wrap; align-items: center; }
+/* Agente de biblioteca: estados de candidatos y de agentes */
+.pill.c-approved, .pill.a-active { background: var(--ok-soft); color: var(--ok); }
+.pill.c-needs_review, .pill.c-generated, .pill.c-validating, .pill.a-suspended_today, .pill.a-paused { background: var(--near-soft); color: var(--near); }
+.pill.c-rejected, .pill.c-quarantined, .pill.c-failed, .pill.a-blocked, .pill.a-error, .pill.a-stopped { background: var(--danger-soft); color: var(--danger); }
+.form .row.wrap, .toolbar.wrap { flex-wrap: wrap; }

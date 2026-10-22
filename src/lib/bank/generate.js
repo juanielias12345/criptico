@@ -643,4 +643,4 @@ function engine(lang) {
   return engines[lang];
 }
 
-module.exports = { Engine, engine, VERSION, hintsFor, genderEs, adjFormsEs, BASE };
+module.exports = { Engine, engine, VERSION, hintsFor, genderEs, adjFormsEs, BASE, CATEGORY_BY_LEX };

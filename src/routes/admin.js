@@ -409,6 +409,7 @@ module.exports = function admin() {
 
   r.use(require('./admin-panel')({ need, log }));
   r.use(require('./admin-bank')({ need, log }));
+  r.use(require('./admin-agent')({ need }));
   r.use(require('./admin-company')({ need, log }));
   r.use(require('./admin-hq')({ need, log }));
 

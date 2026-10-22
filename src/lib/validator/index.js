@@ -271,7 +271,7 @@ function validateClue(input, opts = {}) {
   const warnings = checks.filter((c) => c.level === 'warning').length;
   const status = errors ? 'failed' : assertions.length ? 'asserted' : 'verified';
   const explanation = resolved ? explain(resolved, { lang, definition: def, answer }) : null;
-  return { status, errors, warnings, assertions, checks, explanation, estimatedDifficulty: est, mechanisms: tree ? [...mechanismsIn(tree)] : [] };
+  return { status, errors, warnings, assertions, checks, explanation, estimatedDifficulty: est, mechanisms: tree ? [...mechanismsIn(tree)] : [], resolved };
 }
 
 function estimateDifficulty(tree, answerKey, assertionCount) {

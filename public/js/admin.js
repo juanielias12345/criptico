@@ -889,6 +889,196 @@
       detail);
   };
 
+  // ── Agente Autónomo de Biblioteca ──
+  const AGENT_STATE = { active: 'Activo', paused: 'Pausado', stopped: 'Detenido', blocked: 'Bloqueado', error: 'Con errores' };
+  const CYCLE_STATUS = { running: 'En curso', blocked: 'Bloqueado', stopped: 'Detenido', completed: 'Cumplido', partial: 'Incumplido', failed: 'Falló', not_started: 'Sin empezar' };
+  const BLOCK_REASON = { missing_credentials: 'Falta la clave ANTHROPIC_API_KEY en los secretos de GitHub.', no_budget: 'No hay presupuesto diario: agent.daily_budget_usd está en 0.',
+    budget_exhausted: 'Se agotó el presupuesto del día.', variant_budget_exhausted: 'El presupuesto por variante se agotó o no alcanza para una llamada más.', price_missing: 'Un modelo no tiene precio configurado.', credentials_rejected: 'La API rechazó la clave.', bad_request: 'La API rechazó el pedido: revisar modelos y configuración.' };
+  const MECH = { anagram: 'Anagrama', hidden: 'Oculta', reversal: 'Inversión', container: 'Inserción', deletion: 'Eliminación', charade: 'Charada', homophone: 'Homófono', double_definition: 'Doble definición', initials: 'Iniciales', combination: 'Combinación' };
+  const usd = (v) => (v === null || v === undefined ? '—' : 'US$ ' + Number(v).toLocaleString('es', { maximumFractionDigits: 4 }));
+
+  const CAND_STATE = { generated: 'Generado', validating: 'Validando', approved: 'Aprobado', needs_review: 'En revisión', rejected: 'Rechazado', quarantined: 'En cuarentena', failed: 'Fallido' };
+  const AGENT_ROW_STATE = { active: 'Activo', off: 'Fuera de producción', suspended_today: 'Suspendido hoy por fallas', paused: 'Pausado', stopped: 'Detenido', blocked: 'Bloqueado', error: 'Con errores' };
+  const TAXO_STATE = { production: 'En producción', not_a_mechanism: 'No es un mecanismo', component: 'Componente', review_only: 'Solo con revisión humana' };
+  const candPill = (s) => el('span', { class: 'pill c-' + s, text: CAND_STATE[s] || s });
+  const CHECK_KEYS = ['A', 'M', 'B', 'C', 'D', 'E', 'F'];
+
+  V.library = async () => {
+    const d = await api('/api/admin/agent');
+    const t = (d.today && d.today.totals) || {};
+    const st = d.settings;
+    const ctl = (state, label, cls, confirmText) => btn(label, act(async () => {
+      const reason = confirmText ? prompt(confirmText) : null;
+      if (confirmText && reason === null) return { ok: false, flash: 'Cancelado.' };
+      await api('/api/admin/agent/control', { method: 'POST', body: { state, reason } });
+    }, 'Listo.'), cls);
+    const controls = can('agent.control') ? el('div', { class: 'toolbar' },
+      d.control.state !== 'active' ? ctl('active', 'Reanudar', 'primary') : '',
+      d.control.state === 'active' ? ctl('paused', 'Pausar', '', 'Motivo de la pausa (termina el lote en curso y no empieza otro):') : '',
+      d.control.state !== 'stopped' ? ctl('stopped', 'Detener', '', 'Motivo para detener (corta el ciclo de hoy hasta que alguien lo reanude):') : '') : '';
+    const blocked = d.today && d.today.blocked_reason ? el('p', { class: 'flash bad', text: 'Bloqueado: ' + (BLOCK_REASON[d.today.blocked_reason] || d.today.blocked_reason) + ' No se marca nada como cumplido.' }) : '';
+    const goal = st.daily_cap
+      ? 'Tope diario: ' + nn(st.daily_target) + ' aprobados por variante.'
+      : 'Sin tope diario: produce hasta la meta.';
+
+    // agentes por mecanismo
+    const agents = table(['Agente', 'Estado', 'Peso', 'Meta por variante', 'Hoy: aprobados', 'En revisión', 'Rechazados', 'Cuarentena', 'Fallidos', 'Aprobación histórica', 'Costo por aprobado'],
+      d.agents.map((a) => el('tr', {},
+        el('th', { scope: 'row', title: a.rules.join(' ') }, el('strong', { text: a.label })),
+        el('td', {}, el('span', { class: 'pill a-' + a.state, text: AGENT_ROW_STATE[a.state] || a.state }), a.disabled_in_variants ? el('div', { class: 'small muted', text: 'suspendido hoy en ' + a.disabled_in_variants + ' variantes' }) : ''),
+        el('td', { text: a.weight }), el('td', { text: nn(st.quotas[a.code] || 0) }),
+        el('td', {}, el('b', { text: nn(a.today.approved) })), el('td', { text: nn(a.today.needs_review) }), el('td', { text: nn(a.today.rejected) }),
+        el('td', { text: nn(a.today.quarantined) }), el('td', { text: nn(a.today.failed) }),
+        el('td', { text: a.approval_rate === null ? '—' : a.approval_rate + ' %' }), el('td', { text: usd(a.cost_per_approved_usd) }))));
+
+    // cuotas editables (permiso settings.write)
+    let quotaEditor = '';
+    if (can('settings.write')) {
+      const inputs = st.mechanisms.map((m) => [m, el('input', { type: 'number', min: '0', max: '100', step: '0.5', value: st.weights[m], 'aria-label': 'Peso de ' + (MECH[m] || m) })]);
+      const daily = el('input', { type: 'number', min: '0', max: '100000', value: st.daily_target, 'aria-label': 'Tope diario por variante (0 = sin tope)' });
+      const conc = el('input', { type: 'number', min: '1', max: '8', value: st.concurrency, 'aria-label': 'Variantes a la vez' });
+      const save = act(async () => {
+        const weights = Object.fromEntries(inputs.map(([m, i]) => [m, Number(i.value)]));
+        await api('/api/admin/settings/agent.mechanism_weights', { method: 'PUT', body: { value: weights } });
+        await api('/api/admin/settings/agent.daily_target_per_variant', { method: 'PUT', body: { value: Number(daily.value) } });
+        await api('/api/admin/settings/agent.concurrency', { method: 'PUT', body: { value: Number(conc.value) } });
+      }, 'Cuotas guardadas: rigen desde el próximo lote.');
+      quotaEditor = el('details', { class: 'panel' }, el('summary', { text: 'Cambiar cuotas por mecanismo, tope diario y concurrencia' }),
+        el('p', { class: 'small muted', text: 'La meta de cada variante se reparte en proporción a estos pesos (iguales = partes iguales). Un peso 0 saca el mecanismo de la producción. Lo que falta en un mecanismo nunca lo compensa otro.' }),
+        el('div', { class: 'form' }, el('div', { class: 'row wrap' }, inputs.map(([m, i]) => el('label', {}, MECH[m] || m, i))),
+          el('div', { class: 'row' }, el('label', {}, 'Tope diario por variante (0 = sin tope)', daily), el('label', {}, 'Variantes a la vez (1 a 8)', conc)),
+          el('div', { class: 'toolbar' }, btn('Guardar', save, 'primary'))));
+    }
+
+    // biblioteca real: variante × mecanismo
+    const matrix = el('div', { class: 'tbl-wrap' }, el('table', { class: 'bank-matrix' },
+      el('thead', {}, el('tr', {}, el('th', { text: 'Variante' }), st.mechanisms.map((m) => el('th', { text: MECH[m] || m })), el('th', { text: 'Total' }), el('th', { text: 'Faltan' }))),
+      el('tbody', {}, d.variants.map((v) => el('tr', {}, el('th', { scope: 'row', text: v.variant }),
+        st.mechanisms.map((m) => { const x = v.by_mechanism.find((y) => y.mechanism === m) || {}; return el('td', { class: 'small', title: 'Meta ' + nn(x.library_target), text: nn(x.library) + ' / ' + nn(x.library_target) }); }),
+        el('td', {}, el('b', { text: nn(v.library) })), el('td', { text: nn(v.library_missing) }))))));
+
+    const vRows = d.variants.map((v) => {
+      const pct = v.library_target ? Math.min(100, (v.library / v.library_target) * 100) : 0;
+      return el('tr', {},
+        el('th', { scope: 'row' }, el('strong', { text: v.variant }), el('div', { class: 'small muted', text: v.name })),
+        el('td', {}, pill(v.status === 'active' ? 'active' : v.status === 'maintenance' ? 'verified' : 'paused'), v.paused_reason ? el('div', { class: 'small muted', text: v.paused_reason }) : '',
+          v.exhausted_at ? el('div', { class: 'small muted', text: 'Léxico agotado' }) : ''),
+        el('td', { text: nn(v.candidates) }), el('td', {}, el('b', { text: nn(v.approved) })), el('td', { text: nn(v.needs_review) }),
+        el('td', { text: nn(v.rejected) }), el('td', { text: nn(v.quarantined) }), el('td', { text: nn(v.failed) }), el('td', { text: nn(v.duplicates) }),
+        el('td', { text: v.approval_rate === null ? '—' : v.approval_rate + ' %' }), el('td', { text: usd(v.cost_usd) }),
+        el('td', {}, el('span', { class: 'bar-track', title: pct.toFixed(1) + ' %' }, el('span', { class: 'bar-fill', style: 'width:' + pct + '%' })),
+          el('span', { class: 'small', text: nn(v.library) + ' / ' + nn(v.library_target) })),
+        el('td', {}, el('button', { class: 'btn small', type: 'button', onclick: () => showVariant(v), text: 'Detalle' })));
+    });
+    const detail = el('div', { id: 'agent-variant' });
+    const showVariant = (v) => {
+      detail.replaceChildren(el('div', { class: 'panel' },
+        el('h3', { text: v.variant + ' · ' + v.name }),
+        v.shortfall_reason ? el('p', { class: 'small', text: 'Por qué falta: ' + v.shortfall_reason }) : el('p', { class: 'small', text: st.daily_cap ? 'Tope del día cumplido.' : 'Meta de biblioteca cumplida.' }),
+        v.corrective_actions.length ? el('p', { class: 'small muted', text: 'Acciones correctivas: ' + v.corrective_actions.join('; ') }) : '',
+        table(['Mecanismo', 'Hoy: aprobados', 'En revisión', 'Rechazados', 'Biblioteca', 'Meta', 'Faltan'], v.by_mechanism.map((m) => el('tr', {},
+          el('td', {}, MECH[m.mechanism] || m.mechanism, m.disabled_today ? el('div', { class: 'small muted', text: 'suspendido hoy' }) : ''),
+          el('td', { text: nn(m.approved) }), el('td', { text: nn(m.needs_review) }), el('td', { text: nn(m.rejected) }),
+          el('td', { text: nn(m.library) }), el('td', { text: nn(m.library_target) }), el('td', { text: nn(m.library_missing) })))),
+        can('agent.control') ? el('div', { class: 'toolbar' },
+          btn(v.status === 'paused' ? 'Reanudar variante' : 'Pausar variante', act(() => api('/api/admin/agent/variants/' + v.variant, { method: 'PATCH', body: { status: v.status === 'paused' ? 'active' : 'paused' } }), 'Listo.'))) : ''));
+      detail.scrollIntoView({ block: 'nearest' });
+    };
+
+    // registros con filtros
+    const opt = (v, label, sel) => el('option', { value: v, text: label, selected: sel });
+    const fVariant = el('select', { 'aria-label': 'Variante' }, opt('', 'Todas las variantes'), d.variants.map((v) => opt(v.variant, v.variant)));
+    const fMech = el('select', { 'aria-label': 'Mecanismo' }, opt('', 'Todos los mecanismos'), st.mechanisms.map((m) => opt(m, MECH[m] || m)));
+    const fDiff = el('select', { 'aria-label': 'Dificultad' }, opt('', 'Toda dificultad'), [1, 2, 3, 4, 5].map((n) => opt(String(n), 'Dificultad ' + n)));
+    const fState = el('select', { 'aria-label': 'Estado' }, opt('', 'Todos los estados'), Object.entries(CAND_STATE).map(([k, l]) => opt(k, l)));
+    const fFrom = el('input', { type: 'date', 'aria-label': 'Desde' });
+    const fTo = el('input', { type: 'date', 'aria-label': 'Hasta' });
+    const list = el('div', { id: 'agent-candidates' });
+    const loadCandidates = async () => {
+      const q = new URLSearchParams({ limit: '50' });
+      if (fVariant.value) q.set('variant', fVariant.value); if (fMech.value) q.set('mechanism', fMech.value); if (fDiff.value) q.set('difficulty', fDiff.value);
+      if (fState.value) q.set('status', fState.value); if (fFrom.value) q.set('from', fFrom.value); if (fTo.value) q.set('to', fTo.value);
+      const items = (await api('/api/admin/agent/candidates?' + q)).items;
+      list.replaceChildren(items.length ? table(['Estado', 'Variante', 'Pista', 'Respuesta', 'Mecanismo', 'Dif.', 'Controles', 'Motivos', 'Fecha', ''], items.map((c) => el('tr', {},
+        el('td', {}, candPill(c.status), c.invalidated_at ? el('div', { class: 'small muted', text: 'Invalidada: ' + c.invalidated_reason }) : ''),
+        el('td', { text: c.variant_code }),
+        el('td', {}, c.clue_id ? el('a', { href: '#clue/' + c.clue_id, text: c.clue_text }) : c.clue_text), el('td', { text: c.answer }), el('td', { text: MECH[c.mechanism] || c.mechanism }),
+        el('td', { text: c.difficulty || '' }),
+        el('td', { class: 'small', title: 'A lógica · M reglas del mecanismo · B lingüística · C regional · D duplicados · E integridad · F revisión independiente',
+          text: CHECK_KEYS.map((k) => k + (c.checks[k] ? (c.checks[k].ok === true ? '✓' : c.checks[k].ok === false ? '✗' : '·') : '·')).join(' ') }),
+        el('td', { class: 'small', text: c.reasons.join(', ') || '—' }), el('td', { class: 'small', text: fmt(c.created_at) }),
+        el('td', {}, can('agent.control') && c.status === 'approved' && !c.invalidated_at ? btn('Retirar', act(async () => {
+          const reason = prompt('Motivo para retirarlo (derechos, posible copia, error):');
+          if (!reason) return { ok: false, flash: 'Cancelado.' };
+          await api('/api/admin/agent/candidates/' + c.id + '/quarantine', { method: 'POST', body: { reason } });
+        }, 'Retirado: quedó en cuarentena.'), 'small') : '')))) : el('p', { class: 'muted', text: 'Sin registros con estos filtros.' }));
+    };
+    [fVariant, fMech, fDiff, fState, fFrom, fTo].forEach((x) => x.addEventListener('change', () => loadCandidates().catch((e) => flash(e.message, false))));
+
+    const c = d.costs; const inf = d.infrastructure;
+    main.replaceChildren(
+      el('div', { class: 'adm-head' }, el('h1', { text: 'Agente Autónomo de Biblioteca' }),
+        el('p', { class: 'muted small', text: 'Meta: ' + nn(st.library_target) + ' aprobados por variante, repartidos entre ' + st.mechanisms.length + ' agentes de mecanismo según su peso. ' + goal + ' Solo cuenta lo aprobado: lo dudoso queda en revisión, lo sospechoso de copia en cuarentena, y nada de eso suma.' }),
+        controls),
+      blocked,
+      el('div', { class: 'cards' },
+        kpi('Estado', AGENT_STATE[d.state] || d.state, { fmt: (x) => x, txt: true }),
+        kpi('Última ejecución', fmt(d.last_run.at), { fmt: (x) => x, txt: true, href: d.last_run.evidence || null, link: 'Ver en GitHub' }),
+        kpi('Próxima ejecución', d.next_run ? fmt(d.next_run) : '—', { fmt: (x) => x, txt: true }),
+        kpi('Ciclo de hoy', (d.today.date || '') + ' · ' + (CYCLE_STATUS[d.today.status] || d.today.status), { fmt: (x) => x, txt: true }),
+        kpi('Biblioteca aprobada', d.library.total), kpi('Meta total', d.library.target), kpi('Faltan para la meta', d.library.missing),
+        kpi('Aprobados hoy', t.approved || 0), kpi('Candidatos hoy', t.candidates || 0),
+        kpi('En revisión', t.needs_review || 0), kpi('Rechazados', t.rejected || 0), kpi('En cuarentena', t.quarantined || 0), kpi('Fallidos', t.failed || 0), kpi('Duplicados', t.duplicates || 0),
+        kpi('Aprobación', t.candidates ? Math.round((t.approved / t.candidates) * 1000) / 10 : null, { fmt: (x) => (x === null ? '—' : x + ' %') }),
+        kpi('Costo medido hoy', c.today_usd || 0, { fmt: usd }), kpi('Costo real por aprobado', c.measured_per_approved_usd, { fmt: usd }),
+        kpi('Costo para terminar', c.projected_remaining_usd !== null ? usd(c.projected_remaining_usd) + ' (medido)' : usd(c.estimate_range_usd[0]) + ' a ' + usd(c.estimate_range_usd[1]) + ' (estimado)', { fmt: (x) => x, txt: true })),
+      el('p', { class: 'small muted', text: 'Programación: ' + d.schedule + '. Última ejecución: ' + (d.last_run.summary || 'ninguna') + '. Presupuesto diario: ' + usd(st.daily_budget_usd) + ' · generador ' + st.generator_model + ' · revisor ' + st.reviewer_model + ' · ' + st.concurrency + ' variantes a la vez · zona horaria ' + st.timezone + '. Las demás reglas se cambian en «Reglas y funciones» (claves agent.*).' }),
+      d.alerts.length ? el('div', {}, el('h2', { text: 'Alertas' }), table(['Gravedad', 'Alerta', 'Última vez'], d.alerts.map((x) => el('tr', {}, el('td', {}, el('span', { class: 'pill sev-' + x.severity, text: x.severity })), el('td', { text: x.title }), el('td', { text: fmt(x.last_seen_at) }))))) : '',
+      el('h2', { text: 'Agentes por mecanismo' }), agents, quotaEditor,
+      el('h2', { text: 'Biblioteca real por variante y mecanismo' }),
+      el('p', { class: 'small muted', text: 'Crípticos publicados con esa variante, contados en la base de datos (aprobados / meta del mecanismo). Los generales, sin variante (' + nn(d.library.general_clues) + '), se informan aparte y no suman a ninguna.' }),
+      matrix,
+      el('h2', { text: 'Variantes (' + d.variants.length + ')' }),
+      el('div', { class: 'tbl-wrap' }, el('table', {}, el('thead', {}, el('tr', {}, ['Variante', 'Estado', 'Candidatos hoy', 'Aprobados', 'En revisión', 'Rechazados', 'Cuarentena', 'Fallidos', 'Duplicados', 'Aprobación', 'Costo', 'Biblioteca', ''].map((h) => el('th', { text: h })))), el('tbody', {}, vRows))),
+      detail,
+      el('div', { class: 'cols' },
+        el('div', { class: 'panel' }, el('h3', { text: 'Motivos frecuentes de descarte (hoy)' }),
+          d.reject_reasons.length ? table(['Motivo', 'Casos'], d.reject_reasons.map((r) => el('tr', {}, el('td', { text: r.reason }), el('td', { text: nn(r.n) })))) : el('p', { class: 'muted', text: 'Sin descartes hoy.' })),
+        el('div', { class: 'panel' }, el('h3', { text: 'Infraestructura' }),
+          table(['Medida', 'Hoy'], [['Lotes', nn(inf.batches_today)], ['Minutos de proceso', inf.processing_minutes_today], ['Tiempo medio por lote', inf.avg_batch_seconds + ' s'],
+            ['Reintentos', nn(inf.retries_today)], ['Lotes fallidos', nn(inf.failed_batches_today)], ['Variantes a la vez', inf.concurrency], ['Ejecuta', inf.runner]]
+            .map(([k, v]) => el('tr', {}, el('td', { text: k }), el('td', { text: String(v) })))))),
+      el('h2', { text: 'Registros de candidatos' }),
+      el('div', { class: 'toolbar wrap' }, fVariant, fMech, fDiff, fState, el('label', { class: 'small' }, 'Desde ', fFrom), el('label', { class: 'small' }, 'Hasta ', fTo)),
+      list,
+      el('h2', { text: 'Historial de ciclos' }),
+      d.history.length ? table(['Día', 'Estado', 'Ejecuciones', 'Aprobados', 'Costo', 'Inicio', 'Fin', ''], d.history.map((h) => el('tr', {},
+        el('td', { text: h.cycle_date }), el('td', { text: (CYCLE_STATUS[h.status] || h.status) + (h.blocked_reason ? ' (' + h.blocked_reason + ')' : '') }), el('td', { text: nn(h.runs) }),
+        el('td', { text: h.totals ? nn(h.totals.approved) : '—' }), el('td', { text: usd(h.cost_usd) }),
+        el('td', { text: fmt(h.started_at) }), el('td', { text: fmt(h.finished_at) }),
+        el('td', {}, btn('Informe', async () => {
+          const r = await api('/api/admin/agent/cycles/' + h.cycle_date);
+          const box = el('div', { class: 'panel' }, el('h3', { text: 'Informe del ' + r.date + ' · ' + (CYCLE_STATUS[r.status] || r.status) }),
+            r.blocked_reason ? el('p', { class: 'small', text: 'Bloqueo: ' + (BLOCK_REASON[r.blocked_reason] || r.blocked_reason) }) : '',
+            table(['Variante', 'Candidatos', 'Aprobados', 'Pendientes', 'Rechazados', 'Cuarentena', 'Fallidos', 'Duplicados', 'Costo', 'Biblioteca', 'Faltan', 'Motivo'], r.variants.map((v) => el('tr', {},
+              el('td', { text: v.variant }), el('td', { text: nn(v.candidates) }), el('td', { text: nn(v.approved) }), el('td', { text: nn(v.needs_review) }),
+              el('td', { text: nn(v.rejected) }), el('td', { text: nn(v.quarantined) }), el('td', { text: nn(v.failed) }), el('td', { text: nn(v.duplicates) }), el('td', { text: usd(v.cost_usd) }),
+              el('td', { text: nn(v.library) }), el('td', { text: nn(v.library_missing) }), el('td', { class: 'small', text: v.shortfall_reason || '—' })))));
+          detail.replaceChildren(box); box.scrollIntoView({ block: 'nearest' });
+        }, 'small'))))) : el('p', { class: 'muted', text: 'Todavía no hubo ciclos.' }),
+      el('h2', { text: 'Últimos lotes' }),
+      d.batches.length ? table(['Inicio', 'Variante', '#', 'Tipo', 'Estado', 'Candidatos', 'Aprobados', 'Revisión', 'Rechazados', 'Cuarentena', 'Fallidos', 'Duplicados', 'Reintentos', 'Costo', 'Duración', 'Error'], d.batches.map((b) => el('tr', {},
+        el('td', { text: fmt(b.started_at) }), el('td', { text: b.variant_code }), el('td', { text: b.seq }), el('td', { text: b.kind === 'pilot' ? 'piloto' : b.kind === 'probation' ? 'prueba controlada' : 'normal' }),
+        el('td', { text: BATCH_STATUS[b.status] || b.status }), el('td', { text: nn(b.candidates) }), el('td', { text: nn(b.approved) }), el('td', { text: nn(b.needs_review) }),
+        el('td', { text: nn(b.rejected) }), el('td', { text: nn(b.quarantined) }), el('td', { text: nn(b.failed) }), el('td', { text: nn(b.duplicates) }), el('td', { text: nn(b.retries) }),
+        el('td', { text: usd(b.cost_usd) }), el('td', { text: b.duration_ms ? (b.duration_ms / 1000).toFixed(1) + ' s' : '—' }),
+        el('td', { class: 'small', text: b.error || '' })))) : el('p', { class: 'muted', text: 'Todavía no hubo lotes.' }),
+      el('h2', { text: 'Taxonomía de mecanismos' }),
+      table(['Mecanismo', 'Estado', 'Reglas'], d.taxonomy.map((x) => el('tr', {}, el('th', { scope: 'row', text: x.label }), el('td', { text: TAXO_STATE[x.status] || x.status }),
+        el('td', {}, el('ul', { class: 'small' }, x.rules.map((r) => el('li', { text: r }))))))));
+    await loadCandidates();
+  };
+
   V.bankaudit = async () => {
     const d = await api('/api/admin/bank/audits?limit=20');
     const card = (x) => {
@@ -1159,6 +1349,10 @@
     'publishing.external_allow_asserted': 'Permitir publicar solos externos con afirmaciones semánticas no comprobables (sinónimos, dobles definiciones).',
     'publishing.generated_autopublish': 'Publicar sin revisión los crípticos del generador (no recomendado).',
     'publishing.semantic_duplicate_threshold': 'Umbral de similitud para marcar posibles duplicados (0–1).',
+    'agent.daily_target_per_variant': 'Crípticos aprobados por día que busca el agente en cada variante.', 'agent.library_target_per_variant': 'Tope de la biblioteca por variante; al llegar, la variante pasa a mantenimiento.',
+    'agent.mechanisms': 'Mecanismos entre los que se reparte la cuota diaria en partes iguales.', 'agent.timezone': 'Zona horaria del ciclo diario.',
+    'agent.daily_budget_usd': 'Presupuesto diario en dólares para la API de Claude. En 0 el agente no gasta y queda bloqueado.', 'agent.variant_budget_usd': 'Tope por variante y por día (0 = el diario repartido en partes iguales).',
+    'agent.prices_usd_per_mtok': 'Precio por millón de tokens [entrada, salida] de cada modelo, para medir y limitar el gasto.',
     'retention.games_days': 'Días que se conservan las partidas.', 'retention.audit_days': 'Días que se conserva la auditoría.',
   };
   const ALL_MODES = ['quick', 'infinite', 'daily', 'archive', 'beginner', 'intermediate', 'expert', 'guided', 'timed', 'themed', 'practice', 'streak', 'shared'];

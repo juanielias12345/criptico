@@ -114,6 +114,36 @@ const DEFAULT_SETTINGS = {
   'bank.audit_max_reject_rate': 0.2,
   'bank.max_clues_per_answer': 6,
   'bank.max_per_answer_mechanism': 2,
+  // Agente Autónomo de Biblioteca (ver docs/AGENTE.md). El agente lee estas reglas pero nunca las escribe.
+  // Decisión del dueño (22/10/2026): sin tope diario, producir hasta la meta de biblioteca.
+  // 0 = sin tope diario; un número > 0 limita los aprobados por día y por variante.
+  'agent.daily_target_per_variant': 0,
+  'agent.library_target_per_variant': 100000,
+  // Mecanismos en producción (cada uno tiene su agente en src/lib/agent/mechanisms).
+  'agent.mechanisms': ['anagram', 'hidden', 'reversal', 'container', 'deletion', 'charade', 'homophone', 'double_definition', 'initials', 'combination'],
+  // Peso de cada mecanismo en la meta (la cuota es proporcional al peso). Pedido del dueño: partes iguales.
+  'agent.mechanism_weights': { anagram: 1, hidden: 1, reversal: 1, container: 1, deletion: 1, charade: 1, homophone: 1, double_definition: 1, initials: 1, combination: 1 },
+  'agent.concurrency': 1,                  // variantes procesadas a la vez; se sube de a poco después del piloto
+  'agent.timezone': 'America/Argentina/Buenos_Aires',
+  'agent.daily_budget_usd': 0,             // 0 = sin presupuesto: el agente queda bloqueado y no llama a la IA
+  'agent.variant_budget_usd': 0,           // 0 = el presupuesto diario se reparte en partes iguales entre variantes
+  'agent.batch_size': 100,
+  'agent.pilot_batch_size': 20,
+  'agent.chunk_size': 12,                  // candidatos por llamada al generador
+  'agent.generator_model': 'claude-opus-5-5',
+  'agent.reviewer_model': 'claude-sonnet-5-5',   // distinto del generador: evaluación final independiente
+  'agent.generator_effort': 'medium',
+  'agent.reviewer_effort': 'medium',
+  // Precios por millón de tokens [entrada, salida] según la tabla publicada por Anthropic (consultada el 22/10/2026).
+  // Si cambian, se corrigen acá; un modelo sin precio detiene el agente porque no se puede controlar el gasto.
+  'agent.prices_usd_per_mtok': { 'claude-opus-5-5': [4, 20], 'claude-sonnet-5-5': [2, 10], 'claude-haiku-5-5': [0.1, 0.5], 'claude-fable-5-1': [10, 50], 'claude-opus-5': [5, 25], 'claude-opus-4-8': [5, 25] },
+  'agent.max_reject_rate': 0.6,            // un lote peor que esto pasa a prueba controlada; dos seguidos pausan la variante
+  'agent.max_duplicate_rate': 0.5,
+  'agent.min_approval_rate': 0.05,
+  'agent.max_cost_per_approved_usd': 0.5,  // costo anormal: pausa la variante y alerta
+  'agent.max_consecutive_failures': 3,
+  'agent.max_template_share': 0.02,        // tope diario de pistas con la misma estructura, sobre 3.000 por variante (o la meta diaria si hay)
+  'agent.audit_rate': 0.02,
   'retention.games_days': 400,
   'retention.audit_days': 730,
   'retention.game_events_days': 180,

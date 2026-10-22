@@ -136,8 +136,14 @@ test('revelar muestra solución y explicación; compartir no revela la respuesta
   const copied = await page.evaluate(() => navigator.clipboard.readText().catch(() => ''));
   assert.ok(copied, 'se copió el texto para compartir');
   // La pista misma puede contener la respuesta (palabra oculta); lo que no debe aparecer es la solución fuera de ella.
-  const rest = copied.replace(data.clue.clue, '').toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-  assert.ok(!rest.includes(row.answer.toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')), 'ni el texto ni el enlace revelan la respuesta: ' + copied);
+  // El enlace lleva un slug hecho con las primeras palabras de la pista: se comprueba que salga de ella y se descarta igual que la pista.
+  const norm = (t) => t.toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  const clueWords = norm(data.clue.clue).split(/[^A-Z0-9Ñ]+/).filter(Boolean);
+  const slug = (copied.match(/\/c\/([a-z0-9-]+)/) || [])[1] || '';
+  const fromClue = (w) => w === 'ES' || /^\d+$/.test(w) || clueWords.some((c) => c.replace(/Ñ/g, 'N').startsWith(w));
+  for (const w of norm(slug).split('-')) assert.ok(fromClue(w), 'el enlace solo usa palabras de la pista: ' + slug);
+  const rest = norm(copied.replace(data.clue.clue, '').replace(slug, ''));
+  assert.ok(!rest.includes(norm(row.answer)), 'ni el texto ni el enlace revelan la respuesta: ' + copied);
   await ctx.close();
 });
 
@@ -279,7 +285,7 @@ test('#18 panel de administración en escritorio y móvil', async () => {
   await c.post(`/api/game/${s.json.game_id}/guess`, { answer: ans });
   const owner = await staff(env, 'owner');
   const views = ['dashboard', 'alerts', 'geo', 'funnel', 'cluestats', 'exports', 'players', 'player/' + reg.json.user.id, 'player/' + reg.json.user.id + '?tab=games',
-    'player/' + reg.json.user.id + '?tab=performance', 'games', 'game/' + s.json.game_id, 'privacy', 'catstats', 'importstats', 'catalog', 'submissions', 'users', 'bank', 'bankaudit',
+    'player/' + reg.json.user.id + '?tab=performance', 'games', 'game/' + s.json.game_id, 'privacy', 'catstats', 'importstats', 'catalog', 'submissions', 'users', 'bank', 'bankaudit', 'library',
     ...['direction', 'agents', 'tech', 'marketing', 'legal', 'community', 'apps', 'audit', 'integrations', 'risks'].map((t) => 'company?tab=' + t),
     'agent/editorial', 'approvals', 'tasks', 'task/T-001', 'content', 'piece/new', 'legal', 'legaldoc/terms/1/es', 'jurisdiction/AR', 'security'];
   for (const viewport of [{ width: 1440, height: 900 }, { width: 375, height: 812 }]) {
