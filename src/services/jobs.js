@@ -77,6 +77,9 @@ const HANDLERS = {
   async analytics_rollup(db) {
     return analytics.refresh(db, { force: true });
   },
+  async social_schedule(db) {
+    return require('./social').scheduleApproved(db);
+  },
   async alerts_scan(db) {
     return alerts.scan(db);
   },

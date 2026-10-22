@@ -85,6 +85,8 @@ async function seedCompany(db) {
       content: pieceMaterial(p), targetKind: 'content_piece', targetId: c.id, requestedByKind: 'agent', requestedBy: 'produccion-contenido' }, null);
     await db.run("UPDATE content_pieces SET status = 'pending_approval', approval_id = ?, updated_at = ? WHERE id = ?", [item.id, now(), c.id]);
   }
+  // Calendario de redes de 60 días (data/social/plan.json).
+  await require('./social').seedPlan(db);
   await gov.relaxPending(db);
 }
 

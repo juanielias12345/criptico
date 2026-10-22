@@ -1,0 +1,154 @@
+'use strict';
+
+// Calendario de redes de 60 días: carpetas por día, aprobación en bloque atada a
+// la versión, programación en Metricool con evidencia y archivos reales.
+
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('fs');
+const path = require('path');
+const { makeEnv, client, staff } = require('./helpers');
+const social = require('../src/services/social');
+
+const PLAN = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'data', 'social', 'plan.json'), 'utf8'));
+const ALL = PLAN.days.flatMap((d) => d.pieces);
+
+let env; let owner;
+test.before(async () => { env = await makeEnv(); owner = await staff(env, 'owner'); });
+test.after(async () => { await env.close(); });
+
+test('el plan: 60 días desde el lunes 26/10, todas las redes, horarios y textos que entran en X', () => {
+  assert.equal(PLAN.days.length, 60);
+  assert.equal(PLAN.days[0].date, '2026-10-26');
+  assert.equal(PLAN.days[59].date, '2026-12-24');
+  for (const net of ['instagram', 'facebook', 'x', 'threads', 'tiktok', 'youtube', 'whatsapp']) assert.ok(ALL.some((p) => p.platform === net), net);
+  for (const d of PLAN.days) {
+    assert.ok(d.pieces.length >= 12, 'día ' + d.n);
+    assert.ok(d.pieces.every((p) => p.date === d.date && p.schedule_note && /T\d\d:\d\d:00Z$/.test(p.scheduled_at)));
+  }
+  // 9 h en Argentina = 12 h UTC
+  assert.equal(PLAN.days[0].pieces.find((p) => p.slot === 'instagram_clue').scheduled_at, '2026-10-26T12:00:00Z');
+  for (const p of ALL.filter((x) => x.platform === 'x')) assert.ok([...p.body].length <= 280, p.id + ' tiene ' + [...p.body].length);
+  // Un críptico distinto cada día, y todos existen en el catálogo del sitio.
+  const answers = PLAN.days.map((d) => d.clue.answer);
+  assert.equal(new Set(answers).size, 60);
+});
+
+test('cada archivo del plan existe de verdad (imágenes y videos)', () => {
+  const missing = [...new Set(ALL.flatMap((p) => p.assets))].filter((a) => !fs.existsSync(path.join(__dirname, '..', 'public', a)));
+  assert.deepEqual(missing, []);
+  const v = path.join(__dirname, '..', 'public', 'social', 'd00', 'video.mp4');
+  assert.ok(fs.statSync(v).size > 20000);
+});
+
+test('los crípticos del día están publicados en el catálogo con la misma dirección', async () => {
+  for (const d of PLAN.days) {
+    const c = await env.db.get("SELECT answer FROM clues WHERE slug = ? AND status = 'published'", [d.clue.slug]);
+    assert.ok(c, d.clue.slug);
+    assert.equal(c.answer, d.clue.answer);
+  }
+});
+
+test('el calendario se carga una vez en el panel, en edición y sin aprobación', async () => {
+  const n = (await env.db.get('SELECT COUNT(*) AS n FROM content_pieces WHERE campaign = ?', [social.CAMPAIGN])).n;
+  assert.equal(n, ALL.length);
+  assert.equal((await social.seedPlan(env.db)).loaded, 0);
+  const bad = await env.db.get("SELECT COUNT(*) AS n FROM content_pieces WHERE campaign = ? AND (status != 'editing' OR approved_hash IS NOT NULL)", [social.CAMPAIGN]);
+  assert.equal(bad.n, 0);
+  const cal = await owner.c.get('/api/admin/social/calendar');
+  assert.equal(cal.status, 200);
+  assert.equal(cal.json.days.length, 60);
+  assert.equal(cal.json.days[0].counts.pending, PLAN.days[0].pieces.length);
+  assert.equal(cal.json.metricool.configured, false);
+  const day = await owner.c.get('/api/admin/social/days/3');
+  assert.equal(day.json.pieces.length, PLAN.days[3].pieces.length);
+  assert.ok(day.json.pieces.every((p) => p.current_hash && Array.isArray(p.assets)));
+});
+
+test('aprobar un día: solo la versión que se vio, con pedido y voto en la bandeja; sin Metricool queda aprobada', async () => {
+  const day = (await owner.c.get('/api/admin/social/days/1')).json;
+  const [first, second, ...rest] = day.pieces;
+  // Alguien cambia el texto de una pieza después de que el CEO abrió la carpeta.
+  await env.db.run("UPDATE content_pieces SET body = body || ' (cambio)' WHERE id = ?", [second.id]);
+  const r = await owner.c.post('/api/admin/social/approve', { items: [first, second, ...rest].map((p) => ({ id: p.id, hash: p.current_hash })) });
+  assert.equal(r.status, 200, r.text);
+  assert.equal(r.json.approved, day.pieces.length - 1);
+  assert.deepEqual(r.json.skipped.map((s) => s.reason), ['stale_version']);
+  assert.equal(r.json.scheduled, 0);
+  const p1 = await env.db.get('SELECT * FROM content_pieces WHERE id = ?', [first.id]);
+  assert.equal(p1.status, 'approved');
+  const ap = await env.db.get('SELECT * FROM approval_items WHERE id = ?', [p1.approval_id]);
+  assert.equal(ap.status, 'approved');
+  assert.equal(ap.content_hash, p1.approved_hash);
+  const votes = await env.db.all('SELECT * FROM approval_votes WHERE item_id = ?', [ap.id]);
+  assert.equal(votes.length, 1);
+  assert.equal(votes[0].user_id, owner.user.id);
+  const p2 = await env.db.get('SELECT status FROM content_pieces WHERE id = ?', [second.id]);
+  assert.notEqual(p2.status, 'approved');
+  // Aprobar de nuevo no duplica nada.
+  const again = await owner.c.post('/api/admin/social/approve', { items: [{ id: first.id, hash: first.current_hash }] });
+  assert.equal(again.json.approved, 0);
+});
+
+test('pedir cambios exige comentario y devuelve la pieza; un analista no aprueba', async () => {
+  const day = (await owner.c.get('/api/admin/social/days/2')).json;
+  const p = day.pieces[0];
+  assert.equal((await owner.c.post(`/api/admin/social/pieces/${p.id}/changes`, { comment: '' })).status, 400);
+  assert.equal((await owner.c.post(`/api/admin/social/pieces/${p.id}/changes`, { comment: 'Cambiar el gancho' })).status, 200);
+  assert.equal((await env.db.get('SELECT status FROM content_pieces WHERE id = ?', [p.id])).status, 'changes_requested');
+  const analyst = await staff(env, 'analyst');
+  assert.equal((await analyst.c.post('/api/admin/social/approve', { items: [{ id: day.pieces[1].id, hash: day.pieces[1].current_hash }] })).status, 403);
+});
+
+test('Metricool: arma el pedido de cada red y guarda el identificador como evidencia', async () => {
+  const get = (slot) => env.db.get('SELECT * FROM content_pieces WHERE campaign = ? AND day = 1 AND slot = ?', [social.CAMPAIGN, slot]);
+  const reel = social.metricoolBody(await get('instagram_reel'), 'https://playcripticos.com');
+  assert.deepEqual(reel.providers, [{ network: 'instagram' }]);
+  assert.equal(reel.instagramData.type, 'REEL');
+  assert.equal(reel.media[0], 'https://playcripticos.com/social/d01/video.mp4');
+  assert.deepEqual(reel.publicationDate, { dateTime: '2026-10-27T21:00:00', timezone: 'America/Argentina/Buenos_Aires' });
+  const story = social.metricoolBody(await get('instagram_story'), 'https://playcripticos.com');
+  assert.equal(story.instagramData.type, 'STORY');
+  assert.equal(story.text, '');
+  assert.equal(social.metricoolBody(await get('x_clue'), 'https://x').providers[0].network, 'twitter');
+  const yt = social.metricoolBody(await get('youtube_video'), 'https://x');
+  assert.equal(yt.youtubeData.type, 'short');
+  assert.equal(yt.youtubeData.madeForKids, false);
+
+  const piece = await get('facebook_clue');
+  assert.equal(piece.status, 'approved');
+  // Sin credenciales: espera.
+  assert.deepEqual(await social.scheduleOne(env.db, piece), { waiting: true });
+  // WhatsApp se publica a mano.
+  assert.deepEqual(await social.scheduleOne(env.db, await get('whatsapp_clue')), { manual: true });
+  const old = { ...process.env };
+  Object.assign(process.env, { METRICOOL_USER_TOKEN: 't', METRICOOL_USER_ID: '1', METRICOOL_BLOG_ID: '2' });
+  try {
+    let sent = null;
+    const ok = await social.scheduleOne(env.db, piece, { fetchImpl: async (url, o) => { sent = { url, o }; return { ok: true, status: 200, text: async () => JSON.stringify({ data: { id: 98765 } }) }; } });
+    assert.deepEqual(ok, { scheduled: true, id: '98765' });
+    assert.match(sent.url, /^https:\/\/app\.metricool\.com\/api\/v2\/scheduler\/posts\?blogId=2&userId=1$/);
+    assert.equal(sent.o.headers['X-Mc-Auth'], 't');
+    const after = await get('facebook_clue');
+    assert.equal(after.status, 'scheduled');
+    assert.equal(after.external_id, '98765');
+    // Un error de Metricool no la marca como programada.
+    const other = await get('threads_clue');
+    const bad = await social.scheduleOne(env.db, other, { fetchImpl: async () => ({ ok: false, status: 403, text: async () => 'plan sin API' }) });
+    assert.match(bad.error, /403/);
+    const o2 = await get('threads_clue');
+    assert.equal(o2.status, 'approved');
+    assert.match(o2.external_error, /plan sin API/);
+  } finally { for (const k of ['METRICOOL_USER_TOKEN', 'METRICOOL_USER_ID', 'METRICOOL_BLOG_ID']) if (old[k] === undefined) delete process.env[k]; else process.env[k] = old[k]; }
+  // Nada sin aprobar se programa.
+  const pend = await env.db.get("SELECT * FROM content_pieces WHERE campaign = ? AND day = 5 LIMIT 1", [social.CAMPAIGN]);
+  assert.deepEqual(await social.scheduleOne(env.db, pend), { skipped: true });
+});
+
+test('los archivos de redes se sirven pero no se indexan', async () => {
+  const c = client(env.base);
+  assert.match((await c.get('/robots.txt')).text, /Disallow: \/social\//);
+  const vercel = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'vercel.json'), 'utf8'));
+  assert.ok(vercel.headers.some((h) => h.source === '/social/(.*)' && h.headers.some((x) => x.key === 'X-Robots-Tag')));
+  assert.match(vercel.functions['api/index.js'].includeFiles, /data\/social\/plan\.json/);
+});

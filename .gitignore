@@ -2,6 +2,7 @@ node_modules/
 data/*
 !data/lexicon/
 !data/marketing/
+!data/social/
 *.db
 *.db-*
 .env

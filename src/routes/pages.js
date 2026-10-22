@@ -78,7 +78,7 @@ module.exports = function pages() {
 
   r.get('/robots.txt', (req, res) => {
     const { siteUrl } = req.app.locals.config;
-    res.type('text/plain').send(`User-agent: *\nDisallow: /admin\nDisallow: /api/\nAllow: /\n\nSitemap: ${siteUrl}/sitemap.xml\n`);
+    res.type('text/plain').send(`User-agent: *\nDisallow: /admin\nDisallow: /api/\nDisallow: /social/\nAllow: /\n\nSitemap: ${siteUrl}/sitemap.xml\n`);
   });
 
   r.get('/sitemap.xml', a(async (req, res) => {

@@ -114,7 +114,7 @@ const DEFAULT_SETTINGS = {
 
 const JOBS = [
   ['import_sources', 15], ['daily_challenge', 60], ['generate_clues', 1440], ['cleanup', 1440], ['recover_stuck', 10],
-  ['analytics_rollup', 60], ['alerts_scan', 60],
+  ['analytics_rollup', 60], ['alerts_scan', 60], ['social_schedule', 60],
 ];
 
 async function seedReference(db) {

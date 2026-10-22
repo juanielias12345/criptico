@@ -33,11 +33,14 @@ const letterNames = {
 };
 
 const indicators = {
-  anagram: ['revuelto', 'revuelta', 'revueltos', 'loco', 'loca', 'mezclado', 'mezcla', 'desordenado', 'desorden',
+  anagram: ['revuelto', 'revuelta', 'revueltos', 'loco', 'loca', 'alocado', 'alocada', 'mezclado', 'mezcla', 'desordenado', 'desorden',
     'agitado', 'roto', 'rota', 'raro', 'rara', 'alterado', 'alterada', 'cambiado', 'confundido', 'confuso',
     'caótico', 'extraño', 'reformado', 'nuevo', 'bailando', 'baila', 'mal', 'malo', 'arreglado', 'transformado',
-    'alborotado', 'en desorden', 'con desorden', 'enredado', 'deshecho', 'disparatado', 'lío'],
-  hidden: ['esconde', 'escondido', 'oculta', 'oculto', 'guarda', 'contiene', 'encierra', 'en', 'dentro de',
+    'alborotado', 'en desorden', 'con desorden', 'enredado', 'deshecho', 'disparatado', 'lío',
+    'desordenada', 'desarmado', 'desarmada', 'gastado', 'gastada', 'distraído', 'distraída', 'torpe', 'averiado',
+    'averiada', 'desafinado', 'desafinados', 'enloquecido', 'enloquecida', 'caído', 'caída', 'perdido', 'perdida',
+    'derramado', 'derramada'],
+  hidden: ['esconde', 'esconden', 'escondido', 'oculta', 'oculto', 'guarda', 'contiene', 'encierra', 'en', 'dentro de',
     'parte de', 'algo de', 'tiene', 'alberga', 'lleva dentro'],
   reversal: ['de vuelta', 'al revés', 'vuelto', 'vueltos', 'vuelve', 'que vuelve', 'que regresan', 'que regresa',
     'regresa', 'retrocede', 'hacia atrás', 'invertido', 'se da vuelta', 'se dan vuelta', 'devuelto', 'volviendo',
@@ -50,13 +53,14 @@ const indicators = {
   deletion_letter: ['pierde', 'sin', 'quita', 'perdiendo', 'que pierde', 'le falta', 'sin la', 'pierde la'],
   homophone: ['se oye', 'según se oye', 'suena', 'suena a', 'dicen', 'de oído', 'en voz alta', 'oímos', 'según dicen',
     'que suena', 'se escucha'],
-  initials: ['al principio', 'al inicio', 'inicialmente', 'iniciales', 'cabezas', 'primeras', 'comienzos de', 'principios de'],
+  initials: ['al principio', 'al inicio', 'al comienzo', 'inicialmente', 'iniciales', 'cabezas', 'primeras', 'comienzos de', 'principios de'],
   charade: ['con', 'y', 'más', 'tras', 'después de', 'antes de', 'junto a', 'sobre'],
 };
 
 // Palabras de enlace aceptadas entre definición y juego de palabras.
 const linkWords = ['para', 'por', 'de', 'del', 'en', 'y', 'es', 'que', 'con', 'da', 'dan', 'hace', 'se', 'a', 'al',
-  'el', 'la', 'los', 'las', 'un', 'una', 'lo', 'forma', 'forman', 'son', 'resulta', 'donde', 'como', 'ante'];
+  'el', 'la', 'los', 'las', 'un', 'una', 'lo', 'forma', 'forman', 'son', 'resulta', 'donde', 'como', 'ante', 'o', 'hacia',
+  'regala'];
 
 // Rasgos fonéticos por variante. Seseo: Z/C(e,i) suenan como S. Yeísmo: LL suena como Y.
 function phoneticKey(word, features = []) {

@@ -282,8 +282,10 @@ test('primeras piezas de marketing: con diseño real van a la bandeja; sin video
   const rows = await env.db.all("SELECT id, status, assets, approval_id FROM content_pieces WHERE id LIKE 'mk-%' ORDER BY id");
   assert.equal(rows.length, 9);
   const ready = rows.filter((r) => r.status === 'pending_approval');
-  assert.deepEqual(ready.map((r) => r.id), ['mk-a01', 'mk-c01', 'mk-c02', 'mk-c03', 'mk-c04']);
+  assert.deepEqual(ready.map((r) => r.id), ['mk-a01']);
   assert.ok(ready.every((r) => r.approval_id));
+  // Los carruseles pasaron al calendario de 60 días: quedan pausados sueltos para no publicarse dos veces.
+  assert.deepEqual(rows.filter((r) => /^mk-c/.test(r.id)).map((r) => r.status), ['paused', 'paused', 'paused', 'paused']);
   assert.ok(rows.filter((r) => /^mk-(r|n)/.test(r.id)).every((r) => r.status === 'production'), 'sin video ni correo no se presentan como listas');
   const fs = require('fs'); const path = require('path');
   for (const r of rows) for (const f of JSON.parse(r.assets)) assert.ok(fs.existsSync(path.join(__dirname, '..', 'data', f)), f + ' existe');

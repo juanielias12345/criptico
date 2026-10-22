@@ -113,6 +113,17 @@ module.exports = function companyRoutes({ need }) {
     res.set('Cache-Control', 'private, max-age=3600');
     res.sendFile(file, (err) => { if (err) next(new HttpError(404, 'not_found')); });
   });
+  // Calendario de redes: carpetas por día, aprobación en bloque y programación.
+  const social = require('../services/social');
+  r.get('/social/calendar', need('company.read'), a(async (req, res) => res.json(await social.calendar(db(req)))));
+  r.get('/social/days/:n', need('company.read'), a(async (req, res) => res.json(await social.day(db(req), req.params.n))));
+  r.post('/social/approve', need('approvals.decide'), a(async (req, res) => res.json(await social.approveMany(db(req), (req.body || {}).items, actor(req)))));
+  r.post('/social/pieces/:id/changes', need('approvals.decide'), a(async (req, res) => res.json(await social.requestChanges(db(req), req.params.id, (req.body || {}).comment, actor(req)))));
+  r.post('/social/pieces/:id/schedule', need('approvals.decide'), a(async (req, res) => {
+    const p = await db(req).get('SELECT * FROM content_pieces WHERE id = ?', [req.params.id]);
+    if (!p) throw new HttpError(404, 'not_found');
+    res.json(await social.scheduleOne(db(req), p));
+  }));
   r.get('/content', need('company.read'), a(async (req, res) => res.json({ items: await company.listPieces(db(req), { status: req.query.status }) })));
   r.get('/content/:id', need('company.read'), a(async (req, res) => res.json(await company.getPiece(db(req), req.params.id))));
   r.post('/content', need('content.write'), a(async (req, res) => res.status(201).json(await company.savePiece(db(req), null, req.body || {}, actor(req)))));

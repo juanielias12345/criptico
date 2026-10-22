@@ -200,3 +200,22 @@ td.heat[data-v="4"] { background: color-mix(in srgb, var(--series-1) 45%, transp
 .copy-input { flex: 1 1 320px; min-width: 0; font-family: ui-monospace, monospace; font-size: var(--t-sm); }
 .asset-strip { display: flex; gap: var(--s-2); overflow-x: auto; margin-top: var(--s-2); padding-bottom: var(--s-2); }
 .asset-strip img { width: 180px; height: auto; border: var(--b-1); flex: none; }
+
+/* Redes: calendario de 60 días */
+.asset-strip video { width: 180px; height: auto; border: var(--b-1); flex: none; }
+.day-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: var(--s-3); }
+.day-folder { display: flex; flex-direction: column; gap: var(--s-1); padding: var(--s-3); border: var(--b-1); border-radius: var(--r-2); background: var(--sheet); color: var(--ink); text-decoration: none; min-width: 0; }
+.day-folder:hover, .day-folder:focus-visible { border-color: var(--ink); }
+.day-folder .small { overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.day-n { font: 700 var(--t-xs)/1 var(--font-ui); letter-spacing: .12em; text-transform: uppercase; color: var(--accent); }
+.day-counts { display: flex; flex-wrap: wrap; gap: 4px; margin-top: var(--s-1); }
+.pill.s-approved, .pill.s-scheduled, .pill.s-published { background: var(--ok-soft); color: var(--ok); }
+.pill.s-pending { background: var(--near-soft); color: var(--near); }
+.pill.s-changes { background: var(--danger-soft); color: var(--danger); }
+.social-list { display: grid; gap: var(--s-4); }
+.social-card { border: var(--b-1); border-radius: var(--r-2); padding: var(--s-4); background: var(--sheet); display: grid; gap: var(--s-2); min-width: 0; }
+.social-card header { display: flex; justify-content: space-between; gap: var(--s-2); flex-wrap: wrap; align-items: center; }
+.social-media { display: flex; gap: var(--s-3); overflow-x: auto; padding-bottom: var(--s-2); }
+.social-media figure { margin: 0; display: grid; gap: 4px; flex: none; }
+.social-media img, .social-media video { width: 220px; height: auto; border: var(--b-1); background: var(--paper-2); }
+.inline-form { display: inline-flex; gap: var(--s-2); flex-wrap: wrap; align-items: center; }

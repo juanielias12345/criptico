@@ -214,5 +214,320 @@
       { "op": "abbr", "from": "uno romano", "text": "I" },
       { "op": "syn", "from": "se queda quieta ante la cámara", "text": "POSA" }
     ] }
+  },
+  {
+    "clue": "Lámina rota para cualquier bicho (6)",
+    "answer": "ANIMAL", "definition": "cualquier bicho", "category": "animales", "difficulty": 1, "mechanism": "anagram",
+    "wordplay": { "op": "anagram", "indicator": "rota", "of": [{ "op": "lit", "text": "lámina" }] }
+  },
+  {
+    "clue": "Ramo loco en la fruta del bosque (4)",
+    "answer": "MORA", "definition": "la fruta del bosque", "category": "comida", "difficulty": 1, "mechanism": "anagram",
+    "wordplay": { "op": "anagram", "indicator": "loco", "of": [{ "op": "lit", "text": "ramo" }] }
+  },
+  {
+    "clue": "Saco revuelto, un verdadero desorden (4)",
+    "answer": "CAOS", "definition": "un verdadero desorden", "category": "general", "difficulty": 1, "mechanism": "anagram",
+    "wordplay": { "op": "anagram", "indicator": "revuelto", "of": [{ "op": "lit", "text": "saco" }] }
+  },
+  {
+    "clue": "Credo confuso: animal de granja (5)",
+    "answer": "CERDO", "definition": "animal de granja", "category": "animales", "difficulty": 1, "mechanism": "anagram",
+    "wordplay": { "op": "anagram", "indicator": "confuso", "of": [{ "op": "lit", "text": "credo" }] }
+  },
+  {
+    "clue": "Sergio alocado es un peligro (6)",
+    "answer": "RIESGO", "definition": "un peligro", "category": "general", "difficulty": 1, "mechanism": "anagram",
+    "wordplay": { "op": "anagram", "indicator": "alocado", "of": [{ "op": "lit", "text": "sergio" }] }
+  },
+  {
+    "clue": "Labor desordenada: el pino, por ejemplo (5)",
+    "answer": "ÁRBOL", "definition": "el pino, por ejemplo", "category": "naturaleza", "difficulty": 1, "mechanism": "anagram",
+    "wordplay": { "op": "anagram", "indicator": "desordenada", "of": [{ "op": "lit", "text": "labor" }] }
+  },
+  {
+    "clue": "Costar desarmado: roedor que construye diques (6)",
+    "answer": "CASTOR", "definition": "roedor que construye diques", "category": "animales", "difficulty": 2, "mechanism": "anagram",
+    "wordplay": { "op": "anagram", "indicator": "desarmado", "of": [{ "op": "lit", "text": "costar" }] }
+  },
+  {
+    "clue": "Plata gastada: fruta para la tostada (5)",
+    "answer": "PALTA", "definition": "fruta para la tostada", "category": "comida", "difficulty": 1, "mechanism": "anagram",
+    "wordplay": { "op": "anagram", "indicator": "gastada", "of": [{ "op": "lit", "text": "plata" }] }
+  },
+  {
+    "clue": "Notar alterado: el roedor del queso (5)",
+    "answer": "RATÓN", "definition": "el roedor del queso", "category": "animales", "difficulty": 1, "mechanism": "anagram",
+    "wordplay": { "op": "anagram", "indicator": "alterado", "of": [{ "op": "lit", "text": "notar" }] }
+  },
+  {
+    "clue": "Osar, distraído, regala una flor (4)",
+    "answer": "ROSA", "definition": "una flor", "category": "naturaleza", "difficulty": 1, "mechanism": "anagram",
+    "wordplay": { "op": "anagram", "indicator": "distraído", "of": [{ "op": "lit", "text": "osar" }] }
+  },
+  {
+    "clue": "Mate revuelto: el final de la carrera (4)",
+    "answer": "META", "definition": "el final de la carrera", "category": "deportes", "difficulty": 1, "mechanism": "anagram",
+    "wordplay": { "op": "anagram", "indicator": "revuelto", "of": [{ "op": "lit", "text": "mate" }] }
+  },
+  {
+    "clue": "Paso torpe hacia el primer plato (4)",
+    "answer": "SOPA", "definition": "el primer plato", "category": "comida", "difficulty": 1, "mechanism": "anagram",
+    "wordplay": { "op": "anagram", "indicator": "torpe", "of": [{ "op": "lit", "text": "paso" }] }
+  },
+  {
+    "clue": "Tarot revuelto: algo dulce para el cumpleaños (5)",
+    "answer": "TORTA", "definition": "algo dulce para el cumpleaños", "category": "comida", "difficulty": 1, "mechanism": "anagram",
+    "wordplay": { "op": "anagram", "indicator": "revuelto", "of": [{ "op": "lit", "text": "tarot" }] }
+  },
+  {
+    "clue": "Metro averiado: compañero del mate (5)",
+    "answer": "TERMO", "definition": "compañero del mate", "category": "objetos", "difficulty": 1, "mechanism": "anagram",
+    "wordplay": { "op": "anagram", "indicator": "averiado", "of": [{ "op": "lit", "text": "metro" }] }
+  },
+  {
+    "clue": "Pianos desafinados: un sentimiento intenso (6)",
+    "answer": "PASIÓN", "definition": "un sentimiento intenso", "category": "sentimientos", "difficulty": 1, "mechanism": "anagram",
+    "wordplay": { "op": "anagram", "indicator": "desafinados", "of": [{ "op": "lit", "text": "pianos" }] }
+  },
+  {
+    "clue": "Grite enloquecido como un felino rayado (5)",
+    "answer": "TIGRE", "definition": "un felino rayado", "category": "animales", "difficulty": 1, "mechanism": "anagram",
+    "wordplay": { "op": "anagram", "indicator": "enloquecido", "of": [{ "op": "lit", "text": "grite" }] }
+  },
+  {
+    "clue": "Roquera loca bajo los tres palos (7)",
+    "answer": "ARQUERO", "definition": "bajo los tres palos", "category": "deportes", "difficulty": 2, "mechanism": "anagram",
+    "wordplay": { "op": "anagram", "indicator": "loca", "of": [{ "op": "lit", "text": "roquera" }] }
+  },
+  {
+    "clue": "Astro caído: molusco con perla (5)",
+    "answer": "OSTRA", "definition": "molusco con perla", "category": "animales", "difficulty": 1, "mechanism": "anagram",
+    "wordplay": { "op": "anagram", "indicator": "caído", "of": [{ "op": "lit", "text": "astro" }] }
+  },
+  {
+    "clue": "Paro revuelto: lo que se guarda en el placard (4)",
+    "answer": "ROPA", "definition": "lo que se guarda en el placard", "category": "objetos", "difficulty": 1, "mechanism": "anagram",
+    "wordplay": { "op": "anagram", "indicator": "revuelto", "of": [{ "op": "lit", "text": "paro" }] }
+  },
+  {
+    "clue": "Tenor perdido: hacia arriba en el mapa (5)",
+    "answer": "NORTE", "definition": "hacia arriba en el mapa", "category": "geografia", "difficulty": 2, "mechanism": "anagram",
+    "wordplay": { "op": "anagram", "indicator": "perdido", "of": [{ "op": "lit", "text": "tenor" }] }
+  },
+  {
+    "clue": "Resina derramada: mitad mujer, mitad pez (6)",
+    "answer": "SIRENA", "definition": "mitad mujer, mitad pez", "category": "cultura", "difficulty": 2, "mechanism": "anagram",
+    "wordplay": { "op": "anagram", "indicator": "derramada", "of": [{ "op": "lit", "text": "resina" }] }
+  },
+  {
+    "clue": "Napoleón esconde una fiera (4)",
+    "answer": "LEÓN", "definition": "una fiera", "category": "animales", "difficulty": 1, "mechanism": "hidden",
+    "wordplay": { "op": "hidden", "indicator": "esconde", "in": "Napoleón" }
+  },
+  {
+    "clue": "Sara navega y oculta un anfibio (4)",
+    "answer": "RANA", "definition": "un anfibio", "category": "animales", "difficulty": 2, "mechanism": "hidden",
+    "wordplay": { "op": "hidden", "indicator": "oculta", "in": "Sara navega" }
+  },
+  {
+    "clue": "El doctor oculta un animal bravo (4)",
+    "answer": "TORO", "definition": "un animal bravo", "category": "animales", "difficulty": 2, "mechanism": "hidden",
+    "wordplay": { "op": "hidden", "indicator": "oculta", "in": "doctor oculta" }
+  },
+  {
+    "clue": "Campana oculta lo que sale del horno (3)",
+    "answer": "PAN", "definition": "lo que sale del horno", "category": "comida", "difficulty": 1, "mechanism": "hidden",
+    "wordplay": { "op": "hidden", "indicator": "oculta", "in": "Campana" }
+  },
+  {
+    "clue": "El pasado esconde el plato del domingo (5)",
+    "answer": "ASADO", "definition": "el plato del domingo", "category": "comida", "difficulty": 1, "mechanism": "hidden",
+    "wordplay": { "op": "hidden", "indicator": "esconde", "in": "El pasado" }
+  },
+  {
+    "clue": "Cantan gorriones y esconden un baile porteño (5)",
+    "answer": "TANGO", "definition": "un baile porteño", "category": "cultura", "difficulty": 2, "mechanism": "hidden",
+    "wordplay": { "op": "hidden", "indicator": "esconden", "in": "Cantan gorriones" }
+  },
+  {
+    "clue": "Los de vuelta: la estrella más cercana (3)",
+    "answer": "SOL", "definition": "la estrella más cercana", "category": "ciencia", "difficulty": 1, "mechanism": "reversal",
+    "wordplay": { "op": "reverse", "indicator": "de vuelta", "of": { "op": "lit", "text": "los" } }
+  },
+  {
+    "clue": "Atar al revés: un roedor (4)",
+    "answer": "RATA", "definition": "un roedor", "category": "animales", "difficulty": 1, "mechanism": "reversal",
+    "wordplay": { "op": "reverse", "indicator": "al revés", "of": { "op": "lit", "text": "atar" } }
+  },
+  {
+    "clue": "Amar al revés: parte del árbol (4)",
+    "answer": "RAMA", "definition": "parte del árbol", "category": "naturaleza", "difficulty": 1, "mechanism": "reversal",
+    "wordplay": { "op": "reverse", "indicator": "al revés", "of": { "op": "lit", "text": "amar" } }
+  },
+  {
+    "clue": "Sala que vuelve con las de los pájaros (4)",
+    "answer": "ALAS", "definition": "las de los pájaros", "category": "animales", "difficulty": 1, "mechanism": "reversal",
+    "wordplay": { "op": "reverse", "indicator": "que vuelve", "of": { "op": "lit", "text": "sala" } }
+  },
+  {
+    "clue": "Recorrido de una banda y astro rey: flor amarilla (7)",
+    "answer": "GIRASOL", "definition": "flor amarilla", "category": "naturaleza", "difficulty": 2, "mechanism": "charade",
+    "wordplay": { "op": "concat", "parts": [{ "op": "syn", "from": "Recorrido de una banda", "text": "GIRA" },{ "op": "syn", "from": "astro rey", "text": "SOL" }] }
+  },
+  {
+    "clue": "Rostro y verdura: un molusco (7)",
+    "answer": "CARACOL", "definition": "un molusco", "category": "animales", "difficulty": 2, "mechanism": "charade",
+    "wordplay": { "op": "concat", "parts": [{ "op": "syn", "from": "Rostro", "text": "CARA" },{ "op": "syn", "from": "verdura", "text": "COL" }] }
+  },
+  {
+    "clue": "Lecho y bebida pirata: un marisco (7)",
+    "answer": "CAMARÓN", "definition": "un marisco", "category": "comida", "difficulty": 2, "mechanism": "charade",
+    "wordplay": { "op": "concat", "parts": [{ "op": "syn", "from": "Lecho", "text": "CAMA" },{ "op": "syn", "from": "bebida pirata", "text": "RON" }] }
+  },
+  {
+    "clue": "Alimento y parte del pie: prenda de vestir (8)",
+    "answer": "PANTALÓN", "definition": "prenda de vestir", "category": "objetos", "difficulty": 2, "mechanism": "charade",
+    "wordplay": { "op": "concat", "parts": [{ "op": "syn", "from": "Alimento", "text": "PAN" },{ "op": "syn", "from": "parte del pie", "text": "TALÓN" }] }
+  },
+  {
+    "clue": "Océano y ausente: el esposo (6)",
+    "answer": "MARIDO", "definition": "el esposo", "category": "personas", "difficulty": 2, "mechanism": "charade",
+    "wordplay": { "op": "concat", "parts": [{ "op": "syn", "from": "Océano", "text": "MAR" },{ "op": "syn", "from": "ausente", "text": "IDO" }] }
+  },
+  {
+    "clue": "Estrella y pájaro pampeano: sin pareja (7)",
+    "answer": "SOLTERO", "definition": "sin pareja", "category": "personas", "difficulty": 3, "mechanism": "charade",
+    "wordplay": { "op": "concat", "parts": [{ "op": "syn", "from": "Estrella", "text": "SOL" },{ "op": "syn", "from": "pájaro pampeano", "text": "TERO" }] }
+  },
+  {
+    "clue": "Satélite y rey: mancha en la piel (5)",
+    "answer": "LUNAR", "definition": "mancha en la piel", "category": "personas", "difficulty": 2, "mechanism": "charade",
+    "wordplay": { "op": "concat", "parts": [{ "op": "syn", "from": "Satélite", "text": "LUNA" },{ "op": "abbr", "from": "rey", "text": "R" }] }
+  },
+  {
+    "clue": "Hace footing con oxígeno: llega con cartas (6)",
+    "answer": "CORREO", "definition": "llega con cartas", "category": "sociedad", "difficulty": 2, "mechanism": "charade",
+    "wordplay": { "op": "concat", "parts": [{ "op": "syn", "from": "Hace footing", "text": "CORRE" },{ "op": "abbr", "from": "oxígeno", "text": "O" }] }
+  },
+  {
+    "clue": "Bazo que guarda al rey: extremidad superior (5)",
+    "answer": "BRAZO", "definition": "extremidad superior", "category": "personas", "difficulty": 3, "mechanism": "container",
+    "wordplay": { "op": "insert", "indicator": "que guarda", "outer": { "op": "lit", "text": "bazo" }, "inner": { "op": "abbr", "from": "rey", "text": "R" } }
+  },
+  {
+    "clue": "Apodo que guarda el norte: una montaña (5)",
+    "answer": "MONTE", "definition": "una montaña", "category": "geografia", "difficulty": 3, "mechanism": "container",
+    "wordplay": { "op": "insert", "indicator": "que guarda", "outer": { "op": "syn", "from": "Apodo", "text": "MOTE" }, "inner": { "op": "abbr", "from": "el norte", "text": "N" } }
+  },
+  {
+    "clue": "Hogar sin principio: el mango de la taza (3)",
+    "answer": "ASA", "definition": "el mango de la taza", "category": "objetos", "difficulty": 1, "mechanism": "deletion",
+    "wordplay": { "op": "delete", "indicator": "sin principio", "remove": "first", "of": { "op": "syn", "from": "Hogar", "text": "CASA" } }
+  },
+  {
+    "clue": "Ave parlanchina sin cabeza: metal precioso (3)",
+    "answer": "ORO", "definition": "metal precioso", "category": "ciencia", "difficulty": 2, "mechanism": "deletion",
+    "wordplay": { "op": "delete", "indicator": "sin cabeza", "remove": "first", "of": { "op": "syn", "from": "Ave parlanchina", "text": "LORO" } }
+  },
+  {
+    "clue": "Cuadro sin cabeza: lo que defiende el arquero (4)",
+    "answer": "ARCO", "definition": "lo que defiende el arquero", "category": "deportes", "difficulty": 2, "mechanism": "deletion",
+    "wordplay": { "op": "delete", "indicator": "sin cabeza", "remove": "first", "of": { "op": "syn", "from": "Cuadro", "text": "MARCO" } }
+  },
+  {
+    "clue": "Árbol tropical sin principio: el espíritu (4)",
+    "answer": "ALMA", "definition": "el espíritu", "category": "sentimientos", "difficulty": 2, "mechanism": "deletion",
+    "wordplay": { "op": "delete", "indicator": "sin principio", "remove": "first", "of": { "op": "syn", "from": "Árbol tropical", "text": "PALMA" } }
+  },
+  {
+    "clue": "Fuego del animal andino (5)",
+    "answer": "LLAMA", "category": "animales", "difficulty": 1, "mechanism": "double_definition",
+    "wordplay": { "op": "double", "definitions": ["Fuego", "animal andino"] }
+  },
+  {
+    "clue": "Ciudad principal y dinero para invertir (7)",
+    "answer": "CAPITAL", "category": "geografia", "difficulty": 2, "mechanism": "double_definition",
+    "wordplay": { "op": "double", "definitions": ["Ciudad principal", "dinero para invertir"] }
+  },
+  {
+    "clue": "Mensaje en un sobre o menú del restaurante (5)",
+    "answer": "CARTA", "category": "objetos", "difficulty": 2, "mechanism": "double_definition",
+    "wordplay": { "op": "double", "definitions": ["Mensaje en un sobre", "menú del restaurante"] }
+  },
+  {
+    "clue": "Herramienta para cortar madera y cadena de montañas (6)",
+    "answer": "SIERRA", "category": "geografia", "difficulty": 2, "mechanism": "double_definition",
+    "wordplay": { "op": "double", "definitions": ["Herramienta para cortar madera", "cadena de montañas"] }
+  },
+  {
+    "clue": "Trofeo del campeón y vaso con pie (4)",
+    "answer": "COPA", "category": "deportes", "difficulty": 1, "mechanism": "double_definition",
+    "wordplay": { "op": "double", "definitions": ["Trofeo del campeón", "vaso con pie"] }
+  },
+  {
+    "clue": "Cera con mecha que empuja un barco (4)",
+    "answer": "VELA", "category": "objetos", "difficulty": 2, "mechanism": "double_definition",
+    "wordplay": { "op": "double", "definitions": ["Cera con mecha", "que empuja un barco"] }
+  },
+  {
+    "clue": "Piso de un edificio o ser verde (6)",
+    "answer": "PLANTA", "category": "naturaleza", "difficulty": 2, "mechanism": "double_definition",
+    "wordplay": { "op": "double", "definitions": ["Piso de un edificio", "ser verde"] }
+  },
+  {
+    "clue": "Idioma que se usa para saborear (6)",
+    "answer": "LENGUA", "category": "lenguaje", "difficulty": 2, "mechanism": "double_definition",
+    "wordplay": { "op": "double", "definitions": ["Idioma", "que se usa para saborear"] }
+  },
+  {
+    "clue": "Parte del árbol o página del cuaderno (4)",
+    "answer": "HOJA", "category": "naturaleza", "difficulty": 1, "mechanism": "double_definition",
+    "wordplay": { "op": "double", "definitions": ["Parte del árbol", "página del cuaderno"] }
+  },
+  {
+    "clue": "Fruta tropical o golpe de puño (4)",
+    "answer": "PIÑA", "category": "comida", "difficulty": 2, "mechanism": "double_definition",
+    "wordplay": { "op": "double", "definitions": ["Fruta tropical", "golpe de puño"] }
+  },
+  {
+    "clue": "Pequeña embarcación y salto de la pelota (4)",
+    "answer": "BOTE", "category": "deportes", "difficulty": 2, "mechanism": "double_definition",
+    "wordplay": { "op": "double", "definitions": ["Pequeña embarcación", "salto de la pelota"] }
+  },
+  {
+    "clue": "Militar de bajo rango y punta de tierra en el mar (4)",
+    "answer": "CABO", "category": "geografia", "difficulty": 2, "mechanism": "double_definition",
+    "wordplay": { "op": "double", "definitions": ["Militar de bajo rango", "punta de tierra en el mar"] }
+  },
+  {
+    "clue": "Juguete o articulación de la mano (6)",
+    "answer": "MUÑECA", "category": "objetos", "difficulty": 1, "mechanism": "double_definition",
+    "wordplay": { "op": "double", "definitions": ["Juguete", "articulación de la mano"] }
+  },
+  {
+    "clue": "Hermoso, se oye como pelo fino (5)",
+    "answer": "BELLO", "definition": "Hermoso", "category": "lenguaje", "difficulty": 3, "mechanism": "homophone",
+    "wordplay": { "op": "homophone", "indicator": "se oye como", "of": { "op": "syn", "from": "pelo fino", "text": "VELLO" } }
+  },
+  {
+    "clue": "Costado de la frente que suena a centena (4)",
+    "answer": "SIEN", "definition": "Costado de la frente", "category": "personas", "difficulty": 3, "mechanism": "homophone", "variant": "es-AR", "note": "Funciona con seseo: «sien» y «cien» suenan igual en América y en buena parte de España.",
+    "wordplay": { "op": "homophone", "indicator": "que suena a", "of": { "op": "syn", "from": "centena", "text": "CIEN" } }
+  },
+  {
+    "clue": "Al comienzo, la única noche alumbrada: satélite (4)",
+    "answer": "LUNA", "definition": "satélite", "category": "ciencia", "difficulty": 2, "mechanism": "initials",
+    "wordplay": { "op": "initials", "indicator": "Al comienzo", "in": "la única noche alumbrada" }
+  },
+  {
+    "clue": "Grito de la tribuna: al principio, ganamos otra liga (3)",
+    "answer": "GOL", "definition": "Grito de la tribuna", "category": "deportes", "difficulty": 2, "mechanism": "initials",
+    "wordplay": { "op": "initials", "indicator": "al principio", "in": "ganamos otra liga" }
+  },
+  {
+    "clue": "Corriente de agua: al principio, rema intrépido Osvaldo (3)",
+    "answer": "RÍO", "definition": "Corriente de agua", "category": "naturaleza", "difficulty": 1, "mechanism": "initials",
+    "wordplay": { "op": "initials", "indicator": "al principio", "in": "rema intrépido Osvaldo" }
   }
 ]

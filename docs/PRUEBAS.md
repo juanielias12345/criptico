@@ -5,7 +5,7 @@ npm test          # unidad e integración (servidor real + base temporal)
 npm run test:e2e  # navegador Chromium sin interfaz
 ```
 
-Último resultado (22/10/2026, Node 22, Linux): **109/109** en `npm test` y **17/17** en `npm run test:e2e`. También corren en GitHub Actions (flujo «Pruebas») en cada cambio de `main`.
+Último resultado (22/10/2026, Node 22, Linux): **117/117** en `npm test` y **17/17** en `npm run test:e2e`. También corren en GitHub Actions (flujo «Pruebas») en cada cambio de `main`.
 
 ## Cobertura de las 25 pruebas obligatorias
 
@@ -132,3 +132,16 @@ Problemas que encontró la revisión y se corrigieron:
 - Tareas: completar exige evidencia y, en nivel 3, aprobación.
 - Política de MFA obligatoria.
 - Navegador: invitar desde «Equipo», aceptar sin sesión, activar MFA, volver a entrar con código; todas las pantallas de la empresa en escritorio y móvil sin errores ni desbordes.
+
+## Redes: 60 días (`test/social.test.js`)
+
+| Qué se prueba | Prueba |
+|---|---|
+| 60 días del 26/10 al 24/12, todas las redes, horario en hora argentina, textos de X ≤ 280, un críptico distinto por día | «el plan…» |
+| Cada imagen y video del plan existe de verdad | «cada archivo…» |
+| Los crípticos del día están publicados en el catálogo | «los crípticos del día…» |
+| El calendario se carga una sola vez, en edición, sin aprobación | «el calendario se carga…» |
+| Aprobar un día solo aprueba la versión vista; con pedido y voto registrados | «aprobar un día…» |
+| Pedir cambios exige comentario; un analista no aprueba | «pedir cambios…» |
+| Metricool: pedido por red, identificador como evidencia, error no marca como programada, nada sin aprobar se programa | «Metricool…» |
+| Los archivos se sirven pero no se indexan | «los archivos de redes…» |

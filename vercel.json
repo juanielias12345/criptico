@@ -4,7 +4,7 @@
   "functions": {
     "api/index.js": {
       "maxDuration": 60,
-      "includeFiles": "{src/db/migrations/**,seed/**,public/admin.html,data/lexicon/**,data/marketing/**}"
+      "includeFiles": "{src/db/migrations/**,seed/**,public/admin.html,data/lexicon/**,data/marketing/**,data/social/plan.json}"
     }
   },
   "rewrites": [
@@ -18,6 +18,19 @@
     }
   ],
   "headers": [
+    {
+      "source": "/social/(.*)",
+      "headers": [
+        {
+          "key": "X-Robots-Tag",
+          "value": "noindex, nofollow"
+        },
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=300"
+        }
+      ]
+    },
     {
       "source": "/admin.html",
       "headers": [

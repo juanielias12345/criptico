@@ -1459,7 +1459,8 @@
         el('h3', { text: c.title }), c.body ? el('p', { class: 'pre', text: c.body }) : '', c.script ? el('details', {}, el('summary', { text: 'Guion' }), el('p', { class: 'pre', text: c.script })) : '',
         c.cta ? el('p', {}, el('strong', { text: c.cta })) : '', c.hashtags ? el('p', { class: 'muted', text: c.hashtags }) : '', c.link ? el('p', {}, linkify(c.link)) : '',
         (c.assets || []).length ? el('div', {}, el('strong', { text: 'Archivos: ' }), el('ul', {}, c.assets.map((a) => el('li', {}, /^https:/.test(a) ? linkify(a) : el('code', { text: a })))),
-          el('div', { class: 'asset-strip' }, c.assets.filter((a) => /^marketing\/[a-z0-9-]+\/[a-z0-9-]+\.png$/.test(a)).map((a) => el('img', { src: '/api/admin/content-assets/' + a, alt: a, loading: 'lazy' })))) : el('p', { class: 'small', text: 'Sin archivos adjuntos.' }),
+          el('div', { class: 'asset-strip' }, c.assets.filter((a) => /^marketing\/[a-z0-9-]+\/[a-z0-9-]+\.png$/.test(a)).map((a) => el('img', { src: '/api/admin/content-assets/' + a, alt: a, loading: 'lazy' })),
+            c.assets.filter((a) => /^\/social\//.test(a)).map((a) => mediaEl(a)))) : el('p', { class: 'small', text: 'Sin archivos adjuntos.' }),
         c.alt_text ? el('p', { class: 'small muted', text: 'Texto alternativo: ' + c.alt_text }) : '', c.rights ? el('p', { class: 'small muted', text: 'Derechos: ' + c.rights }) : el('p', { class: 'small', text: 'Derechos de los recursos: sin indicar.' }));
     }
     if (c && c.body && c.doc) return el('div', { class: 'post-preview' }, el('div', { class: 'small muted', text: 'Documento ' + c.doc + ' · versión ' + c.version + ' · ' + c.language }), el('div', { class: 'pre legal-text', text: c.body }));
@@ -1557,6 +1558,121 @@
       out.push(el('h2', { text: 'Vista previa' }), preview({ ...p }));
     }
     main.replaceChildren(...out);
+  };
+
+  // ── Redes: calendario de 60 días ──
+  const NETS = { instagram: 'Instagram', facebook: 'Facebook', x: 'X', threads: 'Threads', tiktok: 'TikTok', youtube: 'YouTube Shorts', whatsapp: 'Canal de WhatsApp' };
+  const SGROUP = { pending: 'Para aprobar', approved: 'Aprobada', scheduled: 'Programada', published: 'Publicada', changes: 'Con cambios pedidos' };
+  const sgroup = (s) => (['approved'].includes(s) ? 'approved' : s === 'scheduled' ? 'scheduled' : s === 'published' ? 'published'
+    : ['changes_requested', 'rejected', 'paused', 'publish_error'].includes(s) ? 'changes' : 'pending');
+  const hm = (iso) => new Date(iso).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Argentina/Buenos_Aires' });
+  const fileName = (a) => a.split('/').filter(Boolean).slice(-2).join('-');
+  function mediaEl(a) {
+    if (/\.mp4$/.test(a)) return el('video', { src: a, controls: true, preload: 'metadata', playsinline: true });
+    return el('img', { src: a, alt: '', loading: 'lazy' });
+  }
+  // ZIP sin compresión armado en el navegador (los archivos ya están comprimidos).
+  const CRC = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
+  const crc32 = (b) => { let c = 0xffffffff; for (let i = 0; i < b.length; i++) c = CRC[(c ^ b[i]) & 0xff] ^ (c >>> 8); return (c ^ 0xffffffff) >>> 0; };
+  function makeZip(files) {
+    const enc = new TextEncoder(); const parts = []; const central = []; let off = 0;
+    for (const f of files) {
+      const name = enc.encode(f.name); const data = f.data; const crc = crc32(data);
+      const h = new DataView(new ArrayBuffer(30)); h.setUint32(0, 0x04034b50, true); h.setUint16(4, 20, true); h.setUint16(6, 0x0800, true);
+      h.setUint32(14, crc, true); h.setUint32(18, data.length, true); h.setUint32(22, data.length, true); h.setUint16(26, name.length, true);
+      parts.push(new Uint8Array(h.buffer), name, data);
+      const c = new DataView(new ArrayBuffer(46)); c.setUint32(0, 0x02014b50, true); c.setUint16(4, 20, true); c.setUint16(6, 20, true); c.setUint16(8, 0x0800, true);
+      c.setUint32(16, crc, true); c.setUint32(20, data.length, true); c.setUint32(24, data.length, true); c.setUint16(28, name.length, true); c.setUint32(42, off, true);
+      central.push(new Uint8Array(c.buffer), name);
+      off += 30 + name.length + data.length;
+    }
+    const size = central.reduce((s, p) => s + p.length, 0);
+    const e = new DataView(new ArrayBuffer(22)); e.setUint32(0, 0x06054b50, true); e.setUint16(8, files.length, true); e.setUint16(10, files.length, true);
+    e.setUint32(12, size, true); e.setUint32(16, off, true);
+    return new Blob([...parts, ...central, new Uint8Array(e.buffer)], { type: 'application/zip' });
+  }
+  function saveBlob(blob, name) { const u = URL.createObjectURL(blob); const a = el('a', { href: u, download: name }); document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(u), 4000); }
+  async function downloadDay(d) {
+    const seen = new Set(); const files = [];
+    const textos = d.pieces.map((p) => `${hm(p.scheduled_at)} · ${NETS[p.platform] || p.platform} · ${p.format}\n${p.body || ''}${p.alt_text ? '\n\n[Texto alternativo] ' + p.alt_text : ''}\n\n────────\n`).join('\n');
+    files.push({ name: 'textos.txt', data: new TextEncoder().encode(`${d.label}\n\n${textos}`) });
+    for (const p of d.pieces) for (const a of p.assets) {
+      if (seen.has(a)) continue; seen.add(a);
+      const r = await fetch(a); if (!r.ok) throw new Error('No se pudo bajar ' + a);
+      files.push({ name: fileName(a), data: new Uint8Array(await r.arrayBuffer()) });
+    }
+    saveBlob(makeZip(files), `play-cripticos-dia-${String(d.n).padStart(2, '0')}-${d.date}.zip`);
+  }
+  const counts = (c) => el('div', { class: 'day-counts' }, ['pending', 'approved', 'scheduled', 'published', 'changes'].filter((k) => c[k]).map((k) => el('span', { class: 'pill s-' + k, text: c[k] + ' ' + SGROUP[k].toLowerCase() })));
+
+  V.social = async () => {
+    const d = await api('/api/admin/social/calendar');
+    if (!d.days.length) { main.replaceChildren(el('h1', { text: 'Redes: 60 días' }), empty('Todavía no hay calendario cargado.')); return; }
+    const weeks = [];
+    for (const day of d.days) { const w = Math.floor(day.n / 7); (weeks[w] = weeks[w] || []).push(day); }
+    const tot = d.days.reduce((s, x) => { for (const k of Object.keys(x.counts)) s[k] = (s[k] || 0) + x.counts[k]; return s; }, {});
+    const approveDays = (days) => act(async () => {
+      let ok = 0; let skipped = 0; let sch = 0;
+      for (const day of days) {
+        const full = await api('/api/admin/social/days/' + day.n);
+        const items = full.pieces.filter((p) => sgroup(p.status) === 'pending').map((p) => ({ id: p.id, hash: p.current_hash }));
+        if (!items.length) continue;
+        const r = await api('/api/admin/social/approve', { method: 'POST', body: { items } });
+        ok += r.approved; skipped += r.skipped.length; sch += r.scheduled;
+      }
+      return { flash: `Aprobadas: ${ok}.` + (sch ? ` Programadas en Metricool: ${sch}.` : d.metricool.configured ? '' : ' Quedan esperando la conexión con Metricool.') + (skipped ? ` Sin cambios: ${skipped}.` : '') };
+    });
+    main.replaceChildren(el('h1', { text: 'Redes: 60 días' }),
+      el('p', { class: 'muted', text: `Del ${d.days[0].label} al ${d.days[d.days.length - 1].label}. Cada carpeta es un día: adentro están las imágenes, los videos y los textos de cada red con su horario. Nada se publica sin tu aprobación.` }),
+      d.metricool.configured ? '' : el('p', { class: 'flash warn', text: 'Metricool todavía no está conectado al servidor: lo que apruebes queda listo y se programa solo cuando se conecte. También podés descargarlo y publicarlo a mano.' }),
+      el('div', { class: 'kpis' }, kpi('Publicaciones', tot.total || 0), kpi('Para aprobar', tot.pending || 0, { warn: !!tot.pending }), kpi('Aprobadas', tot.approved || 0), kpi('Programadas', tot.scheduled || 0), kpi('Publicadas', tot.published || 0)),
+      weeks.map((days, w) => el('section', { class: 'panel' }, el('div', { class: 'toolbar' }, el('h3', { text: `Semana ${w + 1}` }), el('span', { class: 'muted small', text: `${days[0].label} – ${days[days.length - 1].label}` }),
+        can('approvals.decide') && days.some((x) => x.counts.pending) ? btn('Aprobar toda la semana', approveDays(days), 'primary') : ''),
+      el('div', { class: 'day-grid' }, days.map((x) => el('a', { class: 'day-folder', href: '#socialday/' + x.n },
+        el('span', { class: 'day-n', text: 'Día ' + x.n }), el('strong', { text: x.label }), el('span', { class: 'small muted', text: `${x.counts.total} publicaciones · «${x.clue.clue}»` }), counts(x.counts)))))));
+  };
+
+  V.socialday = async (n) => {
+    const d = await api('/api/admin/social/days/' + encodeURIComponent(n));
+    const pend = d.pieces.filter((p) => sgroup(p.status) === 'pending');
+    const approve = (items) => act(async () => {
+      const r = await api('/api/admin/social/approve', { method: 'POST', body: { items } });
+      return { flash: `Aprobadas: ${r.approved}.` + (r.scheduled ? ` Programadas en Metricool: ${r.scheduled}.` : '') + (r.schedule_errors ? ` No se pudieron programar: ${r.schedule_errors} (mirá el detalle en cada pieza).` : '') + (r.skipped.length ? ` Sin cambios: ${r.skipped.length}.` : '') };
+    });
+    const byNet = {};
+    for (const p of d.pieces) (byNet[p.platform] = byNet[p.platform] || []).push(p);
+    const nav = el('div', { class: 'toolbar' }, el('a', { href: '#social', text: '← Calendario' }),
+      Number(n) > 0 ? el('a', { href: '#socialday/' + (Number(n) - 1), text: '← Día anterior' }) : '', Number(n) < 59 ? el('a', { href: '#socialday/' + (Number(n) + 1), text: 'Día siguiente →' }) : '');
+    const card = (p) => {
+      const g = sgroup(p.status);
+      const acts = [];
+      if (can('approvals.decide') && g === 'pending') acts.push(btn('Aprobar', approve([{ id: p.id, hash: p.current_hash }]), 'primary'));
+      if (can('approvals.decide') && ['pending', 'approved'].includes(g)) {
+        const c = el('input', { placeholder: 'Qué hay que cambiar', 'aria-label': 'Cambios pedidos' });
+        acts.push(el('span', { class: 'inline-form' }, c, btn('Pedir cambios', act(() => api('/api/admin/social/pieces/' + p.id + '/changes', { method: 'POST', body: { comment: c.value } }), 'Cambios pedidos: la pieza vuelve a producción.'))));
+      }
+      if (can('approvals.decide') && g === 'approved' && !p.manual && d.metricool.configured) acts.push(btn('Reintentar programación', act(() => api('/api/admin/social/pieces/' + p.id + '/schedule', { method: 'POST', body: {} }), 'Listo.')));
+      if (can('approvals.decide') && ['approved', 'scheduled'].includes(g) && p.approval_valid) {
+        const url = el('input', { placeholder: 'https://… enlace a la publicación', 'aria-label': 'Enlace a la publicación' });
+        acts.push(el('span', { class: 'inline-form' }, url, btn('Marcar publicada', act(() => api('/api/admin/content/' + p.id + '/status', { method: 'POST', body: { status: 'published', published_url: url.value } }), 'Publicación registrada con su enlace.'))));
+      }
+      const copy = btn('Copiar texto', async () => { try { await navigator.clipboard.writeText(p.body || ''); flash('Texto copiado.', true); } catch (e) { flash('No se pudo copiar: seleccioná el texto a mano.'); } });
+      const state = g === 'approved' ? (p.manual ? 'Aprobada: se publica a mano' : p.external_error ? 'Aprobada: ' + p.external_error : d.metricool.configured ? 'Aprobada: programándose' : 'Aprobada: espera la conexión con Metricool')
+        : g === 'scheduled' ? 'Programada en Metricool (' + p.external_id + ')' : g === 'published' ? 'Publicada' : SGROUP[g];
+      return el('article', { class: 'social-card s-' + g },
+        el('header', {}, el('strong', { text: hm(p.scheduled_at) + ' · ' + p.format }), el('span', { class: 'pill s-' + g, text: state })),
+        p.assets.length ? el('div', { class: 'social-media' }, p.assets.map((a) => el('figure', {}, mediaEl(a), el('a', { class: 'small', href: a, download: fileName(a), text: 'Descargar ' + a.split('/').pop() })))) : el('p', { class: 'small muted', text: 'Solo texto.' }),
+        el('p', { class: 'pre', text: p.body || '' }), copy,
+        p.alt_text ? el('p', { class: 'small muted', text: 'Texto alternativo: ' + p.alt_text }) : '',
+        el('p', { class: 'small muted', text: 'Horario elegido por el director de marketing: ' + (p.schedule_note || '—') }),
+        p.published_url ? el('p', {}, 'Publicada: ', linkify(p.published_url)) : '',
+        acts.length ? el('div', { class: 'toolbar' }, acts) : '');
+    };
+    main.replaceChildren(nav, el('h1', { text: `Día ${d.n} · ${d.label}` }),
+      el('p', { class: 'muted' }, 'Críptico del día: «', d.clue.clue, '» · respuesta ', el('strong', { text: d.clue.answer }), ' · ', el('a', { href: 'https://playcripticos.com/es/c/' + d.clue.slug, target: '_blank', rel: 'noopener', text: 'ver en el sitio' })),
+      el('div', { class: 'toolbar' }, can('approvals.decide') && pend.length ? btn(`Aprobar todo el día (${pend.length})`, approve(pend.map((p) => ({ id: p.id, hash: p.current_hash }))), 'primary') : '',
+        btn('Descargar el día (.zip)', async (e) => { const b = e.currentTarget; b.disabled = true; b.textContent = 'Preparando…'; try { await downloadDay(d); } catch (x) { flash(x.message); } b.disabled = false; b.textContent = 'Descargar el día (.zip)'; })),
+      Object.entries(byNet).map(([net, ps]) => el('section', { class: 'panel' }, el('h3', { text: NETS[net] || net }), el('div', { class: 'social-list' }, ps.map(card)))));
   };
 
   // ── Legal ──
@@ -1703,7 +1819,7 @@
     const [name, arg] = location.hash.replace(/^#/, '').split('?')[0].split('/');
     const view = V[name || 'dashboard'] ? (name || 'dashboard') : 'dashboard';
     const PARENT = { player: 'players', game: 'games', clue: 'catalog', submission: 'submissions', source: 'sources', bankaudit: 'bank',
-      agent: 'company', task: 'tasks', approval: 'approvals', piece: 'content', legaldoc: 'legal', jurisdiction: 'legal' };
+      agent: 'company', task: 'tasks', approval: 'approvals', piece: 'content', socialday: 'social', legaldoc: 'legal', jurisdiction: 'legal' };
     const navKey = PARENT[view] || view;
     document.querySelectorAll('#admin-nav a').forEach((a) => {
       const on = a.getAttribute('href') === '#' + navKey;
