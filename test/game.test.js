@@ -289,3 +289,29 @@ test('SEO: en producción de Vercel el dominio canónico es el propio, nunca *.v
   assert.equal(loadConfig({ ...base, VERCEL_ENV: 'preview', SITE_URL: 'https://x.vercel.app' }).siteUrl, 'https://x.vercel.app');
   assert.equal(loadConfig({ ...base, SITE_URL: 'https://playcripticos.com/' }).siteUrl, 'https://playcripticos.com');
 });
+
+test('SEO: IndexNow avisa las páginas nuevas solo desde el dominio público, y la clave está publicada', async () => {
+  const { submit, KEY } = require('../src/services/indexnow');
+  const { runJob } = require('../src/services/jobs');
+  const calls = [];
+  const fetchImpl = async (url, opts) => { calls.push({ url, body: JSON.parse(opts.body) }); return { status: 202 }; };
+  assert.deepEqual(await submit(env.db, { siteUrl: 'http://localhost', fetchImpl }), { skipped: 'no_public_domain' });
+  assert.deepEqual(await submit(env.db, { siteUrl: 'https://criptico.vercel.app', fetchImpl }), { skipped: 'no_public_domain' });
+  assert.equal(calls.length, 0);
+  await env.db.run("UPDATE jobs SET next_run_at = '2000-01-01', last_run_at = NULL, lease_until = NULL WHERE name = 'indexnow'");
+  const r = await runJob(env.db, 'indexnow', { siteUrl: 'https://playcripticos.com', fetchImpl });
+  assert.equal(r.status, 'success');
+  assert.equal(calls.length, 1);
+  const b = calls[0].body;
+  assert.equal(b.host, 'playcripticos.com');
+  assert.equal(b.keyLocation, `https://playcripticos.com/${KEY}.txt`);
+  assert.ok(b.urlList.includes('https://playcripticos.com/es/mecanismos'));
+  assert.ok(b.urlList.some((u) => u.startsWith('https://playcripticos.com/es/c/')));
+  // La segunda vez solo manda lo publicado después: nada.
+  const again = await submit(env.db, { siteUrl: 'https://playcripticos.com', fetchImpl });
+  assert.deepEqual(again, { sent: 0 });
+  const key = await client(env.base).get(`/${KEY}.txt`);
+  assert.equal(key.status, 200);
+  assert.equal(key.text.trim(), KEY);
+  assert.match((await client(env.base).get('/es')).text, /"sameAs":\["https:\/\/www.instagram.com\/playcripticos\/"/);
+});

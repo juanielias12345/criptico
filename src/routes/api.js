@@ -327,7 +327,7 @@ module.exports = function api() {
     const { config, db } = req.app.locals;
     const given = (req.headers.authorization || '').replace(/^Bearer\s+/i, '');
     if (!config.cronSecret || !sameSecret(given, config.cronSecret)) throw new HttpError(401, 'unauthorized');
-    res.json({ ran: await tick(db) });
+    res.json({ ran: await tick(db, { siteUrl: config.siteUrl }) });
   });
   r.get('/cron/tick', cron);
   r.post('/cron/tick', cron);

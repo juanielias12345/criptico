@@ -15,6 +15,8 @@ const { indicators: ES_INDICATORS } = require('../lib/lang/es');
 const a = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
 
 const altFor = (route, rest = '') => Object.fromEntries(UI_LANGS.map((l) => [l, href(l, route, rest)]));
+// Perfiles oficiales de la marca (para que Google los asocie al sitio).
+const SAME_AS = ['https://www.instagram.com/playcripticos/', 'https://www.facebook.com/1372378769297971', 'https://www.youtube.com/channel/UCaaDK6fVoyY060TFhViw-8A'];
 const MECHS = ['anagram', 'hidden', 'reversal', 'container', 'deletion', 'charade', 'homophone', 'double_definition', 'initials'];
 
 function categoryName(cats, slug, lang) {
@@ -159,7 +161,7 @@ module.exports = function pages() {
         page: 'home', path: P('home'), alternates: altFor('home'), ...seo(lang, 'home'),
         jsonLd: { '@context': 'https://schema.org', '@graph': [
           { '@type': 'WebSite', name: req.app.locals.config.siteName, url: req.app.locals.config.siteUrl, inLanguage: UI_LANGS },
-          { '@type': 'Organization', name: req.app.locals.config.siteName, url: req.app.locals.config.siteUrl, logo: req.app.locals.config.siteUrl + '/icon-512.png' },
+          { '@type': 'Organization', name: req.app.locals.config.siteName, url: req.app.locals.config.siteUrl, logo: req.app.locals.config.siteUrl + '/icon-512.png', sameAs: SAME_AS },
         ] },
         body: `
 <section class="hero">

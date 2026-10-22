@@ -80,6 +80,9 @@ const HANDLERS = {
   async social_schedule(db) {
     return require('./social').scheduleApproved(db);
   },
+  async indexnow(db, ctx) {
+    return require('./indexnow').submit(db, { siteUrl: ctx.siteUrl, fetchImpl: ctx.fetchImpl });
+  },
   async alerts_scan(db) {
     return alerts.scan(db);
   },
