@@ -21,13 +21,32 @@ function plan() {
 
 const RIGHTS = 'Diseño propio según el manual de marca; tipografías Fraunces e Instrument Sans (licencia OFL); crípticos originales del catálogo de Play Crípticos.';
 
+const nets = (p) => (p && p.networks) || ['instagram', 'facebook', 'tiktok', 'youtube'];
+
+// Piezas de redes que la marca dejó de usar: se pausan (no se borran) si todavía no
+// salieron; su aprobación pendiente se retira. Lo programado o publicado no se toca.
+async function retireOffPlan(db, all) {
+  const keep = new Set(all.map((x) => x.id));
+  const rows = await db.all("SELECT id, status, approval_id FROM content_pieces WHERE campaign = ? AND status NOT IN ('paused','scheduled','published')", [CAMPAIGN]);
+  const off = rows.filter((r) => !keep.has(r.id));
+  for (const r of off) {
+    const ap = r.approval_id && await db.get("SELECT status FROM approval_items WHERE id = ? AND status = 'pending'", [r.approval_id]);
+    if (ap) await gov.withdraw(db, r.approval_id, { id: null });
+    await db.run("UPDATE content_pieces SET status = 'paused', updated_at = ? WHERE id = ?", [now(), r.id]);
+  }
+  if (off.length) await audit(db, { actorKind: 'agent', actorLabel: 'produccion-contenido', action: 'content.networks_dropped', targetKind: 'campaign', targetId: CAMPAIGN,
+    details: { paused: off.length, networks: nets(plan()) } });
+  return off.length;
+}
+
 // Carga el calendario en el panel: cada pieza queda «en edición», lista para revisar.
 // Es idempotente y no toca piezas que ya existen (ni su estado ni su aprobación).
 async function seedPlan(db) {
   const p = plan();
   if (!p) return { loaded: 0 };
   const all = p.days.flatMap((d) => d.pieces);
-  const have = (await db.get('SELECT COUNT(*) AS n FROM content_pieces WHERE campaign = ?', [CAMPAIGN])).n;
+  await retireOffPlan(db, all);
+  const have = (await db.get('SELECT COUNT(*) AS n FROM content_pieces WHERE campaign = ? AND platform IN (' + nets(p).map(() => '?').join(',') + ')', [CAMPAIGN, ...nets(p)])).n;
   if (have >= all.length) return { loaded: 0 };
   const stmts = all.map((x) => ({
     sql: `INSERT OR IGNORE INTO content_pieces(id, title, campaign, objective, audience, language, platform, format, body, hashtags, link, alt_text, assets,
@@ -62,20 +81,22 @@ const groupOf = (s) => Object.keys(STATUS_GROUPS).find((k) => STATUS_GROUPS[k].i
 
 async function calendar(db) {
   const p = plan();
-  const rows = await db.all('SELECT day, status, COUNT(*) AS n FROM content_pieces WHERE campaign = ? GROUP BY day, status', [CAMPAIGN]);
+  const N = nets(p); const inN = N.map(() => '?').join(',');
+  const rows = await db.all(`SELECT day, status, COUNT(*) AS n FROM content_pieces WHERE campaign = ? AND platform IN (${inN}) GROUP BY day, status`, [CAMPAIGN, ...N]);
   const days = (p ? p.days : []).map((d) => {
     const c = { pending: 0, approved: 0, scheduled: 0, published: 0, changes: 0, total: 0 };
     for (const r of rows.filter((x) => x.day === d.n)) { c[groupOf(r.status)] += r.n; c.total += r.n; }
     return { n: d.n, date: d.date, weekday: d.weekday, label: d.label, clue: d.clue, counts: c };
   });
-  return { campaign: CAMPAIGN, start: p && p.start, timezone: p && p.timezone, slots: p && p.slots, days, metricool: metricool.status() };
+  return { campaign: CAMPAIGN, start: p && p.start, timezone: p && p.timezone, networks: N, slots: p && p.slots, days, metricool: metricool.status() };
 }
 
 async function day(db, n) {
   const p = plan();
   const meta = p && p.days.find((d) => d.n === Number(n));
   if (!meta) throw new HttpError(404, 'not_found');
-  const rows = await db.all('SELECT * FROM content_pieces WHERE campaign = ? AND day = ? ORDER BY scheduled_at, platform', [CAMPAIGN, meta.n]);
+  const N = nets(p);
+  const rows = await db.all(`SELECT * FROM content_pieces WHERE campaign = ? AND day = ? AND platform IN (${N.map(() => '?').join(',')}) ORDER BY scheduled_at, platform`, [CAMPAIGN, meta.n, ...N]);
   return { ...meta, pieces: rows.map((r) => ({ ...r, assets: parseJson(r.assets, []), current_hash: company.pieceHash(r),
     approval_valid: !!r.approved_hash && r.approved_hash === company.pieceHash(r) })), metricool: metricool.status() };
 }
@@ -194,4 +215,4 @@ async function scheduleApproved(db, opts) {
   return res;
 }
 
-module.exports = { seedPlan, calendar, day, approveMany, requestChanges, scheduleOne, scheduleApproved, metricoolBody, metricool, CAMPAIGN };
+module.exports = { seedPlan, retireOffPlan, calendar, day, approveMany, requestChanges, scheduleOne, scheduleApproved, metricoolBody, metricool, CAMPAIGN };

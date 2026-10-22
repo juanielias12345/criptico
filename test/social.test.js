@@ -17,18 +17,17 @@ let env; let owner;
 test.before(async () => { env = await makeEnv(); owner = await staff(env, 'owner'); });
 test.after(async () => { await env.close(); });
 
-test('el plan: 60 días desde el lunes 26/10, todas las redes, horarios y textos que entran en X', () => {
+test('el plan: 60 días desde el lunes 26/10, solo Instagram, Facebook, TikTok y YouTube, con horario', () => {
   assert.equal(PLAN.days.length, 60);
   assert.equal(PLAN.days[0].date, '2026-10-26');
   assert.equal(PLAN.days[59].date, '2026-12-24');
-  for (const net of ['instagram', 'facebook', 'x', 'threads', 'tiktok', 'youtube', 'whatsapp']) assert.ok(ALL.some((p) => p.platform === net), net);
+  assert.deepEqual([...new Set(ALL.map((p) => p.platform))].sort(), ['facebook', 'instagram', 'tiktok', 'youtube']);
   for (const d of PLAN.days) {
-    assert.ok(d.pieces.length >= 12, 'día ' + d.n);
+    assert.ok(d.pieces.length >= 7, 'día ' + d.n);
     assert.ok(d.pieces.every((p) => p.date === d.date && p.schedule_note && /T\d\d:\d\d:00Z$/.test(p.scheduled_at)));
   }
   // 9 h en Argentina = 12 h UTC
   assert.equal(PLAN.days[0].pieces.find((p) => p.slot === 'instagram_clue').scheduled_at, '2026-10-26T12:00:00Z');
-  for (const p of ALL.filter((x) => x.platform === 'x')) assert.ok([...p.body].length <= 280, p.id + ' tiene ' + [...p.body].length);
   // Un críptico distinto cada día, y todos existen en el catálogo del sitio.
   const answers = PLAN.days.map((d) => d.clue.answer);
   assert.equal(new Set(answers).size, 60);
@@ -110,17 +109,15 @@ test('Metricool: arma el pedido de cada red y guarda el identificador como evide
   const story = social.metricoolBody(await get('instagram_story'), 'https://playcripticos.com');
   assert.equal(story.instagramData.type, 'STORY');
   assert.equal(story.text, '');
-  assert.equal(social.metricoolBody(await get('x_clue'), 'https://x').providers[0].network, 'twitter');
+  assert.equal(social.metricoolBody(await get('tiktok_video'), 'https://x').providers[0].network, 'tiktok');
   const yt = social.metricoolBody(await get('youtube_video'), 'https://x');
   assert.equal(yt.youtubeData.type, 'short');
   assert.equal(yt.youtubeData.madeForKids, false);
 
-  const piece = await get('facebook_clue');
+  const piece = await get('facebook_reel');
   assert.equal(piece.status, 'approved');
   // Sin credenciales: espera.
   assert.deepEqual(await social.scheduleOne(env.db, piece), { waiting: true });
-  // WhatsApp se publica a mano.
-  assert.deepEqual(await social.scheduleOne(env.db, await get('whatsapp_clue')), { manual: true });
   const old = { ...process.env };
   Object.assign(process.env, { METRICOOL_USER_TOKEN: 't', METRICOOL_USER_ID: '1', METRICOOL_BLOG_ID: '2' });
   try {
@@ -129,20 +126,33 @@ test('Metricool: arma el pedido de cada red y guarda el identificador como evide
     assert.deepEqual(ok, { scheduled: true, id: '98765' });
     assert.match(sent.url, /^https:\/\/app\.metricool\.com\/api\/v2\/scheduler\/posts\?blogId=2&userId=1$/);
     assert.equal(sent.o.headers['X-Mc-Auth'], 't');
-    const after = await get('facebook_clue');
+    const after = await get('facebook_reel');
     assert.equal(after.status, 'scheduled');
     assert.equal(after.external_id, '98765');
     // Un error de Metricool no la marca como programada.
-    const other = await get('threads_clue');
+    const other = await get('instagram_clue');
     const bad = await social.scheduleOne(env.db, other, { fetchImpl: async () => ({ ok: false, status: 403, text: async () => 'plan sin API' }) });
     assert.match(bad.error, /403/);
-    const o2 = await get('threads_clue');
+    const o2 = await get('instagram_clue');
     assert.equal(o2.status, 'approved');
     assert.match(o2.external_error, /plan sin API/);
   } finally { for (const k of ['METRICOOL_USER_TOKEN', 'METRICOOL_USER_ID', 'METRICOOL_BLOG_ID']) if (old[k] === undefined) delete process.env[k]; else process.env[k] = old[k]; }
   // Nada sin aprobar se programa.
   const pend = await env.db.get("SELECT * FROM content_pieces WHERE campaign = ? AND day = 5 LIMIT 1", [social.CAMPAIGN]);
   assert.deepEqual(await social.scheduleOne(env.db, pend), { skipped: true });
+});
+
+test('las piezas de redes que ya no se usan quedan pausadas y fuera de las carpetas', async () => {
+  await env.db.run(`INSERT INTO content_pieces(id, title, campaign, platform, format, body, assets, status, day, slot, scheduled_at)
+    VALUES ('l60-d04-x_clue', 'Día 4 · X', ?, 'x', 'post', 'texto', '[]', 'editing', 4, 'x_clue', '2026-10-30T12:00:00Z')`, [social.CAMPAIGN]);
+  await social.seedPlan(env.db);
+  assert.equal((await env.db.get("SELECT status FROM content_pieces WHERE id = 'l60-d04-x_clue'")).status, 'paused');
+  const day = (await owner.c.get('/api/admin/social/days/4')).json;
+  assert.ok(day.pieces.every((p) => ['instagram', 'facebook', 'tiktok', 'youtube'].includes(p.platform)));
+  assert.equal(day.pieces.length, PLAN.days[4].pieces.length);
+  const cal = (await owner.c.get('/api/admin/social/calendar')).json;
+  assert.equal(cal.days[4].counts.total, PLAN.days[4].pieces.length);
+  assert.ok(await env.db.get("SELECT 1 FROM audit_log WHERE action = 'content.networks_dropped'"));
 });
 
 test('los archivos de redes se sirven pero no se indexan', async () => {

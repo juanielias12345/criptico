@@ -1,17 +1,16 @@
 # Redes: calendario de lanzamiento de 60 días
 
-El calendario empieza el **lunes 26/10/2026 (día 0)** y termina el **jueves 24/12/2026 (día 59)**. Son 808 publicaciones en Instagram, Facebook, X, Threads, TikTok, YouTube Shorts y el canal de WhatsApp. Todas siguen el manual de marca ([MARCA.md](MARCA.md)).
+El calendario empieza el **lunes 26/10/2026 (día 0)** y termina el **jueves 24/12/2026 (día 59)**. Son 506 publicaciones en Instagram, Facebook, TikTok y YouTube Shorts. El 22/10/2026 Juan decidió usar solo esas cuatro redes: las piezas de X, Threads y WhatsApp que ya estaban cargadas quedaron pausadas (no se borraron) y no aparecen en las carpetas. Para sumar una red de nuevo, agregarla en `NETWORKS` de `scripts/social/plan.js` y regenerar. Todas siguen el manual de marca ([MARCA.md](MARCA.md)).
 
 ## Qué hay cada día
 
-- **Críptico del día:** imagen 1080 × 1350, publicada a la mañana en Instagram, Facebook, X, Threads y WhatsApp. Sale de 63 crípticos originales nuevos, validados por el validador y publicados en el catálogo (`seed/clues.es.json`), así que el enlace `playcripticos.com/es/c/<slug>` existe.
+- **Críptico del día:** imagen 1080 × 1350, publicada a la mañana en Instagram y Facebook. Sale de 63 crípticos originales nuevos, validados por el validador y publicados en el catálogo (`seed/clues.es.json`), así que el enlace `playcripticos.com/es/c/<slug>` existe.
 - **Solución:**
   - video vertical de 16 s: pista, cuenta regresiva, respuesta y explicación. Se publica en TikTok, YouTube Shorts y como reel de Instagram y Facebook;
-  - historia de Instagram;
-  - posteo en X y en Threads.
+  - historia de Instagram.
 - **Lunes, miércoles y viernes:** carrusel. Hay 4 ya diseñados, 9 lecciones («Cómo funciona: anagrama»…) y 13 «Así se resuelve».
 - **Sábado y domingo:** «Dos para el finde» y sus soluciones.
-- **Día 0:** anuncio de lanzamiento en Instagram, Facebook, X y Threads.
+- **Día 0:** anuncio de lanzamiento en Instagram y Facebook.
 
 ## Horarios del director de marketing
 
@@ -19,18 +18,14 @@ Hora de Argentina (UTC−3). Se pueden ajustar con los datos reales de Metricool
 
 | Red | Pieza | Hora | Motivo |
 |---|---|---|---|
-| WhatsApp | Críptico | 08:30 | Antes del trabajo, con el primer café |
 | Instagram | Críptico | 09:00 | Hábito de la mañana, como el Wordle |
-| X | Críptico | 09:00 | Pico de lectura de X a la mañana |
-| Threads | Críptico | 09:15 | Después de Instagram, para no competir |
 | Facebook | Críptico | 09:30 | El público de Facebook entra más tarde |
 | Instagram y Facebook | Lanzamiento (día 0) | 12:00 / 12:15 | Hora del almuerzo |
 | Instagram y Facebook | Carrusel (lun., mié., vie.) | 13:00 / 13:30 | Se guardan en el almuerzo |
 | Instagram y Facebook | Finde (sáb. y dom.) | 12:00 / 12:30 | El fin de semana se juega más tarde |
 | TikTok, Shorts y reel de Instagram | Video | 21:00 | Horario central de video |
 | Instagram | Historia con la solución | 21:05 | Justo después del reel |
-| X | Solución | 21:00 | Misma hora que el resto (posteo propio) |
-| Threads y reel de Facebook | Solución | 21:15 | Después de X e Instagram |
+| Facebook | Reel con la solución | 21:15 | Después de Instagram |
 
 ## Panel: «Redes: 60 días»
 
@@ -46,7 +41,7 @@ Hora de Argentina (UTC−3). Se pueden ajustar con los datos reales de Metricool
 
 - Al aprobarse una pieza, el servidor la programa en Metricool por la API oficial (`POST https://app.metricool.com/api/v2/scheduler/posts`), en la red y el horario de la pieza. La tarea `social_schedule` reintenta lo que haya quedado pendiente.
 - «Programada» exige el identificador que devuelve Metricool, que queda guardado como evidencia. Si Metricool responde con error, la pieza sigue «aprobada» y el error se ve en la carpeta.
-- El canal de WhatsApp no tiene API de programación: esas piezas se publican a mano. Después se marca la pieza como publicada pegando el enlace.
+- Una pieza marcada «manual» no se envía a Metricool: se publica a mano y después se marca como publicada pegando el enlace. Hoy no hay ninguna.
 
 **Para conectarlo:**
 

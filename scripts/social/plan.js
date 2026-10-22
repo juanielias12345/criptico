@@ -13,6 +13,9 @@ const SITE = 'https://playcripticos.com';
 const TZ = 'America/Argentina/Buenos_Aires';   // UTC−3 todo el año
 
 // Horarios del director de marketing (hora de Argentina) y su motivo.
+// Redes que usa la marca (22/10/2026, decisión de Juan). X, Threads y WhatsApp quedan fuera.
+const NETWORKS = ['instagram', 'facebook', 'tiktok', 'youtube'];
+
 const SLOTS = {
   whatsapp_clue: { time: '08:30', platform: 'whatsapp', why: 'Antes del trabajo: el canal llega como notificación con el primer café.' },
   instagram_clue: { time: '09:00', platform: 'instagram', why: 'Hábito de la mañana, como el Wordle: el feed se revisa en el viaje.' },
@@ -178,6 +181,7 @@ function buildPlan(clues) {
     const pieces = [];
     const add = (slotKey, format, title, body, assets, extra = {}) => {
       const s = SLOTS[slotKey];
+      if (!NETWORKS.includes(s.platform)) return;
       pieces.push({ id: `l60-d${String(n).padStart(2, '0')}-${slotKey}`, day: n, date, slot: slotKey, platform: s.platform, format, title, body,
         assets, time: s.time, scheduled_at: utc(date, s.time), schedule_note: s.why, link: extra.link || null, alt_text: extra.alt || null,
         hashtags: extra.hashtags || null, manual: s.platform === 'whatsapp', ...extra.more });
@@ -250,7 +254,7 @@ function buildPlan(clues) {
     add('facebook_reel', 'reel', `Día ${n} · Facebook · reel`, `${cap.video_title}\n\n${cap.video_desc}`, [`${dir}/video.mp4`], { alt: valt });
     days.push({ n, date, weekday: WD[n % 7], label: human(d, n), clue: { slug: c.slug, clue: c.clue_text, answer: c.answer, mechanism: c.mechanism }, pieces });
   }
-  return { campaign: CAMPAIGN, start: START, timezone: TZ, site: SITE, slots: SLOTS, days, renders, spare: A.spare.map((c) => c.slug) };
+  return { campaign: CAMPAIGN, start: START, timezone: TZ, site: SITE, networks: NETWORKS, slots: Object.fromEntries(Object.entries(SLOTS).filter(([, v]) => NETWORKS.includes(v.platform))), days, renders, spare: A.spare.map((c) => c.slug) };
 }
 
-module.exports = { buildPlan, CAMPAIGN, START, DAYS, SLOTS, MECH, steps };
+module.exports = { buildPlan, CAMPAIGN, START, DAYS, NETWORKS, SLOTS, MECH, steps };
