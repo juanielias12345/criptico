@@ -89,6 +89,15 @@ const skeleton = '<div class="sheet"><div class="skeleton" aria-hidden="true"><i
 module.exports = function pages() {
   const r = express.Router();
 
+  // Enlaces cortos para las bios de cada red: llevan al sitio con la etiqueta de origen.
+  const SHORT = { ig: 'instagram', fb: 'facebook', tt: 'tiktok', yt: 'youtube' };
+  for (const [short, source] of Object.entries(SHORT)) {
+    r.get('/' + short, (req, res) => {
+      res.set('X-Robots-Tag', 'noindex');
+      res.redirect(302, `/es?utm_source=${source}&utm_medium=social&utm_campaign=bio`);
+    });
+  }
+
   r.get('/', (req, res) => {
     // Con un solo idioma de interfaz la portada es siempre la misma: redirección permanente.
     if (UI_LANGS.length === 1) return res.redirect(301, `/${UI_LANGS[0]}`);
