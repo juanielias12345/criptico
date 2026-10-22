@@ -55,17 +55,26 @@
     const u = el('input', { id: 'a-user', autocomplete: 'username', required: true });
     const p = el('input', { id: 'a-pass', type: 'password', autocomplete: 'current-password', required: true });
     const err = el('p', { class: 'field-error', role: 'alert', text: msg || '' });
-    const f = el('form', { class: 'form login-box', id: 'admin-login' }, el('h1', { text: 'Panel privado' }), el('label', {}, 'Usuario', u), el('label', {}, 'Contraseña', p), err,
+    // El código de verificación en dos pasos aparece solo si la cuenta lo tiene activo.
+    const c = el('input', { id: 'a-code', inputmode: 'numeric', autocomplete: 'one-time-code', placeholder: '123456 o código de recuperación' });
+    const cl = el('label', { hidden: true }, 'Código de verificación', c);
+    const f = el('form', { class: 'form login-box', id: 'admin-login' }, el('h1', { text: 'Panel privado' }), el('label', {}, 'Usuario', u), el('label', {}, 'Contraseña', p), cl, err,
       el('button', { class: 'btn primary', type: 'submit', text: 'Entrar' }));
     f.addEventListener('submit', async (e) => {
       e.preventDefault();
-      try { const r = await api('/api/auth/login', { method: 'POST', body: { username: u.value, password: p.value, admin: true } }); csrf = r.csrf; await boot(); } catch (x) { err.textContent = x.message; }
+      const body = { username: u.value, password: p.value, admin: true }; if (!cl.hidden) body.code = c.value.trim();
+      try { const r = await api('/api/auth/login', { method: 'POST', body }); csrf = r.csrf; await boot(); } catch (x) {
+        if (x.data && x.data.error === 'mfa_required') { cl.hidden = false; err.textContent = 'Escribí el código de tu aplicación de autenticación.'; c.focus(); return; }
+        err.textContent = x.message;
+      }
     });
     main.replaceChildren(f); u.focus();
   }
 
   async function boot() {
     const s = await api('/api/auth/me'); csrf = s.csrf;
+    // Enlaces de invitación y de recuperación: se usan sin haber entrado.
+    if (/^#(invite|reset)\?/.test(location.hash)) return publicTokenView(location.hash.startsWith('#invite') ? 'invite' : 'reset');
     if (!s.user || s.user.role === 'player') return loginView();
     const m = await api('/api/admin/me'); me = m.user; me.role_label = m.role_label; perms = m.permissions;
     try { meta = await api('/api/admin/panel/meta'); } catch (e) { meta = null; }
@@ -1133,7 +1142,7 @@
       else if (typeof v === 'number') { const c = el('input', { type: 'number', step: 'any', value: v }); input = c; read = () => Number(c.value); }
       else { const c = el('textarea', { class: 'code' }); c.value = JSON.stringify(v, null, 2); input = c; read = () => JSON.parse(c.value); }
       return el('tr', {}, el('td', {}, el('strong', { text: k }), el('div', { class: 'small muted', text: SETTING_HELP[k] || '' })), el('td', {}, input),
-        el('td', {}, w ? btn('Guardar', act(() => api('/api/admin/settings/' + encodeURIComponent(k), { method: 'PUT', body: { value: read() } }), 'Guardado.')) : ''));
+        el('td', {}, w ? btn('Guardar', act(async () => viaApproval(await api('/api/admin/settings/' + encodeURIComponent(k), { method: 'PUT', body: { value: read() } }), 'Guardado.'))) : ''));
     });
     const slug = el('input', { placeholder: 'slug' }); const es = el('input', { placeholder: 'Nombre (es)' }); const en = el('input', { placeholder: 'Name (en)' });
     main.replaceChildren(el('h1', { text: 'Reglas y funciones' }), table(['Opción', 'Valor', ''], rows),
@@ -1142,20 +1151,49 @@
       w ? el('div', { class: 'toolbar' }, slug, es, en, btn('Agregar categoría', act(() => api('/api/admin/categories', { method: 'POST', body: { slug: slug.value, name_es: es.value, name_en: en.value } }), 'Categoría guardada.'))) : '');
   };
 
+  // Respuesta 202: el cambio quedó en la bandeja de aprobaciones de los CEO.
+  const viaApproval = (r, okMsg) => (r && r.approval_required
+    ? { flash: 'Este cambio necesita la aprobación de los dos CEO: quedó en «Aprobaciones».', ok: true } : { flash: okMsg, ok: true });
+
   V.users = async () => {
-    const d = await api('/api/admin/users');
+    const [d, tk] = await Promise.all([api('/api/admin/users'), api('/api/admin/team/tokens')]);
     const u = el('input', { placeholder: 'usuario' }); const p = el('input', { type: 'password', placeholder: 'contraseña (10+)', autocomplete: 'new-password' });
-    const ROLES = (meta && meta.roles) || { moderator: 'Moderador', analyst: 'Analista de estadísticas', editor: 'Administrador de contenido', owner: 'Superadministrador' };
-    const r = el('select', { 'aria-label': 'Rol' }, ['moderator', 'analyst', 'editor', 'owner'].map((x) => el('option', { value: x, text: ROLES[x] || x })));
+    const ROLES = (meta && meta.roles) || { moderator: 'Moderador', analyst: 'Analista de estadísticas', editor: 'Administrador de contenido', owner: 'Superadministrador (CEO)' };
+    const r = el('select', { 'aria-label': 'Rol' }, ['moderator', 'analyst', 'editor'].map((x) => el('option', { value: x, text: ROLES[x] || x })));
+    const ir = el('select', { 'aria-label': 'Rol de la invitación', id: 'inv-role' }, ['owner', 'editor', 'analyst', 'moderator'].map((x) => el('option', { value: x, text: ROLES[x] || x })));
+    const it = el('input', { id: 'inv-title', placeholder: 'Cargo (p. ej. CEO y Súper Administradora)' }); const iname = el('input', { id: 'inv-name', placeholder: 'Nombre visible' });
+    const invOut = el('div', { id: 'invite-result' });
+    const showLink = (out, path, what) => out.replaceChildren(el('div', { class: 'flash ok' }, el('strong', { text: what + ' ' }),
+      'Se muestra una sola vez. Mandala por un canal privado (no por un grupo ni un correo compartido). Vence el ' + fmt(path.expires_at) + '.'), copyBox(location.origin + path.path));
+    const rowOut = el('div');
     main.replaceChildren(el('h1', { text: 'Equipo' }), el('p', { class: 'muted', text: d.players + ' jugadores con cuenta.' }),
-      el('div', { class: 'panel' }, el('h3', { text: 'Roles' }), el('ul', {}, el('li', { text: (ROLES.owner || 'owner') + ': todo, incluida la configuración, el equipo, los datos personales y la auditoría.' }),
+      el('div', { class: 'panel' }, el('h3', { text: 'Roles' }), el('ul', {}, el('li', { text: (ROLES.owner || 'owner') + ': todo, incluida la configuración, el equipo, los datos personales, la auditoría y las aprobaciones. Los CEO tienen exactamente los mismos permisos; los cambios sobre un CEO y las reglas de seguridad necesitan la aprobación de los dos.' }),
         el('li', { text: (ROLES.editor || 'editor') + ': catálogo, fuentes, importaciones, estadísticas y alertas (sin datos personales).' }),
         el('li', { text: (ROLES.moderator || 'moderator') + ': propuestas de usuarios y reportes.' }),
         el('li', { text: (ROLES.analyst || 'analyst') + ': estadísticas, usuarios y partidas en modo lectura, sin correos ni acciones.' })),
         el('p', { class: 'small muted', text: 'Los permisos se verifican en el servidor en cada operación.' })),
-      table(['Usuario', 'Rol', 'Estado', 'Último acceso', ''], d.items.map((x) => el('tr', {}, el('td', { text: x.username }), el('td', { text: ROLES[x.role] || x.role }), el('td', { text: x.disabled ? 'desactivado' : 'activo' }), el('td', { text: fmt(x.last_login_at) }),
-        el('td', {}, x.id !== me.id ? btn(x.disabled ? 'Reactivar' : 'Desactivar', act(() => api('/api/admin/users/' + x.id, { method: 'PATCH', body: { disabled: !x.disabled } }))) : '(vos)')))),
-      el('h2', { text: 'Agregar integrante' }), el('div', { class: 'toolbar' }, u, p, r, btn('Crear', act(() => api('/api/admin/users', { method: 'POST', body: { username: u.value, password: p.value, role: r.value } }), 'Cuenta creada.'), 'primary')));
+      table(['Usuario', 'Nombre y cargo', 'Rol', 'MFA', 'Estado', 'Último acceso', ''], d.items.map((x) => el('tr', {}, el('td', { text: x.username }),
+        el('td', { text: [x.display_name, x.title].filter(Boolean).join(' · ') || '—' }), el('td', { text: ROLES[x.role] || x.role }),
+        el('td', {}, x.mfa ? tag('Activa', 'verified') : tag('Sin activar', 'failed')), el('td', { text: x.disabled ? 'desactivado' : 'activo' }), el('td', { text: fmt(x.last_login_at) }),
+        el('td', {}, x.id === me.id ? '(vos)' : el('div', { class: 'toolbar' },
+          btn(x.disabled ? 'Reactivar' : 'Desactivar', act(async () => viaApproval(await api('/api/admin/users/' + x.id, { method: 'PATCH', body: { disabled: !x.disabled } }), 'Listo.')), 'small'),
+          btn('Enlace de recuperación', async () => { try { const o = await api('/api/admin/team/users/' + x.id + '/reset', { method: 'POST', body: {} }); showLink(rowOut, o, 'Enlace de recuperación para ' + x.username + '.'); } catch (e) { flash(e.message, false); } }, 'small'),
+          btn('Cerrar sesiones', act(() => api('/api/admin/team/users/' + x.id + '/sessions/revoke', { method: 'POST', body: {} }), 'Sesiones cerradas.'), 'small')))))),
+      rowOut,
+      el('h2', { text: 'Invitar a alguien' }),
+      el('p', { class: 'small muted', text: 'La persona invitada elige su usuario y su contraseña; nadie más la conoce. Es la única forma de sumar a un CEO.' }),
+      el('div', { class: 'toolbar' }, ir, iname, it, btn('Generar invitación', async () => {
+        try { const o = await api('/api/admin/team/invites', { method: 'POST', body: { role: ir.value, title: it.value, display_name: iname.value } }); showLink(invOut, o, 'Invitación creada.'); } catch (e) { flash(e.message, false); }
+      }, 'primary')), invOut,
+      el('h2', { text: 'Invitaciones y enlaces de recuperación' }),
+      tk.items.length ? table(['Tipo', 'Para', 'Creado por', 'Vence', 'Estado', ''], tk.items.map((t) => {
+        const st = t.revoked_at ? 'Revocado' : t.used_at ? 'Usado por ' + (t.used_by || '—') : Date.parse(t.expires_at) < Date.now() ? 'Vencido' : 'Vigente';
+        return el('tr', {}, el('td', { text: t.kind === 'invite' ? 'Invitación' : 'Recuperación' }), el('td', { text: t.kind === 'invite' ? [t.display_name, ROLES[t.role] || t.role].filter(Boolean).join(' · ') : (t.for_user || '—') }),
+          el('td', { text: t.created_by }), el('td', { text: fmt(t.expires_at) }), el('td', { text: st }),
+          el('td', {}, st === 'Vigente' ? btn('Revocar', act(() => api('/api/admin/team/tokens/' + t.id + '/revoke', { method: 'POST', body: {} }), 'Enlace revocado.'), 'small') : ''));
+      })) : el('p', { class: 'muted', text: 'Todavía no se generó ningún enlace.' }),
+      el('h2', { text: 'Crear cuenta directamente' }), el('p', { class: 'small muted', text: 'Solo para moderación, análisis o contenido. Vos elegís la contraseña inicial.' }),
+      el('div', { class: 'toolbar' }, u, p, r, btn('Crear', act(() => api('/api/admin/users', { method: 'POST', body: { username: u.value, password: p.value, role: r.value } }), 'Cuenta creada.'))));
   };
 
   V.jobs = async () => {
@@ -1172,11 +1210,498 @@
     main.replaceChildren(el('h1', { text: 'Registro de auditoría' }), table(['Fecha', 'Quién', 'Acción', 'Objeto', 'Detalles'], d.items.map((x) => el('tr', {}, el('td', { text: fmt(x.created_at) }), el('td', { text: x.username || '—' }), el('td', { text: x.action }), el('td', { text: (x.target_kind || '') + ' ' + (x.target_id || '').slice(0, 12) }), el('td', {}, el('code', { class: 'small', text: (x.details || '').slice(0, 160) }))))));
   };
 
+  // ══════════════ Empresa: centro de operaciones, aprobaciones, seguridad ══════════════
+  const AREA = { direction: 'Dirección', tech: 'Tecnología', marketing: 'Marketing', legal: 'Legal', community: 'Comunidad', apps: 'Aplicaciones',
+    content: 'Contenido', finance: 'Finanzas', security: 'Seguridad', integration: 'Integraciones' };
+  const CAT = { critical: 'Crítica', important: 'Importante', ux: 'Experiencia', growth: 'Crecimiento', tech_debt: 'Deuda técnica', legal: 'Legal',
+    integration: 'Integración', human_decision: 'Decisión de los CEO' };
+  const TSTATUS = { pending: 'Pendiente', in_progress: 'En progreso', blocked: 'Bloqueada', in_review: 'En revisión', approved: 'Aprobada', done: 'Completada', cancelled: 'Cancelada' };
+  const ASTATUS = { pending: 'Pendiente', approved: 'Aprobado', rejected: 'Rechazado', changes_requested: 'Pide cambios', conflict: 'En conflicto · en pausa', withdrawn: 'Retirado', executed: 'Ejecutado' };
+  const PSTATUS = { idea: 'Idea', research: 'En investigación', production: 'En producción', editing: 'En edición', rights_review: 'Revisión de derechos',
+    pending_approval: 'Pendiente de aprobación', approved: 'Aprobada', scheduled: 'Programada', published: 'Publicada', paused: 'Pausada', rejected: 'Rechazada',
+    changes_requested: 'Requiere cambios', publish_error: 'Error de publicación' };
+  const ISTATUS = { verified: 'Verificada', configured_unverified: 'Configurada sin verificar', missing: 'Falta', not_needed: 'No hace falta' };
+  const JSTATUS = { not_researched: 'Sin investigar', researching: 'Investigando', draft_findings: 'Hallazgos en borrador', needs_lawyer: 'Requiere abogado', compliant: 'Cumple (con fuente)', gaps: 'Con brechas' };
+  const LSTATUS = { draft: 'Borrador', in_review: 'En revisión', lawyer_review: 'Revisión de abogado', approved: 'Aprobado', published: 'Publicado', superseded: 'Reemplazado' };
+  const RSEV = { critical: 'Crítico', high: 'Alto', medium: 'Medio', low: 'Bajo' };
+  const tag = (txt, cls) => el('span', { class: 'pill ' + (cls || ''), text: txt });
+  const sevTag = (s) => tag(RSEV[s] || s, s === 'critical' || s === 'high' ? 'failed' : s === 'medium' ? 'pending' : '');
+  const statusTag = (map, s) => tag(map[s] || s, ['done', 'approved', 'verified', 'executed', 'published', 'compliant'].includes(s) ? 'verified'
+    : ['blocked', 'rejected', 'conflict', 'missing', 'publish_error', 'gaps'].includes(s) ? 'failed' : 'pending');
+  const field = (label, input) => el('label', {}, label, input);
+  const copyBox = (text) => {
+    const i = el('input', { value: text, readonly: true, class: 'copy-input', 'aria-label': 'Enlace para copiar' });
+    return el('div', { class: 'toolbar' }, i, btn('Copiar', async () => { try { await navigator.clipboard.writeText(text); flash('Copiado.', true); } catch (e) { i.select(); } }));
+  };
+  const linkify = (s) => (/^https:\/\/\S+$/.test(String(s || '')) ? el('a', { href: s, target: '_blank', rel: 'noopener', text: s }) : (s || '—'));
+
+  // ── Centro de operaciones ──
+  V.company = async () => {
+    const tab = qs().get('tab') || 'direction';
+    const d = await api('/api/admin/company/overview');
+    const TABS = [['direction', 'Dirección'], ['agents', 'Agentes'], ['tech', 'Tecnología'], ['marketing', 'Marketing'], ['legal', 'Legal'],
+      ['community', 'Comunidad'], ['apps', 'Aplicaciones'], ['integrations', 'Integraciones'], ['risks', 'Riesgos y costos'], ['audit', 'Auditoría']];
+    const tabs = el('div', { class: 'tabs', role: 'tablist' }, TABS.map(([k, t]) => el('a', { href: '#company?tab=' + k, class: k === tab ? 'active' : '', role: 'tab', 'aria-selected': k === tab ? 'true' : 'false', text: t })));
+    const sum = (rows, f) => rows.filter(f).reduce((s, r) => s + r.n, 0);
+    const body = [];
+    if (tab === 'direction') {
+      const D = d.direction;
+      const open = sum(D.tasks, (r) => !['done', 'cancelled'].includes(r.status));
+      body.push(el('div', { class: 'cards' },
+        kpi('Tareas abiertas', open, { href: '#tasks?status=open' }), kpi('Bloqueadas', D.blocked.length, { warn: true, href: '#tasks?status=blocked' }),
+        kpi('Atrasadas', D.overdue.length, { warn: true }), kpi('Aprobaciones pendientes', sum(D.approvals, (r) => ['pending', 'changes_requested'].includes(r.status)), { href: '#approvals' }),
+        kpi('Conflictos entre CEO', D.conflicts.length, { warn: true, href: '#approvals' }), kpi('Riesgos altos o críticos', D.risks.length, { warn: true, href: '#company?tab=risks' })));
+      body.push(el('div', { class: 'panel' }, el('h3', { text: 'Dirección ejecutiva' }),
+        d.ceos.length ? table(['CEO', 'Cargo', 'MFA', 'Último acceso'], d.ceos.map((c) => el('tr', {}, el('td', { text: c.display_name || c.username }), el('td', { text: c.title || 'Superadministrador' }),
+          el('td', {}, c.mfa ? tag('Activo', 'verified') : tag('Sin MFA', 'failed')), el('td', { text: fmt(c.last_login_at) })))) : el('p', { class: 'muted', text: 'No hay CEO registrados.' }),
+        d.ceos.length < 2 ? el('p', { class: 'small', text: 'Hay ' + d.ceos.length + ' CEO con cuenta. Las decisiones que exigen a los dos quedan pendientes hasta que exista la segunda cuenta (invitación en «Equipo»).' }) : ''));
+      if (D.conflicts.length) body.push(el('div', { class: 'panel' }, el('h3', { text: 'Instrucciones opuestas: en pausa' }), el('ul', {}, D.conflicts.map((c) => el('li', {}, c.description, ' ', el('a', { href: '#approval/' + c.subject_id, text: 'Resolver' }))))));
+      body.push(el('div', { class: 'cols' },
+        el('div', { class: 'panel' }, el('h3', { text: 'Decisiones pendientes de los CEO' }), D.decisions.length ? el('ul', {}, D.decisions.map((t) => el('li', {}, el('a', { href: '#task/' + t.id, text: t.id + ' · ' + t.title }), ' ', statusTag(TSTATUS, t.status)))) : el('p', { class: 'muted', text: 'Ninguna.' })),
+        el('div', { class: 'panel' }, el('h3', { text: 'Bloqueos' }), D.blocked.length ? el('ul', {}, D.blocked.map((t) => el('li', {}, el('a', { href: '#task/' + t.id, text: t.id + ' · ' + t.title }), el('br'), el('small', { class: 'muted', text: t.blocked_reason || '' })))) : el('p', { class: 'muted', text: 'Ninguno.' }))));
+      body.push(el('div', { class: 'panel' }, el('h3', { text: 'Costos registrados' }), D.costs.length
+        ? table(['Tipo', 'Área', 'Moneda', 'Total', 'Registros'], D.costs.map((c) => el('tr', {}, el('td', { text: c.kind === 'actual' ? 'Real (con comprobante)' : c.kind === 'estimate' ? 'Estimado' : 'Presupuesto' }), el('td', { text: AREA[c.area] || c.area }), el('td', { text: c.currency }), el('td', { text: nf(c.total, 2) }), el('td', { text: c.n }))))
+        : el('p', { class: 'muted', text: 'Todavía no hay costos cargados. Los reales necesitan comprobante; los estimados se muestran aparte.' }),
+        el('a', { class: 'small', href: '#company?tab=risks', text: 'Cargar costos' })));
+    }
+    if (tab === 'agents') {
+      body.push(el('p', { class: 'muted', text: 'Roles con responsabilidades, herramientas y límites. El estado dice cómo se ejecuta cada uno de verdad: «Sin proceso activo» significa que hoy no hay ningún proceso trabajando en ese rol.' }));
+      const groups = [...new Set(d.agents.map((x) => x.department))];
+      for (const g of groups) {
+        body.push(el('h2', { text: g }), table(['#', 'Agente', 'Estado real', 'Última ejecución', 'Tareas', 'Autonomía', ''], d.agents.filter((x) => x.department === g).map((x) => el('tr', {},
+          el('td', { text: x.number }), el('td', {}, el('strong', { text: x.name }), el('br'), el('small', { class: 'muted', text: x.mission })),
+          el('td', { text: x.state }), el('td', { text: x.last_run_at ? fmt(x.last_run_at) + (x.last_result ? ' · ' + (LABELS[x.last_result] || x.last_result) : '') : '—' }),
+          el('td', { text: x.open_tasks + (x.blocked_tasks ? ' (' + x.blocked_tasks + ' bloq.)' : '') }), el('td', { text: 'Nivel ' + x.autonomy_max }),
+          el('td', {}, el('a', { href: '#agent/' + x.id, text: 'Ficha' }))))));
+      }
+    }
+    if (tab === 'tech') {
+      const T = d.tech;
+      body.push(el('div', { class: 'cards' }, kpi('Errores 24 h', T.errors24, { warn: true, href: '#jobs' }), kpi('Alertas abiertas', T.openAlerts, { href: '#alerts' }),
+        kpi('Alertas de seguridad', T.securityAlerts.length, { warn: true, href: '#alerts' }), kpi('Tareas abiertas', T.tasks.length + T.security_tasks.length, { href: '#tasks?area=tech' })));
+      body.push(el('div', { class: 'panel' }, el('h3', { text: 'Versión en producción' }),
+        el('p', {}, d.version.commit ? ['Commit ', el('code', { text: d.version.commit.slice(0, 7) }), ' · ', d.version.message || ''] : 'Sin dato de versión (solo se informa en Vercel).'),
+        el('p', { class: 'small muted', text: 'Las pruebas corren en GitHub Actions («Pruebas») en cada cambio; el resultado se ve en GitHub. Banco: ' + nn(T.bank.published) + ' crípticos publicados de ' + nn(T.bank.target) + ' de meta.' })));
+      if (T.securityAlerts.length) body.push(el('h2', { text: 'Alertas de seguridad' }), table(['Fecha', 'Alerta'], T.securityAlerts.map((x) => el('tr', {}, el('td', { text: fmt(x.last_seen_at) }), el('td', { text: x.title })))));
+      body.push(el('h2', { text: 'Mejoras y riesgos técnicos' }), taskTable([...T.security_tasks, ...T.tasks]));
+      if (T.jobsFailed.length) body.push(el('h2', { text: 'Tareas programadas con fallos' }), table(['Tarea', 'Fecha', 'Salida'], T.jobsFailed.map((x) => el('tr', {}, el('td', { text: x.job_name }), el('td', { text: fmt(x.started_at) }), el('td', {}, el('code', { class: 'small', text: (x.output || '').slice(0, 160) }))))));
+      body.push(el('h2', { text: 'Últimos errores' }), T.recentErrors.length ? table(['Fecha', 'Ámbito', 'Mensaje'], T.recentErrors.map((x) => el('tr', {}, el('td', { text: fmt(x.created_at) }), el('td', { text: x.scope }), el('td', { text: x.message })))) : el('p', { class: 'muted', text: 'Sin errores registrados.' }));
+    }
+    if (tab === 'marketing') {
+      const M = d.marketing;
+      body.push(el('div', { class: 'cards' }, Object.keys(PSTATUS).filter((k) => ['idea', 'production', 'pending_approval', 'approved', 'scheduled', 'published'].includes(k)).map((k) =>
+        kpi(PSTATUS[k], sum(M.pieces, (r) => r.status === k), { href: '#content?status=' + k }))));
+      body.push(el('p', { class: 'small muted', text: 'Ninguna pieza se publica sin la aprobación de un CEO sobre la versión exacta. Sin redes conectadas, la publicación la hace una persona y deja el enlace como evidencia.' }));
+      body.push(el('div', { class: 'cols' },
+        el('div', { class: 'panel' }, el('h3', { text: 'Calendario' }), M.calendar.length ? el('ul', {}, M.calendar.map((p) => el('li', {}, fmt(p.scheduled_at) + ' · ', el('a', { href: '#piece/' + p.id, text: p.title }), ' · ' + p.platform + ' ', statusTag(PSTATUS, p.status)))) : el('p', { class: 'muted', text: 'Sin piezas con fecha.' })),
+        el('div', { class: 'panel' }, el('h3', { text: 'Publicaciones verificadas' }), M.published.length ? el('ul', {}, M.published.map((p) => el('li', {}, p.title + ' · ', linkify(p.published_url)))) : el('p', { class: 'muted', text: 'Ninguna todavía.' }))));
+      body.push(el('h2', { text: 'Redes' }), integrationsTable(M.channels));
+      body.push(el('p', {}, el('a', { class: 'btn primary', href: '#content', text: 'Ir a contenido' })));
+    }
+    if (tab === 'legal') {
+      const G = d.legal;
+      body.push(el('p', { class: 'muted', text: 'Investigación y borradores preparados por agentes: no son asesoramiento jurídico. Ningún texto nuevo se publica sin aprobación y, cuando el riesgo lo exige, revisión profesional.' }));
+      body.push(el('div', { class: 'cards' }, kpi('Documentos', G.docs.length), kpi('Con versión publicada', G.docs.filter((x) => x.versions.some((v) => v.status === 'published')).length),
+        kpi('Jurisdicciones verificadas', G.jurisdictions.filter((j) => j.verified_at).length), kpi('Requieren abogado', G.jurisdictions.filter((j) => j.needs_lawyer).length + G.risks.filter((r) => r.needs_lawyer).length, { warn: true }),
+        kpi('Aprobaciones legales abiertas', G.approvals.length, { href: '#approvals?area=legal' })));
+      body.push(el('p', {}, el('a', { class: 'btn primary', href: '#legal', text: 'Documentos y matriz por país' })));
+      body.push(el('h2', { text: 'Riesgos legales' }), riskTable(G.risks));
+    }
+    if (tab === 'community') {
+      const C = d.community;
+      body.push(el('div', { class: 'cards' }, kpi('Propuestas por moderar', C.submissions_pending, { href: '#submissions' }), kpi('Errores informados abiertos', C.reports_open, { href: '#reports' }),
+        kpi('Solicitudes de datos abiertas', C.data_requests_open, { href: '#privacy' })));
+      body.push(el('p', { class: 'muted', text: 'Comentarios y mensajes de redes: ninguna red está conectada, así que no hay bandeja de mensajes. Las respuestas, cuando existan, serán borradores para revisión humana salvo política aprobada por los CEO.' }));
+      body.push(integrationsTable(C.channels));
+    }
+    if (tab === 'apps') {
+      const A = d.apps;
+      body.push(el('div', { class: 'panel' }, el('h3', { text: 'Estado real' }), el('p', { text: A.note })));
+      body.push(el('h2', { text: 'Tiendas' }), integrationsTable(A.stores));
+      body.push(el('h2', { text: 'Tareas' }), taskTable(A.tasks));
+    }
+    if (tab === 'integrations') {
+      body.push(el('p', { class: 'muted', text: 'Una integración figura «verificada» solo con la evidencia de cómo se comprobó.' }), integrationsTable(d.integrations, true));
+    }
+    if (tab === 'risks') {
+      body.push(el('h2', { text: 'Riesgos' }), riskTable(d.risks));
+      if (can('company.write')) {
+        const f = { area: el('select', {}, Object.entries(AREA).map(([k, v]) => el('option', { value: k, text: v }))), vendor: el('input', { placeholder: 'Proveedor' }),
+          description: el('input', { placeholder: 'Concepto' }), kind: el('select', {}, [['estimate', 'Estimado'], ['budget', 'Presupuesto'], ['actual', 'Real (con comprobante)']].map(([k, v]) => el('option', { value: k, text: v }))),
+          amount: el('input', { type: 'number', min: '0', step: '0.01', placeholder: 'Monto' }), currency: el('input', { value: 'USD', size: 4 }), period: el('input', { placeholder: 'Período (2026-11)' }),
+          evidence: el('input', { placeholder: 'Comprobante o fuente del estimado' }) };
+        body.push(el('h2', { text: 'Cargar un costo' }), el('div', { class: 'toolbar' }, Object.values(f), btn('Guardar', act(() => api('/api/admin/company/costs', { method: 'POST',
+          body: { area: f.area.value, vendor: f.vendor.value, description: f.description.value, kind: f.kind.value, amount: Number(f.amount.value), currency: f.currency.value, period: f.period.value, evidence: f.evidence.value } }), 'Costo registrado.'), 'primary')));
+      }
+    }
+    if (tab === 'audit') {
+      body.push(el('p', { class: 'muted', text: 'Acciones relevantes: aprobaciones, permisos, seguridad, contenido, legal, costos y ejecuciones de agentes. El registro no se puede borrar ni modificar.' }),
+        table(['Fecha', 'Quién', 'Acción', 'Objeto', 'Resultado'], d.audit.map((x) => el('tr', {}, el('td', { text: fmt(x.created_at) }),
+          el('td', { text: x.username || (x.actor_kind === 'agent' ? 'Agente ' + (x.actor_label || '') : 'Sistema') }), el('td', { text: x.action }),
+          el('td', { text: (x.target_kind || '') + ' ' + String(x.target_id || '').slice(0, 14) }), el('td', { text: (x.outcome || 'ok') + (x.cost_amount ? ' · ' + nf(x.cost_amount, 2) : '') })))),
+        el('p', {}, el('a', { href: '#audit', text: 'Registro completo' })));
+    }
+    main.replaceChildren(el('div', { class: 'adm-head' }, el('h1', { text: 'Centro de operaciones' }),
+      el('p', { class: 'muted small', text: 'Datos reales de la base al ' + fmt(d.generated_at) + '. Nada se muestra como hecho sin evidencia.' })), tabs, el('div', { role: 'tabpanel' }, body));
+  };
+
+  function taskTable(items) {
+    if (!items.length) return el('p', { class: 'muted', text: 'Sin tareas.' });
+    return table(['ID', 'Tarea', 'Categoría', 'Responsable', 'Estado', 'Riesgo'], items.map((t) => el('tr', {},
+      el('td', {}, el('a', { href: '#task/' + t.id, text: t.id })), el('td', {}, t.title, t.blocked_reason ? el('small', { class: 'muted', text: ' · ' + t.blocked_reason }) : ''),
+      el('td', { text: CAT[t.category] || t.category }), el('td', { text: t.agent_name || t.owner_username || '—' }), el('td', {}, statusTag(TSTATUS, t.status)), el('td', {}, t.risk ? sevTag(t.risk) : '—'))));
+  }
+  function riskTable(items) {
+    if (!items.length) return el('p', { class: 'muted', text: 'Sin riesgos abiertos.' });
+    return table(['ID', 'Riesgo', 'Área', 'Gravedad', 'Probabilidad', 'Mitigación', 'Abogado'], items.map((r) => el('tr', {},
+      el('td', { text: r.id }), el('td', {}, el('strong', { text: r.title }), el('br'), el('small', { class: 'muted', text: r.description || '' })), el('td', { text: AREA[r.area] || r.area }),
+      el('td', {}, sevTag(r.severity)), el('td', { text: RSEV[r.likelihood] || r.likelihood }), el('td', { text: r.mitigation || '—' }), el('td', { text: r.needs_lawyer ? 'Sí' : 'No' }))));
+  }
+  function integrationsTable(items, editable) {
+    return table(['Integración', 'Estado', 'Qué aporta', 'Costo', 'Qué falta del CEO', 'Evidencia', ''], items.map((i) => el('tr', {},
+      el('td', {}, el('strong', { text: i.name }), el('br'), el('small', { class: 'muted', text: [i.permissions, i.limitations].filter(Boolean).join(' · ') })),
+      el('td', {}, statusTag(ISTATUS, i.status)), el('td', { text: i.provides || '—' }), el('td', { text: i.cost || '—' }), el('td', { text: i.ceo_action || '—' }),
+      el('td', {}, el('small', { text: i.evidence ? i.evidence + (i.checked_at ? ' (' + String(i.checked_at).slice(0, 10) + ')' : '') : '—' })),
+      el('td', {}, editable && can('company.write') ? btn('Marcar verificada', act(async () => {
+        const ev = window.prompt('¿Cómo se comprobó? (evidencia verificable)');
+        if (!ev) return;
+        await api('/api/admin/company/integrations/' + i.id, { method: 'PATCH', body: { status: 'verified', evidence: ev } });
+      }, 'Integración actualizada.'), 'small') : ''))));
+  }
+
+  V.agent = async (id) => {
+    const [d, runs] = await Promise.all([api('/api/admin/company/agents'), api('/api/admin/company/agents/' + encodeURIComponent(id) + '/runs')]);
+    const x = d.items.find((a) => a.id === id);
+    if (!x) throw new Error('Agente no encontrado');
+    const list = (t, arr) => el('div', {}, el('h3', { text: t }), el('ul', {}, arr.map((s) => el('li', { text: s }))));
+    main.replaceChildren(el('p', {}, el('a', { href: '#company?tab=agents', text: '← Agentes' })), el('h1', { text: x.number + '. ' + x.name }),
+      el('p', { class: 'muted', text: x.department + ' · ' + x.mission }),
+      el('div', { class: 'cards' }, kpi('Estado real', x.state, { txt: true, fmt: (v) => v }), kpi('Autonomía máxima', 'Nivel ' + x.autonomy_max, { txt: true, fmt: (v) => v }),
+        kpi('Ejecuciones registradas', x.runs), kpi('Errores', x.errors, { warn: true }), kpi('Costo registrado (USD)', x.cost, { fmt: (v) => nf(v, 2) })),
+      el('div', { class: 'cols' }, el('div', { class: 'panel' }, list('Responsabilidades', x.responsibilities), list('Indicadores', x.kpis)),
+        el('div', { class: 'panel' }, list('Herramientas autorizadas', x.tools), list('Límites', x.limits), el('p', { class: 'small muted', text: 'Responsable operativo: ' + x.owner_label + '. Los agentes no pueden cambiar sus propios permisos ni subir su nivel de autonomía.' }))),
+      el('h2', { text: 'Ejecuciones' }), runs.items.length ? table(['Inicio', 'Estado', 'Resumen', 'Evidencia'], runs.items.map((r) => el('tr', {}, el('td', { text: fmt(r.started_at) }),
+        el('td', { text: r.status }), el('td', { text: r.summary || r.error || '' }), el('td', {}, linkify(r.evidence))))) : el('p', { class: 'muted', text: 'No hay ejecuciones registradas.' }));
+  };
+
+  // ── Tareas ──
+  V.tasks = async () => {
+    const q = qs();
+    const p = new URLSearchParams(); ['status', 'area', 'category'].forEach((k) => { if (q.get(k)) p.set(k, q.get(k)); });
+    if (!q.get('status')) p.set('status', 'open');
+    const d = await api('/api/admin/company/tasks?' + p);
+    const nav = el('div', { class: 'tabs' }, [['open', 'Abiertas'], ['blocked', 'Bloqueadas'], ['in_review', 'En revisión'], ['done', 'Completadas']].map(([k, t]) =>
+      el('a', { href: '#tasks?status=' + k, class: (p.get('status') === k) ? 'active' : '', text: t })));
+    const out = [el('h1', { text: 'Tareas' }), nav, taskTable(d.items)];
+    if (can('company.write')) {
+      const f = { title: el('input', { placeholder: 'Título', required: true }), area: el('select', {}, Object.entries(AREA).map(([k, v]) => el('option', { value: k, text: v }))),
+        category: el('select', {}, Object.entries(CAT).map(([k, v]) => el('option', { value: k, text: v }))), expected: el('input', { placeholder: 'Resultado esperado' }),
+        due_at: el('input', { type: 'date', 'aria-label': 'Plazo' }), approval_level: el('select', { 'aria-label': 'Nivel' }, [1, 2, 3, 4].map((n) => el('option', { value: n, text: 'Nivel ' + n }))) };
+      out.push(el('h2', { text: 'Nueva tarea' }), el('div', { class: 'toolbar' }, Object.values(f), btn('Crear', act(() => api('/api/admin/company/tasks', { method: 'POST',
+        body: { title: f.title.value, area: f.area.value, category: f.category.value, expected: f.expected.value, due_at: f.due_at.value || null, approval_level: Number(f.approval_level.value) } }), 'Tarea creada.'), 'primary')));
+    }
+    main.replaceChildren(...out);
+  };
+
+  V.task = async (id) => {
+    const [d, ag] = await Promise.all([api('/api/admin/company/tasks'), api('/api/admin/company/agents')]);
+    const t = d.items.find((x) => x.id === id);
+    if (!t) throw new Error('Tarea no encontrada');
+    const row = (k, v) => el('tr', {}, el('th', { scope: 'row', text: k }), el('td', {}, v === null || v === undefined || v === '' ? '—' : v));
+    const out = [el('p', {}, el('a', { href: '#tasks', text: '← Tareas' })), el('h1', { text: t.id + ' · ' + t.title }),
+      el('div', { class: 'tbl-wrap' }, el('table', {}, el('tbody', {}, row('Estado', statusTag(TSTATUS, t.status)), row('Motivo del bloqueo', t.blocked_reason), row('Objetivo', t.objective),
+        row('Área', AREA[t.area] || t.area), row('Categoría', CAT[t.category] || t.category), row('Agente', t.agent_name), row('Resultado esperado', t.expected), row('Plazo', t.due_at ? fmt(t.due_at) : null),
+        row('Riesgo', t.risk ? RSEV[t.risk] : null), row('Aprobación necesaria', 'Nivel ' + t.approval_level + (t.approval_level >= 3 ? ' (requiere CEO)' : '')),
+        row('Pedido de aprobación', t.approval_id ? el('a', { href: '#approval/' + t.approval_id, text: 'Ver' }) : null), row('Evidencia', linkify(t.evidence)),
+        row('Costo estimado / real', [t.cost_estimate, t.cost_actual].map((v) => (v == null ? '—' : nf(v, 2))).join(' / ')))))];
+    if (can('company.write')) {
+      const st = el('select', { 'aria-label': 'Estado' }, Object.entries(TSTATUS).map(([k, v]) => el('option', { value: k, selected: k === t.status, text: v })));
+      const ev = el('input', { placeholder: 'Evidencia (obligatoria para completar)', value: t.evidence || '' });
+      const br = el('input', { placeholder: 'Motivo del bloqueo', value: t.blocked_reason || '' });
+      const agent = el('select', { 'aria-label': 'Agente' }, el('option', { value: '', text: 'Sin agente' }), ag.items.map((a) => el('option', { value: a.id, selected: a.id === t.agent_id, text: a.number + '. ' + a.name })));
+      out.push(el('h2', { text: 'Actualizar' }), el('div', { class: 'toolbar' }, st, agent, br, ev, btn('Guardar', act(() => api('/api/admin/company/tasks/' + t.id, { method: 'PATCH',
+        body: { status: st.value, evidence: ev.value || null, blocked_reason: br.value || null, agent_id: agent.value || null } }), 'Tarea actualizada.'), 'primary')));
+    }
+    if (can('approvals.request') && !t.approval_id) {
+      const note = el('input', { placeholder: 'Qué se pide aprobar' });
+      const amount = el('input', { type: 'number', min: '0', placeholder: 'Monto USD (si hay gasto)' });
+      const kind = el('select', { 'aria-label': 'Tipo' }, [['decision', 'Decisión'], ['production_change', 'Cambio en producción'], ['feature', 'Funcionalidad'], ['design_change', 'Diseño o producto'],
+        ['budget', 'Presupuesto'], ['contract', 'Contrato'], ['app_release', 'Lanzamiento de app'], ['institutional', 'Comunicación institucional']].map(([k, v]) => el('option', { value: k, text: v })));
+      out.push(el('h2', { text: 'Pedir aprobación de los CEO' }), el('div', { class: 'toolbar' }, kind, note, amount, btn('Enviar a la bandeja', act(async () => {
+        const r = await api('/api/admin/company/tasks/' + t.id + '/request-approval', { method: 'POST', body: { kind: kind.value, note: note.value, amount: amount.value ? Number(amount.value) : undefined } });
+        location.hash = 'approval/' + r.id;
+      }), 'primary')));
+    }
+    main.replaceChildren(...out);
+  };
+
+  // ── Aprobaciones ──
+  V.approvals = async () => {
+    const q = qs(); const status = q.get('status') || 'open'; const area = q.get('area') || '';
+    const d = await api('/api/admin/approvals?status=' + status + (area ? '&area=' + area : ''));
+    const nav = el('div', { class: 'tabs' }, [['open', 'Abiertas'], ['approved', 'Aprobadas'], ['executed', 'Ejecutadas'], ['rejected', 'Rechazadas'], ['withdrawn', 'Retiradas']].map(([k, t]) =>
+      el('a', { href: '#approvals?status=' + k, class: status === k ? 'active' : '', text: t })));
+    main.replaceChildren(el('h1', { text: 'Bandeja de aprobaciones' }),
+      el('p', { class: 'muted', text: 'Cualquiera de los dos CEO aprueba lo ordinario. Lo extraordinario (gastos sobre el umbral, contratos, seguridad crítica, decisiones legales de alto impacto y permisos de un CEO) necesita a los dos. Cada aprobación vale solo para la versión que se vio.' }),
+      d.owners < 2 ? el('p', { class: 'flash warn', text: 'Hay un solo CEO con cuenta: los pedidos que exigen a los dos quedan pendientes hasta que se sume el segundo.' }) : '',
+      d.conflicts.length ? el('div', { class: 'panel' }, el('h3', { text: 'Conflictos abiertos' }), el('ul', {}, d.conflicts.map((c) => el('li', {}, c.description, ' ', el('a', { href: '#approval/' + c.subject_id, text: 'Abrir' }))))) : '',
+      nav, d.items.length ? table(['Pedido', 'Tipo', 'Área', 'Política', 'Estado', 'Versión', 'Creado'], d.items.map((x) => el('tr', {},
+        el('td', {}, el('a', { href: '#approval/' + x.id, text: x.title })), el('td', { text: x.kind_label }), el('td', { text: AREA[x.area] || x.area }),
+        el('td', { text: x.policy === 'both' ? 'Los dos CEO (' + x.approvals + '/2)' : 'Un CEO' }), el('td', {}, statusTag(ASTATUS, x.status)), el('td', { text: 'v' + x.version }), el('td', { text: fmt(x.created_at) }))))
+        : el('p', { class: 'muted', text: 'No hay pedidos en esta lista.' }));
+  };
+
+  // Vista previa «tal como se publica» de una pieza o un texto.
+  function preview(c) {
+    if (c && c.platform) {
+      return el('div', { class: 'post-preview' }, el('div', { class: 'small muted', text: [c.platform, c.format, c.country, c.language].filter(Boolean).join(' · ') }),
+        el('h3', { text: c.title }), c.body ? el('p', { class: 'pre', text: c.body }) : '', c.script ? el('details', {}, el('summary', { text: 'Guion' }), el('p', { class: 'pre', text: c.script })) : '',
+        c.cta ? el('p', {}, el('strong', { text: c.cta })) : '', c.hashtags ? el('p', { class: 'muted', text: c.hashtags }) : '', c.link ? el('p', {}, linkify(c.link)) : '',
+        (c.assets || []).length ? el('div', {}, el('strong', { text: 'Archivos: ' }), el('ul', {}, c.assets.map((a) => el('li', {}, /^https:/.test(a) ? linkify(a) : el('code', { text: a }))))) : el('p', { class: 'small', text: 'Sin archivos adjuntos.' }),
+        c.alt_text ? el('p', { class: 'small muted', text: 'Texto alternativo: ' + c.alt_text }) : '', c.rights ? el('p', { class: 'small muted', text: 'Derechos: ' + c.rights }) : el('p', { class: 'small', text: 'Derechos de los recursos: sin indicar.' }));
+    }
+    if (c && c.body && c.doc) return el('div', { class: 'post-preview' }, el('div', { class: 'small muted', text: 'Documento ' + c.doc + ' · versión ' + c.version + ' · ' + c.language }), el('div', { class: 'pre legal-text', text: c.body }));
+    return el('pre', { class: 'code' }, JSON.stringify(c, null, 2));
+  }
+
+  V.approval = async (id) => {
+    const x = await api('/api/admin/approvals/' + encodeURIComponent(id));
+    const mine = x.votes.find((v) => v.current && v.user_id === me.id);
+    const open = ['pending', 'changes_requested', 'conflict'].includes(x.status) || (x.status === 'pending');
+    const comment = el('input', { placeholder: 'Comentario (obligatorio para rechazar o pedir cambios)' });
+    const vote = (decision) => act(() => api('/api/admin/approvals/' + x.id + '/vote', { method: 'POST', body: { decision, comment: comment.value, version: x.version, content_hash: x.content_hash } }),
+      decision === 'approve' ? 'Aprobación registrada para la versión ' + x.version + '.' : 'Decisión registrada.');
+    const out = [el('p', {}, el('a', { href: '#approvals', text: '← Bandeja' })), el('h1', { text: x.title }),
+      el('p', {}, statusTag(ASTATUS, x.status), ' ', x.kind_label, ' · ', AREA[x.area] || x.area, ' · ', x.policy === 'both' ? 'Necesita a los dos CEO' : 'Alcanza con un CEO',
+        ' · Nivel ' + x.level, x.amount != null ? ' · ' + nf(x.amount, 2) + ' ' + (x.currency || '') : ''),
+      x.summary ? el('p', { class: 'muted', text: x.summary }) : '',
+      el('div', { class: 'panel' }, el('h3', { text: 'Versión ' + x.version + ' · lo que se aprueba' }), preview(x.content),
+        el('p', { class: 'small muted' }, 'Huella de esta versión: ', el('code', { text: x.content_hash.slice(0, 16) }), '. Si el contenido cambia, esta aprobación deja de valer.'))];
+    if (x.status === 'conflict' && can('approvals.decide')) {
+      const res = el('input', { placeholder: 'Cómo lo resolvieron los dos CEO' });
+      const list = await api('/api/admin/approvals?status=open');
+      const c = list.conflicts.find((k) => k.subject_id === x.id);
+      if (c) out.push(el('div', { class: 'panel' }, el('h3', { text: 'Conflicto: tarea en pausa' }), el('p', { text: c.description }), el('div', { class: 'toolbar' }, res,
+        btn('Registrar resolución', act(() => api('/api/admin/conflicts/' + c.id + '/resolve', { method: 'POST', body: { resolution: res.value } }), 'Resolución registrada: se vuelve a votar.'), 'primary'))));
+    }
+    if (can('approvals.decide') && ['pending', 'changes_requested'].includes(x.status) && !mine) {
+      out.push(el('div', { class: 'panel' }, el('h3', { text: 'Tu decisión sobre la versión ' + x.version }), el('div', { class: 'toolbar' }, comment,
+        btn('Aprobar esta versión', vote('approve'), 'primary'), btn('Pedir cambios', vote('changes')), btn('Rechazar', vote('reject')))));
+    } else if (mine) out.push(el('p', { class: 'small', text: 'Ya decidiste sobre esta versión: ' + ({ approve: 'aprobaste', reject: 'rechazaste', changes: 'pediste cambios' })[mine.decision] + '.' }));
+    if (x.status === 'approved' && can('approvals.decide') && !x.target_kind) {
+      const ev = el('input', { placeholder: 'Evidencia de la ejecución (enlace, commit, factura…)' });
+      out.push(el('div', { class: 'panel' }, el('h3', { text: 'Registrar la ejecución' }), el('div', { class: 'toolbar' }, ev, btn('Marcar ejecutado', act(() => api('/api/admin/approvals/' + x.id + '/executed', { method: 'POST', body: { evidence: ev.value } }), 'Ejecución registrada.')))));
+    }
+    if (x.execution_evidence) out.push(el('p', {}, 'Evidencia de ejecución: ', linkify(x.execution_evidence)));
+    out.push(el('h2', { text: 'Decisiones' }), x.votes.length ? table(['Fecha', 'CEO', 'Decisión', 'Versión', 'Vigente', 'Comentario'], x.votes.map((v) => el('tr', {},
+      el('td', { text: fmt(v.created_at) }), el('td', { text: v.display_name || v.username }), el('td', { text: ({ approve: 'Aprobó', reject: 'Rechazó', changes: 'Pidió cambios' })[v.decision] }),
+      el('td', { text: 'v' + v.version }), el('td', { text: v.current ? 'Sí' : 'No (otra versión)' }), el('td', { text: v.comment || '' })))) : el('p', { class: 'muted', text: 'Sin decisiones todavía.' }),
+    el('h2', { text: 'Versiones' }), table(['Versión', 'Huella', 'Fecha'], x.versions.map((v) => el('tr', {}, el('td', { text: 'v' + v.version }), el('td', {}, el('code', { text: v.content_hash.slice(0, 16) })), el('td', { text: fmt(v.created_at) })))));
+    if (can('approvals.request') && !['executed', 'withdrawn'].includes(x.status)) out.push(el('p', {}, btn('Retirar pedido', act(() => api('/api/admin/approvals/' + x.id + '/withdraw', { method: 'POST', body: {} }), 'Pedido retirado.'))));
+    void open;
+    main.replaceChildren(...out);
+  };
+
+  // ── Contenido ──
+  V.content = async () => {
+    const status = qs().get('status') || '';
+    const d = await api('/api/admin/content' + (status ? '?status=' + status : ''));
+    const nav = el('div', { class: 'tabs' }, [['', 'Todas'], ...Object.entries(PSTATUS)].map(([k, t]) => el('a', { href: '#content' + (k ? '?status=' + k : ''), class: status === k ? 'active' : '', text: t })));
+    const out = [el('h1', { text: 'Contenido y redes' }), el('p', { class: 'muted', text: 'Cada pieza tiene su texto, archivos, derechos y fecha sugerida. Pasa por la bandeja de aprobaciones antes de programarse o publicarse.' }), nav,
+      d.items.length ? table(['Pieza', 'Plataforma', 'Formato', 'País / idioma', 'Fecha sugerida', 'Estado'], d.items.map((p) => el('tr', {}, el('td', {}, el('a', { href: '#piece/' + p.id, text: p.title })),
+        el('td', { text: p.platform }), el('td', { text: p.format }), el('td', { text: [p.country, p.language].filter(Boolean).join(' / ') || '—' }), el('td', { text: p.scheduled_at ? fmt(p.scheduled_at) : '—' }), el('td', {}, statusTag(PSTATUS, p.status)))))
+        : el('p', { class: 'muted', text: 'Todavía no hay piezas.' })];
+    if (can('content.write')) out.push(el('p', {}, el('a', { class: 'btn primary', href: '#piece/new', text: 'Nueva pieza' })));
+    main.replaceChildren(...out);
+  };
+
+  V.piece = async (id) => {
+    const isNew = id === 'new';
+    const p = isNew ? { assets: [], status: 'idea' } : await api('/api/admin/content/' + encodeURIComponent(id));
+    const F = [['title', 'Título'], ['campaign', 'Campaña'], ['objective', 'Objetivo'], ['audience', 'Audiencia'], ['country', 'País'], ['language', 'Idioma'], ['platform', 'Plataforma'],
+      ['format', 'Formato (reel, carrusel, historia, artículo, pdf, newsletter…)'], ['idea', 'Idea creativa'], ['script', 'Guion o estructura'], ['body', 'Texto final'], ['cta', 'Llamado a la acción'],
+      ['hashtags', 'Hashtags'], ['link', 'Enlace de destino'], ['alt_text', 'Texto alternativo'], ['rights', 'Derechos y licencias de los recursos'], ['metric', 'Métrica de éxito']];
+    const big = ['idea', 'script', 'body', 'rights'];
+    const inputs = {};
+    for (const [k] of F) inputs[k] = big.includes(k) ? el('textarea', {}) : el('input', {});
+    for (const [k] of F) inputs[k].value = p[k] || '';
+    const assets = el('textarea', { placeholder: 'Un archivo por línea: ruta del repositorio o enlace https' }); assets.value = (p.assets || []).join('\n');
+    const sched = el('input', { type: 'datetime-local' }); if (p.scheduled_at) sched.value = String(p.scheduled_at).slice(0, 16);
+    const read = () => { const b = {}; for (const [k] of F) b[k] = inputs[k].value; b.assets = assets.value.split('\n').map((s) => s.trim()).filter(Boolean); b.scheduled_at = sched.value ? new Date(sched.value).toISOString() : null; return b; };
+    const save = async () => { const r = isNew ? await api('/api/admin/content', { method: 'POST', body: read() }) : await api('/api/admin/content/' + p.id, { method: 'PATCH', body: read() }); if (isNew) location.hash = 'piece/' + r.id; return r; };
+    const out = [el('p', {}, el('a', { href: '#content', text: '← Contenido' })), el('h1', { text: isNew ? 'Nueva pieza' : p.title })];
+    if (!isNew) {
+      out.push(el('p', {}, statusTag(PSTATUS, p.status), ' · versión ' + p.version, p.approval_id ? [' · ', el('a', { href: '#approval/' + p.approval_id, text: 'pedido de aprobación' })] : '',
+        p.approved_hash ? (p.approval_valid ? ' · aprobación vigente' : ' · la aprobación ya no vale (cambió)') : ''));
+      if (p.published_url) out.push(el('p', {}, 'Publicada: ', linkify(p.published_url)));
+    }
+    const form = el('form', { class: 'form', onsubmit: (e) => { e.preventDefault(); act(save, 'Guardado.' + (p.approved_hash ? ' Si cambiaste algo material, vuelve a aprobación.' : ''))(); } },
+      F.map(([k, t]) => field(t, inputs[k])), field('Archivos (diseños, videos, PDF)', assets), field('Fecha y hora sugeridas', sched),
+      p.status !== 'published' && can('content.write') ? el('button', { class: 'btn primary', type: 'submit', text: 'Guardar' }) : '');
+    out.push(form);
+    if (!isNew && can('content.write')) {
+      const acts = [];
+      if (['idea', 'research', 'production', 'editing', 'rights_review', 'changes_requested', 'rejected', 'paused'].includes(p.status)) {
+        acts.push(btn('Enviar a aprobación', act(() => api('/api/admin/content/' + p.id + '/status', { method: 'POST', body: { status: 'pending_approval' } }), 'Enviada a la bandeja.'), 'primary'));
+        const st = el('select', { 'aria-label': 'Etapa' }, ['idea', 'research', 'production', 'editing', 'rights_review', 'paused'].map((k) => el('option', { value: k, selected: k === p.status, text: PSTATUS[k] })));
+        acts.push(st, btn('Cambiar etapa', act(() => api('/api/admin/content/' + p.id + '/status', { method: 'POST', body: { status: st.value } }), 'Etapa actualizada.')));
+      }
+      if (can('approvals.decide') && p.status === 'approved' && p.approval_valid) acts.push(btn('Programar', act(() => api('/api/admin/content/' + p.id + '/status', { method: 'POST', body: { status: 'scheduled' } }), 'Programada.')));
+      if (can('approvals.decide') && ['approved', 'scheduled'].includes(p.status) && p.approval_valid) {
+        const url = el('input', { placeholder: 'https://… enlace a la publicación real' });
+        acts.push(url, btn('Marcar publicada', act(() => api('/api/admin/content/' + p.id + '/status', { method: 'POST', body: { status: 'published', published_url: url.value } }), 'Publicación registrada con su evidencia.')));
+      }
+      if (acts.length) out.push(el('h2', { text: 'Acciones' }), el('div', { class: 'toolbar' }, acts));
+      out.push(el('h2', { text: 'Vista previa' }), preview({ ...p }));
+    }
+    main.replaceChildren(...out);
+  };
+
+  // ── Legal ──
+  V.legal = async () => {
+    const [docs, ov] = await Promise.all([api('/api/admin/legal/documents'), api('/api/admin/company/overview')]);
+    const jur = ov.legal.jurisdictions;
+    main.replaceChildren(el('h1', { text: 'Legal y cumplimiento' }),
+      el('p', { class: 'flash', text: 'Investigación y borradores preparados por agentes: no son asesoramiento jurídico ni reemplazan a un abogado matriculado. Un borrador nunca reemplaza al texto público sin aprobación.' }),
+      el('h2', { text: 'Documentos' }), table(['Documento', 'Versiones', 'Publicada', ''], docs.items.map((d) => {
+        const pub = d.versions.filter((v) => v.status === 'published');
+        return el('tr', {}, el('td', {}, el('strong', { text: d.name }), d.public_route ? el('small', { class: 'muted', text: ' · ' + d.public_route }) : ''),
+          el('td', {}, d.versions.length ? d.versions.map((v) => el('a', { href: '#legaldoc/' + d.id + '/' + v.version + '/' + v.language, class: 'pill ' + (v.status === 'published' ? 'verified' : 'pending'), text: 'v' + v.version + ' ' + v.language + ' · ' + (LSTATUS[v.status] || v.status) })) : el('span', { class: 'muted', text: 'No existe' })),
+          el('td', { text: pub.length ? pub.map((v) => v.language + (v.source_note === 'baseline' ? ' (texto actual del sitio, sin revisión profesional)' : '')).join(', ') : '—' }),
+          el('td', {}, can('legal.write') ? el('a', { href: '#legaldoc/' + d.id + '/new', text: 'Nuevo borrador' }) : ''));
+      })),
+      el('h2', { text: 'Matriz por país y región' }),
+      el('p', { class: 'small muted', text: 'Un requisito se carga solo con fuente oficial y fecha de verificación. Que exista una fila no significa que se cumpla en ese país.' }),
+      table(['País', 'Mercado', 'Estado', 'Requisitos', 'Fuente oficial', 'Verificado', 'Próxima revisión', 'Abogado', 'Pendiente', ''], jur.map((j) => el('tr', {},
+        el('td', { text: j.name + ' (' + j.code + ')' }), el('td', { text: j.target_market ? 'Prioritario' + (j.priority ? ' #' + j.priority : '') : 'Candidato' }), el('td', {}, statusTag(JSTATUS, j.status)),
+        el('td', { text: j.requirements || '—' }), el('td', {}, j.official_sources ? linkify(j.official_sources) : '—'), el('td', { text: j.verified_at || '—' }), el('td', { text: j.next_review_at || '—' }),
+        el('td', { text: j.needs_lawyer ? 'Sí' : 'No' }), el('td', { text: j.pending_action || '—' }), el('td', {}, can('legal.write') ? el('a', { href: '#jurisdiction/' + j.code, text: 'Editar' }) : '')))));
+  };
+
+  V.jurisdiction = async (code) => {
+    const ov = await api('/api/admin/company/overview');
+    const j = ov.legal.jurisdictions.find((x) => x.code === code) || { code, name: '' };
+    const F = [['name', 'Nombre'], ['priority', 'Prioridad (1 = primero)'], ['requirements', 'Requisitos aplicables'], ['official_sources', 'Fuente oficial (enlace)'], ['verified_at', 'Fecha de verificación (AAAA-MM-DD)'],
+      ['next_review_at', 'Próxima revisión'], ['owner_label', 'Responsable'], ['affected_docs', 'Documentos afectados'], ['risk', 'Riesgo identificado'], ['pending_action', 'Acción pendiente'], ['notes', 'Evidencia y observaciones']];
+    const inp = {}; for (const [k] of F) { inp[k] = ['requirements', 'notes'].includes(k) ? el('textarea', {}) : el('input', {}); inp[k].value = j[k] == null ? '' : j[k]; }
+    const st = el('select', {}, Object.entries(JSTATUS).map(([k, v]) => el('option', { value: k, selected: k === j.status, text: v })));
+    const target = el('input', { type: 'checkbox' }); target.checked = !!j.target_market;
+    const lawyer = el('input', { type: 'checkbox' }); lawyer.checked = !!j.needs_lawyer;
+    main.replaceChildren(el('p', {}, el('a', { href: '#legal', text: '← Legal' })), el('h1', { text: (j.name || code) + ' (' + code + ')' }),
+      el('form', { class: 'form', onsubmit: (e) => { e.preventDefault(); const b = {}; for (const [k] of F) b[k] = inp[k].value || null; b.priority = b.priority ? Number(b.priority) : null;
+        b.status = st.value; b.target_market = target.checked; b.needs_lawyer = lawyer.checked; act(() => api('/api/admin/legal/jurisdictions/' + code, { method: 'PUT', body: b }), 'Guardado.')(); } },
+      F.map(([k, t]) => field(t, inp[k])), field('Estado', st), el('label', { class: 'check' }, target, 'Mercado prioritario'), el('label', { class: 'check' }, lawyer, 'Necesita abogado local'),
+      el('button', { class: 'btn primary', type: 'submit', text: 'Guardar' })));
+  };
+
+  V.legaldoc = async (arg) => {
+    const parts = location.hash.replace(/^#legaldoc\//, '').split('?')[0].split('/');
+    const [docId, version, language] = parts;
+    void arg;
+    if (version === 'new') {
+      const body = el('textarea', { class: 'code', rows: 18 }); const langSel = el('select', {}, ['es', 'en'].map((l) => el('option', { value: l, text: l })));
+      const note = el('input', { placeholder: 'Origen o notas (fuentes consultadas, fecha)' });
+      main.replaceChildren(el('p', {}, el('a', { href: '#legal', text: '← Legal' })), el('h1', { text: 'Nuevo borrador · ' + docId }),
+        el('form', { class: 'form', onsubmit: (e) => { e.preventDefault(); act(async () => { const r = await api('/api/admin/legal/documents/' + docId + '/drafts', { method: 'POST', body: { language: langSel.value, body: body.value, note: note.value } }); location.hash = 'legaldoc/' + docId + '/' + r.version + '/' + r.language; }, 'Borrador guardado.')(); } },
+          field('Idioma', langSel), field('Texto', body), field('Notas', note), el('button', { class: 'btn primary', type: 'submit', text: 'Guardar borrador' })));
+      return;
+    }
+    const v = await api('/api/admin/legal/documents/' + docId + '/' + version + '/' + language);
+    const out = [el('p', {}, el('a', { href: '#legal', text: '← Legal' })), el('h1', { text: docId + ' · versión ' + v.version + ' (' + v.language + ')' }),
+      el('p', {}, statusTag(LSTATUS, v.status), v.source_note === 'baseline' ? ' Texto que ya estaba publicado en el sitio; sin revisión profesional.' : (v.source_note ? ' ' + v.source_note : ''),
+        v.approval_id ? [' · ', el('a', { href: '#approval/' + v.approval_id, text: 'aprobación' })] : ''),
+      el('div', { class: 'panel' }, el('div', { class: 'pre legal-text', text: v.body }))];
+    if (can('legal.write') && ['draft', 'lawyer_review'].includes(v.status)) out.push(btn('Enviar a aprobación de los CEO', act(async () => { const r = await api('/api/admin/legal/documents/' + docId + '/' + v.version + '/' + v.language + '/submit', { method: 'POST', body: {} }); location.hash = 'approval/' + r.id; }), 'primary'));
+    if (can('approvals.decide') && v.status === 'approved') {
+      const ev = el('input', { placeholder: 'Evidencia: commit o despliegue que cambió el texto público' });
+      out.push(el('div', { class: 'toolbar' }, ev, btn('Registrar publicación', act(() => api('/api/admin/legal/documents/' + docId + '/' + v.version + '/' + v.language + '/published', { method: 'POST', body: { evidence: ev.value } }), 'Publicación registrada.'))));
+    }
+    main.replaceChildren(...out);
+  };
+
+  // ── Mi seguridad ──
+  V.security = async () => {
+    const s = await api('/api/admin/security/me');
+    const out = [el('h1', { text: 'Mi seguridad' })];
+    if (s.require_mfa && !s.mfa_enabled) out.push(el('p', { class: 'flash bad', text: 'La política de la empresa exige verificación en dos pasos: activala para seguir usando el panel.' }));
+    const mfa = el('div', { class: 'panel', id: 'mfa-panel' }, el('h3', { text: 'Verificación en dos pasos (MFA)' }));
+    if (s.mfa_enabled) {
+      const pw = el('input', { type: 'password', placeholder: 'Contraseña', autocomplete: 'current-password' }); const code = el('input', { placeholder: 'Código', inputmode: 'numeric', autocomplete: 'one-time-code' });
+      mfa.append(el('p', {}, tag('Activa', 'verified'), ' desde ' + fmt(s.mfa_enabled_at) + ' · ' + s.recovery_left + ' códigos de recuperación sin usar.'),
+        el('details', {}, el('summary', { text: 'Desactivar' }), el('div', { class: 'toolbar' }, pw, code, btn('Desactivar MFA', act(() => api('/api/admin/security/mfa/disable', { method: 'POST', body: { password: pw.value, code: code.value } }), 'MFA desactivado.')))));
+    } else {
+      const start = btn('Configurar', async () => {
+        try {
+          const r = await api('/api/admin/security/mfa/setup', { method: 'POST', body: {} });
+          const code = el('input', { id: 'mfa-code', placeholder: 'Código de 6 dígitos', inputmode: 'numeric', autocomplete: 'one-time-code' });
+          const result = el('div');
+          mfa.replaceChildren(el('h3', { text: 'Verificación en dos pasos (MFA)' }),
+            el('ol', {}, el('li', {}, 'Abrí tu aplicación de autenticación (Google Authenticator, Microsoft Authenticator, 1Password, Authy…).'),
+              el('li', {}, 'Agregá una cuenta con esta clave: ', el('code', { id: 'mfa-secret', class: 'secret', text: r.secret.replace(/(.{4})/g, '$1 ').trim() }), ' (o, en el teléfono, ', el('a', { href: r.uri, text: 'abrí este enlace' }), ').'),
+              el('li', {}, 'Escribí el código que muestra la aplicación.')),
+            el('div', { class: 'toolbar' }, code, btn('Activar', async () => {
+              try {
+                const e = await api('/api/admin/security/mfa/enable', { method: 'POST', body: { code: code.value } });
+                result.replaceChildren(el('div', { class: 'flash ok' }, el('strong', { text: 'MFA activo. ' }), 'Guardá estos códigos de recuperación en un lugar seguro: cada uno sirve una sola vez y no se vuelven a mostrar.'),
+                  el('ul', { class: 'codes', id: 'recovery-codes' }, e.recovery_codes.map((c) => el('li', {}, el('code', { text: c })))), el('a', { class: 'btn', href: '#security', text: 'Listo, ya los guardé' }));
+              } catch (x) { flash(x.message, false); }
+            }, 'primary')), result);
+        } catch (x) { flash(x.message, false); }
+      }, 'primary');
+      mfa.append(el('p', {}, tag('Sin activar', 'failed'), ' Con MFA, una contraseña filtrada no alcanza para entrar.'), start);
+    }
+    out.push(mfa);
+    const title = el('input', { value: s.title || '', placeholder: 'Cargo' }); const name = el('input', { value: s.display_name || '', placeholder: 'Nombre visible' });
+    out.push(el('div', { class: 'panel' }, el('h3', { text: 'Perfil' }), el('div', { class: 'toolbar' }, name, title, btn('Guardar', act(() => api('/api/admin/security/profile', { method: 'PATCH', body: { title: title.value, display_name: name.value } }), 'Perfil guardado.')))));
+    out.push(el('h2', { text: 'Sesiones abiertas' }), table(['Inicio', 'Última actividad', 'Vence', 'Navegador', 'MFA', ''], s.sessions.map((x) => el('tr', {},
+      el('td', { text: fmt(x.created_at) }), el('td', { text: fmt(x.last_seen_at) }), el('td', { text: fmt(x.expires_at) }), el('td', {}, el('small', { text: x.user_agent || '—' })), el('td', { text: x.mfa ? 'Sí' : 'No' }),
+      el('td', {}, x.current ? '(esta)' : btn('Cerrar', act(() => api('/api/admin/security/sessions/revoke', { method: 'POST', body: { session: x.id } }), 'Sesión cerrada.'), 'small'))))),
+    el('p', {}, btn('Cerrar todas las demás sesiones', act(() => api('/api/admin/security/sessions/revoke', { method: 'POST', body: { others: true } }), 'Listo.'))),
+    el('p', { class: 'small muted', text: 'Un acceso desde un dispositivo o red nuevos genera una alerta de seguridad. ¿Perdiste el acceso? Otra persona del equipo con permiso puede generarte un enlace de recuperación desde «Equipo».' }));
+    main.replaceChildren(...out);
+  };
+
+  // ── Público: aceptar invitación y recuperar cuenta ──
+  async function publicTokenView(kind) {
+    $('#admin-nav').hidden = true; $('#nav-toggle').hidden = true; $('#logout').hidden = true;
+    const token = new URLSearchParams(location.hash.split('?')[1] || '').get('token') || '';
+    let info;
+    try { const r = await fetch('/api/team/token?token=' + encodeURIComponent(token), { credentials: 'same-origin' }); info = await r.json(); if (!r.ok) throw new Error(info.message || 'El enlace no es válido o venció.'); } catch (e) {
+      main.replaceChildren(el('div', { class: 'login-box' }, el('h1', { text: 'Enlace no válido' }), el('p', { text: e.message }), el('a', { class: 'btn', href: '#', text: 'Ir al acceso' }))); return;
+    }
+    const err = el('p', { class: 'field-error', role: 'alert' });
+    const send = async (path, body) => {
+      const r = await fetch(path, { method: 'POST', credentials: 'same-origin', headers: Object.assign({ 'content-type': 'application/json' }, csrf ? { 'x-csrf-token': csrf } : {}), body: JSON.stringify(body) });
+      const d = await r.json().catch(() => ({})); if (!r.ok) throw new Error(d.message || d.error || 'Error'); return d;
+    };
+    const done = (msg) => main.replaceChildren(el('div', { class: 'login-box' }, el('h1', { text: 'Listo' }), el('p', { text: msg }), el('a', { class: 'btn primary', href: '#', onclick: () => { history.replaceState(null, '', '/admin'); setTimeout(() => loginView(), 0); }, text: 'Entrar al panel' })));
+    if (kind === 'invite' && info.kind === 'invite') {
+      const u = el('input', { id: 'i-user', autocomplete: 'username', required: true }); const n = el('input', { id: 'i-name', value: info.display_name || '' });
+      const p = el('input', { id: 'i-pass', type: 'password', autocomplete: 'new-password', required: true }); const p2 = el('input', { id: 'i-pass2', type: 'password', autocomplete: 'new-password', required: true });
+      main.replaceChildren(el('form', { class: 'form login-box', id: 'invite-form', onsubmit: async (e) => { e.preventDefault(); err.textContent = '';
+        if (p.value !== p2.value) { err.textContent = 'Las contraseñas no coinciden.'; return; }
+        try { await send('/api/team/accept', { token, username: u.value, password: p.value, display_name: n.value }); done('Tu cuenta está creada. Entrá y activá la verificación en dos pasos desde «Mi seguridad».'); } catch (x) { err.textContent = x.message; } } },
+      el('h1', { text: 'Sumate al equipo' }), el('p', { text: 'Te invitaron como ' + (info.title || info.role) + '. Elegí tu usuario y tu contraseña: nadie más la conoce.' }),
+      field('Nombre', n), field('Usuario', u), field('Contraseña (10 caracteres o más)', p), field('Repetir contraseña', p2), err, el('button', { class: 'btn primary', type: 'submit', text: 'Crear mi cuenta' })));
+      return;
+    }
+    if (kind === 'reset' && info.kind === 'reset') {
+      const p = el('input', { id: 'r-pass', type: 'password', autocomplete: 'new-password', required: true }); const p2 = el('input', { id: 'r-pass2', type: 'password', autocomplete: 'new-password', required: true });
+      main.replaceChildren(el('form', { class: 'form login-box', onsubmit: async (e) => { e.preventDefault(); err.textContent = '';
+        if (p.value !== p2.value) { err.textContent = 'Las contraseñas no coinciden.'; return; }
+        try { await send('/api/team/reset', { token, password: p.value }); done('Contraseña cambiada. Se cerraron tus sesiones y se quitó la verificación en dos pasos: volvé a activarla al entrar.'); } catch (x) { err.textContent = x.message; } } },
+      el('h1', { text: 'Recuperar tu cuenta' }), field('Contraseña nueva', p), field('Repetir contraseña', p2), err, el('button', { class: 'btn primary', type: 'submit', text: 'Guardar' })));
+      return;
+    }
+    main.replaceChildren(el('p', { class: 'flash bad', text: 'El enlace no corresponde a esta página.' }));
+  }
+
   async function route() {
     if (!me) return;
     const [name, arg] = location.hash.replace(/^#/, '').split('?')[0].split('/');
     const view = V[name || 'dashboard'] ? (name || 'dashboard') : 'dashboard';
-    const PARENT = { player: 'players', game: 'games', clue: 'catalog', submission: 'submissions', source: 'sources', bankaudit: 'bank' };
+    const PARENT = { player: 'players', game: 'games', clue: 'catalog', submission: 'submissions', source: 'sources', bankaudit: 'bank',
+      agent: 'company', task: 'tasks', approval: 'approvals', piece: 'content', legaldoc: 'legal', jurisdiction: 'legal' };
     const navKey = PARENT[view] || view;
     document.querySelectorAll('#admin-nav a').forEach((a) => {
       const on = a.getAttribute('href') === '#' + navKey;

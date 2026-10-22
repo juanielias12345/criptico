@@ -60,7 +60,8 @@ const HANDLERS = {
     const cut = (d) => new Date(Date.now() - d * 86400000).toISOString();
     await db.run('DELETE FROM sessions WHERE expires_at < ?', [now()]);
     await db.run('DELETE FROM games WHERE started_at < ?', [cut(gamesDays)]);
-    await db.run('DELETE FROM audit_log WHERE created_at < ?', [cut(auditDays)]);
+    // La auditoría no se borra (es inalterable): al vencer el plazo solo se quita el hash de IP.
+    await db.run('UPDATE audit_log SET ip_hash = NULL WHERE created_at < ? AND ip_hash IS NOT NULL', [cut(auditDays)]);
     await db.run('DELETE FROM error_log WHERE created_at < ?', [cut(90)]);
     await db.run('DELETE FROM job_runs WHERE started_at < ?', [cut(30)]);
     await db.run('DELETE FROM players WHERE user_id IS NULL AND last_seen_at < ? AND id NOT IN (SELECT player_id FROM games)', [cut(gamesDays)]);

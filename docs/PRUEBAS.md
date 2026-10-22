@@ -5,7 +5,7 @@ npm test          # unidad e integración (servidor real + base temporal)
 npm run test:e2e  # navegador Chromium sin interfaz
 ```
 
-Último resultado (21/10/2026, Node 22, Linux): **64/64** en `npm test` y **12/12** en `npm run test:e2e`.
+Último resultado (22/10/2026, Node 22, Linux): **105/105** en `npm test` y **17/17** en `npm run test:e2e`. También corren en GitHub Actions (flujo «Pruebas») en cada cambio de `main`.
 
 ## Cobertura de las 25 pruebas obligatorias
 
@@ -117,3 +117,18 @@ Problemas que encontró la revisión y se corrigieron:
 
 - Los avisos del panel desaparecían al instante porque la vista se volvía a dibujar después de mostrarlos. Ahora se muestran después del redibujo.
 - La cola de auditoría mostraba «[object HTMLDivElement]» en lugar de las tarjetas.
+
+## Empresa (`test/company.test.js` y e2e «empresa…»)
+
+- Vectores TOTP de la RFC 6238; el secreto se guarda cifrado; un código usado no vuelve a servir.
+- Invitación de un CEO: un solo uso, mismos permisos que el otro CEO; crear un `owner` de forma directa se rechaza.
+- Inicio de sesión con MFA: sin código, código incorrecto, código de recuperación de un solo uso, alerta por dispositivo nuevo y cierre de otras sesiones.
+- Recuperación: otro integrante genera el enlace; nadie puede generarse uno propio; usarlo quita MFA y cierra sesiones.
+- Aprobaciones: voto atado a versión y hash; editar invalida; política de los dos CEO para montos sobre el umbral; aprobar y rechazar la misma versión abre un conflicto y pausa.
+- Ajustes de seguridad y cambios sobre un CEO pasan por la bandeja y se aplican al aprobarse.
+- Auditoría: la base rechaza borrar y modificar.
+- Contenido: programar exige aprobación; un cambio la invalida; «publicada» exige enlace.
+- Legal: sin aprobación del hash exacto la base rechaza aprobar o publicar.
+- Tareas: completar exige evidencia y, en nivel 3, aprobación.
+- Política de MFA obligatoria.
+- Navegador: invitar desde «Equipo», aceptar sin sesión, activar MFA, volver a entrar con código; todas las pantallas de la empresa en escritorio y móvil sin errores ni desbordes.

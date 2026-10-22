@@ -52,6 +52,14 @@ function cleanSource(b, partial) {
 module.exports = function admin() {
   const r = express.Router();
   r.use((req, res, next) => { res.set('Cache-Control', 'no-store'); next(); });
+  // Si la política exige MFA a los CEO, uno sin MFA solo puede configurarlo.
+  r.use(a(async (req, res, next) => {
+    if (req.user && req.user.role === 'owner' && !req.user.mfa_enabled && !/^\/(security\/|me$)/.test(req.path)
+      && await require('../services/security').require2fa(req.app.locals.db)) {
+      throw new HttpError(403, 'mfa_setup_required', 'Activá la verificación en dos pasos para continuar.');
+    }
+    next();
+  }));
 
   r.get('/me', need('dashboard'), (req, res) => res.json({ user: req.user, permissions: require('../services/auth').PERMISSIONS[req.user.role],
     role_label: require('../services/auth').ROLE_LABELS[req.user.role] }));
@@ -336,6 +344,12 @@ module.exports = function admin() {
     const value = (req.body || {}).value;
     const problem = validateSetting(req.params.key, value);
     if (problem) throw new HttpError(400, problem);
+    // Los ajustes de seguridad y gobierno cambian solo con la aprobación de los dos CEO.
+    if (/^(security|governance)\./.test(req.params.key)) {
+      const item = await require('../services/governance').createRequest(req.app.locals.db, { kind: 'security_change',
+        title: `Cambiar ${req.params.key}`, summary: `Nuevo valor: ${JSON.stringify(value)}`, content: { setting: req.params.key, value } }, req.user);
+      return res.status(202).json({ approval_required: true, approval_id: item.id });
+    }
     await setSetting(req.app.locals.db, req.params.key, value, req.user.id);
     await log(req, 'setting.update', 'setting', req.params.key, { value });
     res.json({ ok: true });
@@ -343,12 +357,14 @@ module.exports = function admin() {
 
   // ── Equipo, auditoría y tareas ──
   r.get('/users', need('users.manage'), a(async (req, res) => {
-    res.json({ items: await req.app.locals.db.all(`SELECT id, username, email, role, disabled, created_at, last_login_at FROM users
+    res.json({ items: await req.app.locals.db.all(`SELECT id, username, email, role, title, display_name, mfa_enabled_at IS NOT NULL AS mfa, disabled, created_at, last_login_at FROM users
       WHERE role <> 'player' ORDER BY created_at`), players: (await req.app.locals.db.get("SELECT COUNT(*) AS n FROM users WHERE role = 'player' AND deleted_at IS NULL")).n });
   }));
   r.post('/users', need('users.manage'), a(async (req, res) => {
     const b = req.body || {};
     if (!STAFF_ROLES.includes(b.role)) throw new HttpError(400, 'invalid_role');
+    // Un CEO se suma solo por invitación: elige su propia contraseña y nadie más la conoce.
+    if (b.role === 'owner') throw new HttpError(400, 'owner_requires_invite', 'Para sumar un CEO, generá una invitación.');
     const u = await createUser(req.app.locals.db, { username: b.username, password: b.password, email: b.email, role: b.role });
     await log(req, 'user.create', 'user', u.id, { role: b.role });
     res.status(201).json(u);
@@ -360,6 +376,14 @@ module.exports = function admin() {
     if (!u) throw new HttpError(404, 'not_found');
     const role = b.role !== undefined ? b.role : u.role;
     if (!['player', ...STAFF_ROLES].includes(role)) throw new HttpError(400, 'invalid_role');
+    // Ningún CEO es secundario del otro: cambiar o desactivar a un CEO, o nombrar uno nuevo,
+    // exige la aprobación de los dos (pedido «permission_change»).
+    if ((u.role === 'owner' || role === 'owner') && (role !== u.role || (b.disabled !== undefined && (b.disabled ? 1 : 0) !== u.disabled))) {
+      const item = await require('../services/governance').createRequest(db, { kind: 'permission_change',
+        title: `Cambiar permisos de ${u.username}`, summary: `Rol ${u.role} → ${role}${b.disabled !== undefined ? (b.disabled ? ' · desactivar' : ' · activar') : ''}`,
+        content: { user_id: u.id, username: u.username, role, disabled: b.disabled !== undefined ? !!b.disabled : !!u.disabled } }, req.user);
+      return res.status(202).json({ approval_required: true, approval_id: item.id });
+    }
     await db.run('UPDATE users SET role = ?, disabled = ? WHERE id = ?', [role, b.disabled !== undefined ? (b.disabled ? 1 : 0) : u.disabled, u.id]);
     if (b.disabled) await db.run('DELETE FROM sessions WHERE user_id = ?', [u.id]);
     await log(req, 'user.edit', 'user', u.id, b);
@@ -385,6 +409,7 @@ module.exports = function admin() {
 
   r.use(require('./admin-panel')({ need, log }));
   r.use(require('./admin-bank')({ need, log }));
+  r.use(require('./admin-company')({ need, log }));
 
   return r;
 };

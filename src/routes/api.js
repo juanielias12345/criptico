@@ -5,6 +5,7 @@ const express = require('express');
 const game = require('../services/game');
 const subs = require('../services/submissions');
 const auth = require('../services/auth');
+const security = require('../services/security');
 const { publicClue } = require('../services/clues');
 const { getSetting } = require('../services/settings');
 const { hit } = require('../services/ratelimit');
@@ -192,16 +193,40 @@ module.exports = function api() {
     const b = req.body || {};
     let s;
     try {
-      s = await auth.login(db, { username: b.username, password: b.password, ipHash: req.ipHash, userAgent: req.headers['user-agent'], adminOnly: b.admin === true });
+      s = await auth.login(db, { username: b.username, password: b.password, ipHash: req.ipHash, userAgent: req.headers['user-agent'], adminOnly: b.admin === true,
+        code: b.code ? String(b.code).slice(0, 20) : null, config: req.app.locals.config });
     } catch (e) {
       // Los intentos fallidos en el panel quedan en la auditoría (sin la contraseña) para detectar abusos.
-      if (b.admin === true) await audit(db, { action: 'admin.login_failed', details: { reason: e.code, username: String(b.username || '').slice(0, 60) }, ipHash: req.ipHash });
+      if (b.admin === true && e.code !== 'mfa_required') await audit(db, { action: 'admin.login_failed', details: { reason: e.code, username: String(b.username || '').slice(0, 60) }, ipHash: req.ipHash, outcome: 'error' });
       throw e;
     }
     const hours = s.user.role === 'player' ? 30 * 24 : 12;
     cookie(res, req.app.locals.config, 'sid', s.token, { maxAge: hours * 3600 });
-    if (s.user.role !== 'player') await audit(db, { actorId: s.user.id, action: 'admin.login', ipHash: req.ipHash });
+    if (s.user.role !== 'player') {
+      const dev = await security.noteDevice(db, s.user, { ipHash: req.ipHash, userAgent: req.headers['user-agent'] });
+      await audit(db, { actorId: s.user.id, action: 'admin.login', details: { new_device: dev.isNew, mfa: !!s.user.mfa_enabled }, ipHash: req.ipHash });
+    }
     res.json({ user: s.user, csrf: s.csrf, link_offer: s.user.role === 'player' ? await linkOffer(db, req.playerId) : null });
+  }));
+  // Invitaciones y recuperación del equipo: el enlace trae un token de un solo uso.
+  r.get('/team/token', a(async (req, res) => {
+    const db = req.app.locals.db;
+    if (!(await hit(db, 'teamtok:' + req.ipHash, 30, 'hour')).allowed) throw new HttpError(429, 'rate_limited');
+    const t = await security.tokenInfo(db, req.query.token);
+    res.set('Cache-Control', 'no-store');
+    res.json({ kind: t.kind, role: t.kind === 'invite' ? t.role : undefined, title: t.title || null, display_name: t.display_name || null, expires_at: t.expires_at });
+  }));
+  r.post('/team/accept', a(async (req, res) => {
+    const db = req.app.locals.db;
+    if (!(await hit(db, 'teamtok:' + req.ipHash, 30, 'hour')).allowed) throw new HttpError(429, 'rate_limited');
+    const b = req.body || {};
+    res.status(201).json(await security.acceptInvite(db, { token: b.token, username: b.username, password: b.password, display_name: b.display_name, email: b.email }, req.ipHash));
+  }));
+  r.post('/team/reset', a(async (req, res) => {
+    const db = req.app.locals.db;
+    if (!(await hit(db, 'teamtok:' + req.ipHash, 30, 'hour')).allowed) throw new HttpError(429, 'rate_limited');
+    const b = req.body || {};
+    res.json(await security.useReset(db, { token: b.token, password: b.password }, req.ipHash));
   }));
   r.post('/auth/logout', a(async (req, res) => {
     await auth.logout(req.app.locals.db, req.cookies.sid);

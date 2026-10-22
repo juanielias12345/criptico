@@ -77,6 +77,9 @@ const DEFAULT_SETTINGS = {
   'publishing.external_allow_asserted': false,
   'publishing.generated_autopublish': false,
   'publishing.semantic_duplicate_threshold': 0.6,
+  // Gobierno (ver docs/EMPRESA.md). Se cambian solo con la aprobación de los dos CEO.
+  'governance.dual_approval_amount_usd': 100,   // gastos o compromisos por encima de esto exigen a los dos CEO
+  'security.require_mfa_owner': false,          // si es true, un CEO sin MFA solo puede configurarlo
   // Banco de crípticos (ver docs/BANCO.md)
   'bank.target_per_cell': 10000,
   'bank.batch_size': 400,
@@ -135,6 +138,8 @@ async function seedReference(db) {
   for (const [name, every] of JOBS) {
     await db.run('INSERT OR IGNORE INTO jobs(name, interval_minutes, next_run_at) VALUES (?,?,?)', [name, every, now]);
   }
+  // Centro de operaciones: agentes, backlog, riesgos e integraciones de la auditoría inicial.
+  await require('../services/company').seedCompany(db);
 }
 
 module.exports = { seedReference, DEFAULT_SETTINGS, CATEGORY_ALIASES, VARIANTS };

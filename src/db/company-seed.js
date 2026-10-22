@@ -1,0 +1,195 @@
+'use strict';
+
+// Datos iniciales del centro de operaciones (ver docs/EMPRESA.md).
+// Son registros de organización —roles, tareas del backlog, riesgos detectados en
+// la auditoría y estado de integraciones comprobado—, no resultados inventados:
+// ninguna tarea entra como completada y ninguna integración figura como verificada
+// sin la evidencia de la comprobación.
+
+const AUDIT_DATE = '2026-10-22';
+
+// [n, id, departamento, nombre, misión, responsabilidades, herramientas, límites, indicadores, autonomía máxima, ejecución]
+// Ejecución: none = sin proceso activo; on_demand = trabaja cuando un CEO lo pide en el
+// proyecto de Claude; workflow:<archivo> = flujo de GitHub Actions; job:<nombre> = tarea programada del servidor.
+const L1 = ['Investigar, analizar y preparar borradores', 'No publica ni cambia producción'];
+const AGENTS = [
+  [1, 'operaciones', 'Dirección y operaciones', 'Operaciones ejecutivas', 'Coordinar equipos, prioridades y bloqueos; informar a los dos CEO.',
+    ['Mantener el tablero general', 'Detectar bloqueos', 'Convocar revisiones', 'Preparar informes ejecutivos'], ['Centro de operaciones', 'Repositorio (lectura)'], L1, ['Tareas bloqueadas', 'Decisiones pendientes'], 2, 'on_demand'],
+  [2, 'planificacion', 'Dirección y operaciones', 'Planificación estratégica', 'Convertir objetivos en proyectos y tareas priorizadas.',
+    ['Objetivos trimestrales y mensuales', 'Priorizar por impacto, costo, esfuerzo y riesgo', 'Comparar con resultados reales'], ['Centro de operaciones'], L1, ['Objetivos cumplidos'], 1, 'on_demand'],
+  [3, 'proyectos', 'Dirección y operaciones', 'Gestión de proyectos', 'Crear y asignar tareas, gestionar dependencias y plazos.',
+    ['Crear tareas', 'Asignar responsables', 'Detectar duplicadas', 'Supervisar entregas'], ['Centro de operaciones'], L1, ['Tareas atrasadas'], 2, 'on_demand'],
+  [4, 'finanzas', 'Dirección y operaciones', 'Finanzas y presupuestos', 'Controlar gastos previstos y reales por equipo y proveedor.',
+    ['Registrar costos con evidencia', 'Proyectar costos', 'Pedir aprobación antes de superar límites'], ['Centro de operaciones (costos)'], ['No paga ni contrata', 'Gastos sobre el umbral: aprobación de los dos CEO'], ['Desvío presupuesto/real'], 1, 'on_demand'],
+  [5, 'documentacion', 'Dirección y operaciones', 'Documentación y conocimiento', 'Mantener documentación y registro de decisiones sin contradicciones.',
+    ['Actualizar docs/', 'Registrar decisiones', 'Evitar contradicciones'], ['Repositorio (docs/)', 'Memoria del proyecto'], L1, ['Documentos desactualizados'], 2, 'on_demand'],
+  [6, 'mercado', 'Investigación y producto', 'Investigación de mercado', 'Analizar públicos, competidores y tendencias por país e idioma.',
+    ['Distinguir hechos de hipótesis', 'Citar fuentes con fecha'], ['Búsqueda web'], L1, ['Informes con fuentes'], 1, 'on_demand'],
+  [7, 'usuarios', 'Investigación y producto', 'Investigación de usuarios', 'Analizar comportamiento agregado y comentarios para proponer mejoras.',
+    ['Detectar fricciones', 'Barreras de activación', 'Propuestas basadas en evidencia'], ['Panel (estadísticas agregadas, sin datos personales)'], L1, ['Activación', 'Retención D1/D7'], 1, 'on_demand'],
+  [8, 'producto', 'Investigación y producto', 'Estrategia de producto', 'Mantener la hoja de ruta, hipótesis y criterios de aceptación.',
+    ['Priorizar funcionalidades', 'Coordinar tecnología, diseño y crecimiento'], ['Centro de operaciones'], L1, ['Entregas con criterio cumplido'], 1, 'on_demand'],
+  [9, 'accesibilidad', 'Investigación y producto', 'Accesibilidad e inclusión', 'Auditar contraste, teclado, lectores de pantalla y tipografía.',
+    ['Auditorías WCAG 2.1 AA', 'Correcciones verificables'], ['Navegador de pruebas', 'Repositorio'], L1, ['Problemas abiertos'], 2, 'on_demand'],
+  [10, 'cto', 'Tecnología', 'CTO virtual / arquitectura', 'Definir y vigilar arquitectura, seguridad, escalabilidad y mantenibilidad.',
+    ['Evaluar cambios de otros agentes', 'Evitar complejidad innecesaria', 'Proponer migraciones justificadas'], ['Repositorio', 'Pruebas'], ['Migraciones destructivas: nivel 4'], ['Incidentes', 'Deuda técnica'], 2, 'on_demand'],
+  [11, 'auditoria-codigo', 'Tecnología', 'Auditoría de código', 'Detectar errores, duplicaciones y patrones inseguros.',
+    ['Inventario de riesgos', 'Refactorizaciones justificadas'], ['Repositorio (lectura)'], L1, ['Hallazgos abiertos'], 1, 'on_demand'],
+  [12, 'backend', 'Tecnología', 'Arquitectura y backend', 'Mantener APIs, permisos, lógica de negocio e integridad de datos.',
+    ['Documentar contratos de API', 'Optimizar operaciones costosas'], ['Repositorio', 'Pruebas'], ['Cambios de producción: aprobación de un CEO'], ['Errores 5xx'], 2, 'on_demand'],
+  [13, 'frontend', 'Tecnología', 'Frontend web', 'Mantener la interfaz web, su rendimiento y coherencia visual.',
+    ['Implementar funcionalidades', 'Corregir errores'], ['Repositorio', 'Navegador de pruebas'], ['Cambios de producción: aprobación de un CEO'], ['Errores de página'], 2, 'on_demand'],
+  [14, 'movil', 'Tecnología', 'Aplicaciones móviles', 'Preparar y mantener las apps iOS y Android.',
+    ['Arquitectura móvil', 'Builds de prueba', 'Compatibilidad'], ['Repositorio'], ['No publica en tiendas sin cuentas y aprobación'], ['Builds verdes'], 1, 'none'],
+  [15, 'base-datos', 'Tecnología', 'Base de datos', 'Cuidar esquema, índices, migraciones, integridad y copias.',
+    ['Revisar consultas', 'Planificar copias y recuperación'], ['Repositorio (migraciones)'], ['Nunca borra datos de producción', 'Migraciones destructivas: nivel 4'], ['Consultas lentas'], 2, 'on_demand'],
+  [16, 'direccion-diseno', 'Tecnología · UX/UI', 'Dirección de diseño de producto', 'Mantener la visión visual y la coherencia entre web, apps y panel.',
+    ['Principios de diseño (docs/DISENO.md)'], ['Repositorio'], L1, ['Inconsistencias'], 1, 'on_demand'],
+  [17, 'ux-investigacion', 'Tecnología · UX/UI', 'Investigación UX', 'Analizar recorridos, abandonos y fricciones.',
+    ['Proponer experimentos'], ['Panel (embudo)'], L1, ['Abandono por pantalla'], 1, 'on_demand'],
+  [18, 'ux-interfaces', 'Tecnología · UX/UI', 'UX/UI de interfaces', 'Diseñar pantallas, estados y especificaciones para programar.',
+    ['Estados de carga, error, éxito y vacíos'], ['Repositorio'], L1, ['Especificaciones entregadas'], 1, 'on_demand'],
+  [19, 'sistema-diseno', 'Tecnología · UX/UI', 'Sistema de diseño', 'Mantener colores, tipografías, espaciados y componentes.',
+    ['Documentar componentes'], ['Repositorio (CSS)'], L1, ['Valores sueltos fuera del sistema'], 2, 'on_demand'],
+  [20, 'prototipado', 'Tecnología · UX/UI', 'Prototipado', 'Producir y comparar prototipos antes de tocar producción.',
+    ['Prototipos', 'Pruebas de usabilidad si hay herramientas'], ['Artifacts'], L1, ['Prototipos evaluados'], 1, 'on_demand'],
+  [21, 'funcionalidades', 'Tecnología · Programación', 'Funcionalidades', 'Implementar características aprobadas con pruebas y documentación.',
+    ['Entregas pequeñas', 'Pruebas y docs'], ['Repositorio', 'Pruebas'], ['Producción: aprobación de un CEO'], ['Entregas sin regresiones'], 2, 'on_demand'],
+  [22, 'rendimiento', 'Tecnología · Programación', 'Rendimiento', 'Medir y optimizar carga, consultas y recursos.',
+    ['Medición antes y después'], ['Repositorio', 'Navegador de pruebas'], L1, ['Tiempo de carga'], 2, 'on_demand'],
+  [23, 'integraciones', 'Tecnología · Programación', 'Integraciones', 'Gestionar servicios externos sin inventar conectividad.',
+    ['Verificar cada integración con evidencia', 'Documentar dependencias'], ['Centro de operaciones (integraciones)'], ['Credenciales solo por variables de entorno'], ['Integraciones verificadas'], 1, 'on_demand'],
+  [24, 'automatizacion', 'Tecnología · Programación', 'Automatización e infraestructura', 'Mantener tareas programadas, CI/CD y despliegues.',
+    ['Supervisar ejecuciones y fallos'], ['GitHub Actions', 'Vercel'], ['Respeta límites de costo'], ['Ejecuciones fallidas'], 2, 'workflow:ci.yml'],
+  [25, 'qa-funcional', 'Tecnología · Calidad', 'QA funcional', 'Verificar criterios de aceptación y que lo anterior siga funcionando.',
+    ['Reproducir errores'], ['Navegador de pruebas'], L1, ['Errores escapados'], 1, 'on_demand'],
+  [26, 'pruebas', 'Tecnología · Calidad', 'Pruebas automatizadas', 'Mantener y ejecutar pruebas en cada cambio.',
+    ['Unitarias, integración y extremo a extremo'], ['GitHub Actions (Pruebas)'], L1, ['Pruebas en verde'], 2, 'workflow:ci.yml'],
+  [27, 'qa-visual', 'Tecnología · Calidad', 'QA visual y responsive', 'Revisar tamaños de pantalla, desbordes y consistencia.',
+    ['Pruebas en escritorio y móvil'], ['Navegador de pruebas'], L1, ['Desbordes detectados'], 1, 'workflow:ci.yml'],
+  [28, 'seguridad', 'Tecnología · Calidad', 'Seguridad informática', 'Revisar autenticación, permisos, sesiones, secretos y datos.',
+    ['Priorizar riesgos críticos'], ['Repositorio', 'Panel (alertas)'], ['No desactiva controles'], ['Vulnerabilidades abiertas'], 1, 'on_demand'],
+  [29, 'devops', 'Tecnología · Calidad', 'DevOps y confiabilidad', 'Vigilar disponibilidad, errores, copias y reversión.',
+    ['Alertas accionables', 'Planes de reversión'], ['Panel (alertas)', 'Vercel'], ['Revertir requiere aviso a los CEO'], ['Alertas abiertas'], 2, 'job:alerts_scan'],
+  [30, 'doc-tecnica', 'Tecnología · Calidad', 'Documentación técnica', 'Mantener guías, arquitectura y procedimientos al día.',
+    ['Registrar cambios importantes'], ['Repositorio (docs/)'], L1, ['Docs al día'], 2, 'on_demand'],
+  [31, 'legal-direccion', 'Legal y cumplimiento', 'Dirección de cumplimiento y riesgo legal', 'Mapa de riesgos legales y elevación de asuntos de alto impacto.',
+    ['Priorizar por gravedad, probabilidad y país'], ['Centro de operaciones (legal)'], ['No es abogado: deriva a profesionales'], ['Riesgos altos abiertos'], 1, 'on_demand'],
+  [32, 'legal-paises', 'Legal y cumplimiento', 'Legislación por país', 'Investigar requisitos con fuentes oficiales fechadas.',
+    ['Distinguir obligación, recomendación y duda'], ['Búsqueda web (fuentes oficiales)'], ['No afirma cobertura sin fuente'], ['Jurisdicciones verificadas'], 1, 'on_demand'],
+  [33, 'legal-terminos', 'Legal y cumplimiento', 'Términos y condiciones', 'Preparar y versionar los términos de uso.',
+    ['Marcar cláusulas para revisión jurídica'], ['Centro de operaciones (documentos)'], ['Nunca publica sin aprobación'], ['Versiones aprobadas'], 1, 'on_demand'],
+  [34, 'privacidad', 'Legal y cumplimiento', 'Privacidad y protección de datos', 'Políticas de privacidad, finalidades, conservación y derechos.',
+    ['Minimizar datos', 'Registro de proveedores'], ['Centro de operaciones (documentos)', 'Panel (privacidad)'], ['Nunca publica sin aprobación'], ['Solicitudes atendidas en plazo'], 1, 'job:cleanup'],
+  [35, 'propiedad-intelectual', 'Legal y cumplimiento', 'Propiedad intelectual', 'Revisar derechos de acertijos, imágenes, marcas y tipografías.',
+    ['Registro de licencias'], ['Panel (fuentes y licencias)'], ['Bloquea ante duda de derechos'], ['Recursos sin licencia'], 1, 'on_demand'],
+  [36, 'legal-ugc', 'Legal y cumplimiento', 'Contenido de usuarios', 'Reglas de envío, denuncias, retirada y apelación.',
+    ['Trazabilidad de decisiones'], ['Panel (propuestas y reportes)'], ['Las propuestas siempre requieren aprobación humana'], ['Denuncias resueltas'], 1, 'on_demand'],
+  [37, 'legal-marketing', 'Legal y cumplimiento', 'Publicidad y marketing legal', 'Revisar afirmaciones, promociones, sorteos e influencers.',
+    ['Divulgación publicitaria'], ['Centro de operaciones (contenido)'], L1, ['Piezas observadas'], 1, 'on_demand'],
+  [38, 'legal-apps', 'Legal y cumplimiento', 'Legal de aplicaciones móviles', 'Privacidad, permisos y requisitos de tiendas.',
+    ['Coherencia entre permisos, funciones y políticas'], ['Centro de operaciones'], L1, ['Requisitos cubiertos'], 1, 'none'],
+  [39, 'contratos', 'Legal y cumplimiento', 'Contratos', 'Borradores con proveedores, colaboradores y creadores.',
+    ['Plantillas y versiones'], ['Centro de operaciones (documentos)'], ['Nunca firma ni compromete a la empresa'], ['Borradores revisados'], 1, 'on_demand'],
+  [40, 'regulatorio', 'Legal y cumplimiento', 'Seguimiento regulatorio', 'Detectar cambios legales y de políticas de plataformas.',
+    ['Revisión periódica de fuentes oficiales'], ['Búsqueda web'], L1, ['Cambios detectados'], 1, 'none'],
+  [41, 'cumplimiento-editorial', 'Legal y cumplimiento', 'Cumplimiento editorial', 'Comprobar derechos, atribuciones y licencias antes de publicar.',
+    ['Detener publicaciones con dudas de derechos'], ['Panel (fuentes)', 'Centro de operaciones (contenido)'], ['Bloquea ante duda'], ['Piezas detenidas'], 2, 'on_demand'],
+  // Equipos compartidos (en lugar de decenas de procesos redundantes)
+  [42, 'editorial', 'Contenido y propiedad intelectual', 'Equipo editorial de crípticos', 'Investigar mecanismos, crear, validar, clasificar, deduplicar y localizar crípticos.',
+    ['Creación original', 'Validación de respuestas y explicaciones', 'Dificultad', 'Duplicados', 'Localización', 'Fuentes y licencias'], ['Generador y banco', 'Validador', 'Panel (catálogo)'],
+    ['Publica solo lo que pasa la validación estricta sin dudas', 'Auditoría humana por muestra'], ['Publicados por celda', 'Rechazos en auditoría'], 2, 'workflow:bank.yml'],
+  [43, 'marketing-direccion', 'Marketing', 'Dirección de marketing y marca', 'Marca, propuesta de valor, plan de 90 días y estrategia por plataforma.',
+    ['Posicionamiento', 'Identidad verbal y visual', 'Calendario'], ['Centro de operaciones (contenido)'], ['Nada se publica sin aprobación de un CEO'], ['Jugadores activos desde campañas'], 1, 'on_demand'],
+  [44, 'crecimiento', 'Marketing', 'Crecimiento, SEO y ASO', 'Adquisición orgánica, SEO del sitio y metadatos de tiendas.',
+    ['Experimentos de conversión con hipótesis'], ['Repositorio (SEO)', 'Panel (embudo)'], L1, ['Tráfico orgánico', 'Conversión a primer juego'], 2, 'on_demand'],
+  [45, 'produccion-contenido', 'Marketing', 'Producción de contenido', 'Guiones, diseño, video, carruseles, historias, reels, artículos, newsletters y PDFs.',
+    ['Cada pieza con todos sus campos y archivos reales'], ['Centro de operaciones (contenido)'], ['No marca como creado lo que es solo descripción'], ['Piezas aprobadas'], 1, 'on_demand'],
+  [46, 'localizacion', 'Marketing', 'Localización', 'Adaptar piezas y pistas a cada país e idioma sin traducir juegos de palabras literalmente.',
+    ['Adaptación cultural'], ['Centro de operaciones (contenido)'], L1, ['Piezas localizadas'], 1, 'on_demand'],
+  [47, 'analitica', 'Analítica y crecimiento', 'Analítica, atribución y retención', 'Conectar marketing con uso real; separar datos observados de estimaciones.',
+    ['Cohortes', 'Embudo', 'A/B con hipótesis'], ['Panel (estadísticas)'], ['No inventa cifras'], ['Retención por cohorte'], 1, 'job:analytics_rollup'],
+  [48, 'publicidad', 'Marketing', 'Publicidad pagada', 'Preparar campañas pagas con presupuesto aprobado.',
+    ['Propuestas con presupuesto y métrica'], ['Centro de operaciones'], ['No gasta sin aprobación', 'Sobre el umbral: los dos CEO'], ['Costo por jugador activo'], 1, 'none'],
+  [49, 'alianzas', 'Marketing', 'Alianzas y relaciones públicas', 'Colaboraciones, prensa y creadores.',
+    ['Borradores de contacto'], ['Centro de operaciones'], ['No envía mensajes externos sin aprobación'], ['Alianzas activas'], 1, 'none'],
+  [50, 'comunidad', 'Comunidad', 'Comunidad y redes', 'Monitorear, clasificar, preparar borradores de respuesta y escalar casos delicados.',
+    ['Clasificar mensajes', 'Borradores para revisión humana', 'Escalar casos sensibles'], ['Panel (reportes y propuestas)'], ['Respuestas automáticas solo con política aprobada', 'No simula usuarios'], ['Tiempo de respuesta'], 1, 'none'],
+  [51, 'moderacion', 'Comunidad', 'Moderación', 'Aplicar las normas de comunidad a propuestas y reportes.',
+    ['Moderar spam y abuso según reglas'], ['Panel (propuestas y reportes)'], ['Decisiones de publicación siempre humanas'], ['Pendientes de moderación'], 1, 'none'],
+];
+
+// Backlog inicial que sale de la auditoría del 22/10/2026 (docs/AUDITORIA.md).
+// [id, título, área, categoría, agente, resultado esperado, riesgo, nivel de aprobación, estado, motivo de bloqueo]
+const TASKS = [
+  ['T-001', 'Activar MFA en las cuentas de los dos CEO', 'security', 'critical', 'seguridad', 'Ambos CEO con MFA y códigos de recuperación guardados', 'high', 1, 'blocked', 'Cada CEO debe activarlo desde «Mi seguridad»'],
+  ['T-002', 'Invitar a Inés de Gregorio como CEO y Súper Administradora', 'direction', 'critical', 'operaciones', 'Cuenta propia de Inés con rol de superadministradora y MFA', 'high', 1, 'blocked', 'Juan genera la invitación y se la envía por un canal seguro'],
+  ['T-003', 'Decidir si se exige MFA a todos los CEO', 'security', 'human_decision', 'seguridad', 'Ajuste security.require_mfa_owner aprobado por los dos CEO', 'medium', 4, 'pending', null],
+  ['T-004', 'Fijar el umbral de gasto que exige a los dos CEO', 'finance', 'human_decision', 'finanzas', 'Ajuste governance.dual_approval_amount_usd aprobado (hoy 100 USD)', 'medium', 4, 'pending', null],
+  ['T-005', 'Pasar Vercel de Hobby a Pro antes de uso comercial', 'tech', 'critical', 'automatizacion', 'Proyecto en un plan que permite uso comercial', 'high', 3, 'blocked', 'Decisión y pago de un CEO (aprox. 20 USD por miembro por mes, a confirmar en vercel.com/pricing)'],
+  ['T-006', 'Configurar SITE_URL=https://playcripticos.com y región gru1 en Vercel', 'tech', 'important', 'automatizacion', 'Variables y región aplicadas y verificadas', 'medium', 3, 'blocked', 'Requiere acceso de un CEO a Vercel'],
+  ['T-007', 'Elegir proveedor de correo transaccional', 'integration', 'integration', 'integraciones', 'Verificación de correo y avisos de seguridad por email', 'medium', 3, 'blocked', 'Decisión y cuenta del proveedor'],
+  ['T-008', 'Monitoreo de errores en producción', 'tech', 'important', 'devops', 'Errores del servidor y del navegador con alertas', 'medium', 3, 'pending', null],
+  ['T-009', 'Revisión profesional de términos y privacidad', 'legal', 'legal', 'legal-direccion', 'Textos revisados por un abogado para los países prioritarios', 'high', 4, 'blocked', 'Contratar asesoría legal y elegir países prioritarios'],
+  ['T-010', 'Elegir países prioritarios para la investigación legal y el marketing', 'direction', 'human_decision', 'planificacion', 'Lista de países priorizada', 'medium', 3, 'pending', null],
+  ['T-011', 'Auditar o crear las cuentas de redes sociales de la marca', 'marketing', 'human_decision', 'marketing-direccion', 'Inventario de cuentas existentes y plan de creación', 'medium', 3, 'blocked', 'Los CEO deben indicar qué cuentas existen y dar acceso'],
+  ['T-012', 'Plan de lanzamiento de 90 días con piezas concretas', 'marketing', 'growth', 'marketing-direccion', 'Calendario con cada pieza cargada y en revisión', 'low', 3, 'pending', null],
+  ['T-013', 'Decidir tecnología de las apps móviles', 'apps', 'human_decision', 'movil', 'Decisión entre PWA mejorada, Capacitor o Expo, con costos', 'medium', 3, 'pending', null],
+  ['T-014', 'Cuentas de Apple Developer y Google Play Console', 'apps', 'integration', 'movil', 'Cuentas a nombre de la empresa', 'medium', 4, 'blocked', 'Alta y pago de un CEO (Apple 99 USD/año; Google 25 USD única vez, a confirmar)'],
+  ['T-015', 'Auditar la muestra del banco de crípticos', 'content', 'important', 'editorial', 'Muestra de 346 crípticos revisada', 'medium', 1, 'blocked', 'Revisión humana en el panel'],
+  ['T-016', 'Nueva versión del generador para ampliar el banco', 'content', 'growth', 'editorial', 'Más celdas cerca de la meta, con la misma validación', 'low', 2, 'pending', null],
+  ['T-017', 'Política de respuestas automáticas en redes', 'community', 'human_decision', 'comunidad', 'Política aprobada por los CEO o decisión de responder solo a mano', 'medium', 3, 'pending', null],
+  ['T-018', 'Copias de seguridad de Turso verificadas', 'tech', 'important', 'base-datos', 'Restauración de prueba documentada', 'high', 3, 'pending', null],
+];
+
+const RISKS = [
+  ['R-001', 'tech', 'Vercel Hobby no admite uso comercial', 'Las condiciones del plan Hobby lo limitan a uso personal no comercial. Una empresa con marketing y apps debe pasar a un plan pago.', 'high', 'high', null, 'Pasar a Pro (T-005).', 0],
+  ['R-002', 'security', 'Cuentas de superadministrador sin segundo factor', 'Hasta que cada CEO active MFA, una contraseña filtrada da control total.', 'critical', 'medium', null, 'Activar MFA (T-001) y luego exigirlo (T-003).', 0],
+  ['R-003', 'security', 'Sin correo para recuperar cuentas', 'No hay proveedor de correo: la recuperación depende de que el otro CEO genere un enlace.', 'medium', 'medium', null, 'Enlaces de recuperación entre CEO ya disponibles; correo en T-007.', 0],
+  ['R-004', 'legal', 'Términos y privacidad sin revisión profesional', 'Los textos publicados son borradores razonables, no validados por un abogado en ningún país.', 'high', 'medium', null, 'T-009.', 1],
+  ['R-005', 'legal', 'Requisitos por país sin investigar', 'No hay matriz verificada: no se puede afirmar cumplimiento en ningún mercado.', 'high', 'high', null, 'Elegir países (T-010) e investigar con fuentes oficiales.', 1],
+  ['R-006', 'content', 'El banco no alcanza la meta de 10.000 por celda', '16.696 de 100.000 publicados al 22/10/2026; el generador está agotado.', 'medium', 'high', null, 'T-016, fuentes con licencia y propuestas aprobadas.', 0],
+  ['R-007', 'tech', 'Sin monitoreo de errores externo ni copias verificadas', 'Los errores quedan en la base, pero no hay alertas fuera del panel ni prueba de restauración.', 'medium', 'medium', null, 'T-008 y T-018.', 0],
+  ['R-008', 'apps', 'No existen aplicaciones móviles', 'Solo hay sitio web con manifiesto instalable.', 'medium', 'high', null, 'T-013 y T-014.', 0],
+  ['R-009', 'marketing', 'Sin cuentas sociales conectadas', 'Ninguna API de redes está conectada: no se puede publicar ni medir automáticamente.', 'medium', 'high', null, 'T-011.', 0],
+];
+
+// [id, nombre, categoría, estado, aporta, permisos, datos, costo, acciones, limitaciones, acción del CEO, evidencia, fecha]
+const INTEGRATIONS = [
+  ['github', 'GitHub (repositorio juanielias12345/criptico)', 'Código', 'verified', 'Código, historial, revisiones y flujos', 'Lectura y escritura del repositorio', 'Código fuente; ningún dato de usuarios', 'Gratis en el plan actual', 'Commits, ramas, flujos de Actions', 'Repositorio público: nada secreto en el código', '—', 'Push del commit 2e81fce aceptado el 22/10/2026', AUDIT_DATE],
+  ['vercel', 'Vercel (hosting)', 'Hosting', 'verified', 'Publica el sitio en cada cambio de main', 'Despliegue desde GitHub; variables de entorno', 'Tráfico web y registros del servidor', 'Hobby gratis (no comercial); Pro pago', 'Despliegues, funciones, cron diario', 'Hobby: uso no comercial y cron diario', 'Pasar a Pro (T-005), SITE_URL y región (T-006)', 'Estado de despliegue «success» del commit 2e81fce el 22/10/2026', AUDIT_DATE],
+  ['turso', 'Turso (base de datos libSQL, São Paulo)', 'Base de datos', 'verified', 'Base de datos de producción', 'Token de base en Vercel y en secretos de GitHub', 'Todos los datos del sitio', 'Plan gratuito con límites de uso', 'Lectura y escritura', 'Las copias de seguridad no son visibles desde el proyecto', 'Verificar plan y copias (T-018)', 'El flujo «Banco de crípticos» escribió y verificó 16.696 registros (ejecución 39697250036, 22/10/2026)', AUDIT_DATE],
+  ['github-actions', 'GitHub Actions', 'Automatización', 'verified', 'Tareas programadas (banco cada 6 h) y manuales (crear administrador)', 'Secretos DATABASE_URL, DATABASE_AUTH_TOKEN, ADMIN_PASSWORD', 'Escribe en la base de producción', 'Minutos gratuitos del plan', 'Ejecuta scripts del repositorio', 'Sin acceso del sitio a sus resultados salvo lo que escriben en la base', '—', 'Ejecución 39697250036 terminó con éxito el 22/10/2026', AUDIT_DATE],
+  ['vercel-cron', 'Vercel Cron (/api/cron/tick)', 'Automatización', 'configured_unverified', 'Tareas del servidor una vez por día', 'CRON_SECRET', 'Base de datos', 'Incluido', 'Importaciones, diario, limpieza, alertas', 'Hobby: una vez por día', 'Revisar «Tareas» en el panel', 'Configurado en vercel.json; ejecuciones visibles en el panel, no comprobadas desde aquí', null],
+  ['analytics', 'Analítica propia (primera parte)', 'Analítica', 'verified', 'Partidas, embudo y retención sin terceros', 'Ninguno externo', 'Eventos de juego sin datos personales', 'Incluido', 'Resúmenes diarios', 'No mide redes sociales ni anuncios', '—', 'Funciona en las pruebas automáticas del panel', AUDIT_DATE],
+  ['email', 'Correo transaccional', 'Comunicación', 'missing', 'Verificación de cuentas, avisos de seguridad y newsletters', 'Clave de API del proveedor', 'Correos de usuarios', 'Variable según proveedor', 'Enviar correos', '—', 'Elegir proveedor (T-007)', null, null],
+  ['error-monitoring', 'Monitoreo de errores', 'Monitoreo', 'missing', 'Alertas de errores fuera del panel', 'Clave del proveedor', 'Trazas de error', 'Variable', 'Alertar', '—', 'Aprobar proveedor (T-008)', null, null],
+  ['instagram', 'Instagram / Facebook (Meta Graph API)', 'Redes sociales', 'missing', 'Publicar, leer comentarios y métricas', 'Cuenta profesional, app de Meta revisada', 'Comentarios y mensajes', 'Gratis (API)', 'Publicar contenido aprobado, leer métricas', 'Revisión de la app por Meta', 'Indicar cuentas y conectar (T-011)', null, null],
+  ['tiktok', 'TikTok (Content Posting API)', 'Redes sociales', 'missing', 'Publicar videos y leer métricas', 'App de TikTok aprobada', 'Métricas y comentarios', 'Gratis (API)', 'Publicar', 'Auditoría de la app por TikTok', 'T-011', null, null],
+  ['youtube', 'YouTube (Data API)', 'Redes sociales', 'missing', 'Subir videos y Shorts, métricas', 'OAuth de la cuenta del canal', 'Métricas', 'Gratis con cuota', 'Publicar', 'Cuotas diarias', 'T-011', null, null],
+  ['linkedin', 'LinkedIn', 'Redes sociales', 'missing', 'Publicaciones de la página de empresa', 'App de LinkedIn', 'Métricas', 'Gratis (API)', 'Publicar', 'Acceso por programa de socios', 'T-011', null, null],
+  ['x', 'X', 'Redes sociales', 'missing', 'Publicaciones', 'Plan de API de X', 'Métricas', 'Planes pagos para publicar a escala', 'Publicar', 'Costo de la API', 'T-011', null, null],
+  ['app-store', 'App Store Connect', 'Aplicaciones', 'missing', 'Publicar la app de iOS', 'Cuenta Apple Developer', 'Datos de la app', 'Apple Developer: 99 USD/año (a confirmar)', 'Builds, TestFlight, revisión', 'Revisión de Apple', 'T-014', null, null],
+  ['google-play', 'Google Play Console', 'Aplicaciones', 'missing', 'Publicar la app de Android', 'Cuenta de desarrollador', 'Datos de la app', '25 USD única vez (a confirmar)', 'Builds, pruebas, revisión', 'Revisión de Google', 'T-014', null, null],
+  ['design', 'Herramienta de diseño (Figma o Canva)', 'Diseño', 'missing', 'Piezas gráficas y video', 'Cuenta de la empresa', 'Recursos de marca', 'Variable', 'Diseñar', '—', 'Elegir herramienta', null, null],
+  ['metricool', 'Metricool (programación y métricas de redes)', 'Redes sociales', 'configured_unverified', 'Programar publicaciones y leer métricas de varias redes desde un solo lugar', 'Conector de Claude a la cuenta de Metricool', 'Métricas y publicaciones de las cuentas conectadas', 'Según el plan de Metricool', 'Programar, enviar a revisión, leer métricas', 'La marca existe pero no tiene ninguna red conectada: no se puede publicar ni medir', 'Conectar las redes de la marca en Metricool (T-011)', 'Consulta del 22/10/2026: «This brand doesn\'t have any social network connected yet»', AUDIT_DATE],
+  ['claude', 'Claude (agentes de este proyecto)', 'IA', 'verified', 'Auditoría, código, documentos y borradores', 'Repositorio y herramientas autorizadas del proyecto', 'Lo que el proyecto comparte', 'Según el plan de Claude', 'Trabaja cuando un CEO lo pide; no corre en segundo plano', 'Sin proceso continuo propio', '—', 'Commits 2e81fce y anteriores', AUDIT_DATE],
+];
+
+const JURISDICTIONS = [
+  ['AR', 'Argentina'], ['UY', 'Uruguay'], ['CL', 'Chile'], ['MX', 'México'], ['CO', 'Colombia'], ['ES', 'España'], ['EU', 'Unión Europea'],
+  ['US', 'Estados Unidos'], ['GB', 'Reino Unido'], ['CA', 'Canadá'], ['AU', 'Australia'],
+];
+
+// [id, nombre, ruta pública]
+const LEGAL_DOCS = [
+  ['terms', 'Términos y condiciones del sitio', '/es/condiciones'], ['privacy', 'Política de privacidad', '/es/privacidad'],
+  ['cookies', 'Política de cookies', null], ['ugc', 'Política de contenido enviado por usuarios', null], ['community', 'Normas de comunidad', null],
+  ['ip', 'Propiedad intelectual y procedimiento de denuncias', null], ['moderation', 'Política de moderación', null],
+  ['deletion', 'Eliminación de cuentas y datos', null], ['promotions', 'Concursos y promociones', null], ['consents', 'Avisos y consentimientos específicos', null],
+  ['contracts', 'Acuerdos con colaboradores, proveedores y creadores', null], ['app-privacy', 'Privacidad de las aplicaciones', null],
+  ['obligations', 'Matriz de obligaciones por país', null], ['processors', 'Registro de proveedores que tratan datos', null],
+  ['incidents', 'Registro de incidentes y procedimiento de respuesta', null],
+];
+
+module.exports = { AGENTS, TASKS, RISKS, INTEGRATIONS, JURISDICTIONS, LEGAL_DOCS, AUDIT_DATE };

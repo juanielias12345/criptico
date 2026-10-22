@@ -8,7 +8,7 @@
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="preload" href="/fonts/instrument-sans-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="/css/app.css?v=2026-10-21d">
-<link rel="stylesheet" href="/css/admin.css?v=2026-10-22b">
+<link rel="stylesheet" href="/css/admin.css?v=2026-10-22c">
 </head>
 <body class="admin">
 <header class="site-header">
@@ -23,6 +23,12 @@
   <nav class="admin-nav" id="admin-nav" aria-label="Secciones del panel" hidden>
     <a href="#dashboard" data-perm="dashboard">Resumen</a>
     <a href="#alerts" data-perm="alerts.read">Alertas</a>
+    <p class="nav-group">Empresa</p>
+    <a href="#company" data-perm="company.read">Centro de operaciones</a>
+    <a href="#approvals" data-perm="company.read">Aprobaciones</a>
+    <a href="#tasks" data-perm="company.read">Tareas</a>
+    <a href="#content" data-perm="company.read">Contenido y redes</a>
+    <a href="#legal" data-perm="company.read">Legal</a>
     <p class="nav-group">Análisis</p>
     <a href="#geo" data-perm="analytics.read">Regiones e idiomas</a>
     <a href="#funnel" data-perm="analytics.read">Embudo y retención</a>
@@ -53,9 +59,10 @@
     <a href="#users" data-perm="users.manage">Equipo</a>
     <a href="#jobs" data-perm="dashboard">Tareas y errores</a>
     <a href="#audit" data-perm="audit.read">Auditoría</a>
+    <a href="#security" data-perm="dashboard">Mi seguridad</a>
   </nav>
   <main id="admin-main" tabindex="-1"><p class="muted">Cargando…</p></main>
 </div>
-<script src="/js/admin.js?v=2026-10-22b" defer></script>
+<script src="/js/admin.js?v=2026-10-22c" defer></script>
 </body>
 </html>

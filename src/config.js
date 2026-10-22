@@ -19,6 +19,9 @@ function loadConfig(env = process.env) {
     autoMigrate: env.AUTO_MIGRATE ? env.AUTO_MIGRATE === '1' : !production,
     internalScheduler: env.INTERNAL_SCHEDULER === '1',
     cookieSecure: env.COOKIE_SECURE ? env.COOKIE_SECURE === '1' : production,
+    mfaKey: env.MFA_ENCRYPTION_KEY || '',                     // opcional; si falta se deriva de IP_HASH_SALT
+    commit: env.VERCEL_GIT_COMMIT_SHA || null,
+    commitMessage: env.VERCEL_GIT_COMMIT_MESSAGE ? env.VERCEL_GIT_COMMIT_MESSAGE.split('\n')[0].slice(0, 120) : null,
   };
   const missing = [];
   if (production) {

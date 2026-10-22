@@ -279,7 +279,9 @@ test('#18 panel de administración en escritorio y móvil', async () => {
   await c.post(`/api/game/${s.json.game_id}/guess`, { answer: ans });
   const owner = await staff(env, 'owner');
   const views = ['dashboard', 'alerts', 'geo', 'funnel', 'cluestats', 'exports', 'players', 'player/' + reg.json.user.id, 'player/' + reg.json.user.id + '?tab=games',
-    'player/' + reg.json.user.id + '?tab=performance', 'games', 'game/' + s.json.game_id, 'privacy', 'catstats', 'importstats', 'catalog', 'submissions', 'users', 'bank', 'bankaudit'];
+    'player/' + reg.json.user.id + '?tab=performance', 'games', 'game/' + s.json.game_id, 'privacy', 'catstats', 'importstats', 'catalog', 'submissions', 'users', 'bank', 'bankaudit',
+    ...['direction', 'agents', 'tech', 'marketing', 'legal', 'community', 'apps', 'audit', 'integrations', 'risks'].map((t) => 'company?tab=' + t),
+    'agent/editorial', 'approvals', 'tasks', 'task/T-001', 'content', 'piece/new', 'legal', 'legaldoc/terms/1/es', 'jurisdiction/AR', 'security'];
   for (const viewport of [{ width: 1440, height: 900 }, { width: 375, height: 812 }]) {
     const { ctx, page, errors } = await newPage({ viewport });
     await adminLogin(page, owner);
@@ -487,4 +489,57 @@ test('el menú desplegable lleva a «Mi perfil» en móvil y escritorio', async 
     assert.deepEqual(errors, []);
     await ctx.close();
   }
+});
+
+test('empresa: invitar a un CEO, aceptar, activar MFA y entrar con código', async () => {
+  const { totp } = require('../../src/services/security');
+  const owner = await staff(env, 'owner');
+  const { ctx, page, errors } = await newPage();
+  await adminLogin(page, owner);
+  await page.goto(env.base + '/admin#users');
+  await page.selectOption('#inv-role', 'owner');
+  await page.fill('#inv-name', 'Inés de Prueba');
+  await page.fill('#inv-title', 'CEO y Súper Administradora');
+  await page.getByRole('button', { name: 'Generar invitación' }).click();
+  const link = await page.locator('#invite-result .copy-input').inputValue();
+  assert.match(link, /\/admin#invite\?token=/);
+  await ctx.close();
+
+  // La persona invitada abre el enlace sin sesión y elige su contraseña.
+  const b = await newPage();
+  const password = 'Clave-de-la-ceo-2026';
+  const username = 'ceo' + Date.now().toString(36);
+  await b.page.goto(link);
+  await b.page.locator('#invite-form').waitFor();
+  await b.page.fill('#i-user', username);
+  await b.page.fill('#i-pass', password);
+  await b.page.fill('#i-pass2', password);
+  await b.page.click('#invite-form button[type=submit]');
+  await b.page.locator('.login-box h1:has-text("Listo")').waitFor();
+  const row = await env.db.get('SELECT role, title FROM users WHERE username = ?', [username]);
+  assert.deepEqual({ ...row }, { role: 'owner', title: 'CEO y Súper Administradora' });
+
+  // Activa la verificación en dos pasos.
+  await adminLogin(b.page, { username, password });
+  await b.page.goto(env.base + '/admin#security');
+  await b.page.getByRole('button', { name: 'Configurar' }).click();
+  const secret = (await b.page.textContent('#mfa-secret')).replace(/\s/g, '');
+  await b.page.fill('#mfa-code', totp(secret));
+  await b.page.getByRole('button', { name: 'Activar' }).click();
+  await b.page.locator('#recovery-codes li').nth(7).waitFor();
+
+  // Al volver a entrar, el panel pide el código.
+  await b.page.click('#logout');
+  await b.page.locator('#admin-login').waitFor();
+  await b.page.fill('#a-user', username);
+  await b.page.fill('#a-pass', password);
+  await b.page.click('#admin-login button[type=submit]');
+  await b.page.locator('#a-code').waitFor({ state: 'visible' });
+  // El código de 30 s ya se usó al activar: se espera al siguiente intervalo si hace falta.
+  await b.page.fill('#a-code', totp(secret, Date.now() + 30000));
+  await b.page.click('#admin-login button[type=submit]');
+  await b.page.locator('#logout').waitFor({ state: 'visible' });
+  assert.equal(await b.page.locator('#admin-nav a[href="#approvals"]').isVisible(), true);
+  assert.deepEqual(b.errors.filter((e) => !/401/.test(e)), []);
+  await b.ctx.close();
 });

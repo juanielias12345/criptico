@@ -59,7 +59,7 @@ async function createUser(db, { username, password, email, role = 'player', disp
   return { id, username: u, role };
 }
 
-async function login(db, { username, password, ipHash, userAgent, adminOnly }) {
+async function login(db, { username, password, ipHash, userAgent, adminOnly, code, config }) {
   const user = await db.get('SELECT * FROM users WHERE username = ? OR email = ?', [String(username || ''), String(username || '').toLowerCase()]);
   if (!user) { verifyPassword(password, DUMMY_HASH); throw new HttpError(401, 'invalid_credentials', 'Usuario o contraseña incorrectos.'); }
   if (user.disabled) throw new HttpError(403, 'account_disabled');
@@ -73,27 +73,44 @@ async function login(db, { username, password, ipHash, userAgent, adminOnly }) {
     throw new HttpError(401, 'invalid_credentials', 'Usuario o contraseña incorrectos.');
   }
   if (adminOnly && user.role === 'player') throw new HttpError(403, 'not_admin', 'Esta cuenta no tiene acceso al panel.');
+  // Segundo factor: sin código se pide; un código incorrecto cuenta como intento fallido.
+  let mfaAt = null;
+  if (user.mfa_enabled_at) {
+    if (!code) throw new HttpError(401, 'mfa_required', 'Ingresá el código de tu aplicación de autenticación.');
+    const second = await require('./security').checkSecondFactor(db, config, user, code);
+    if (!second.ok) {
+      const failed = user.failed_logins + 1;
+      const lock = failed >= MAX_FAILED ? new Date(Date.now() + LOCK_MINUTES * 60000).toISOString() : null;
+      await db.run('UPDATE users SET failed_logins = ?, locked_until = ? WHERE id = ?', [lock ? 0 : failed, lock, user.id]);
+      throw new HttpError(401, 'invalid_code', 'El código no es correcto.');
+    }
+    mfaAt = now();
+  }
   await db.run('UPDATE users SET failed_logins = 0, locked_until = NULL, last_login_at = ? WHERE id = ?', [now(), user.id]);
   const token = randomToken(32);
   const csrf = randomToken(24);
   const hours = user.role === 'player' ? SESSION_DAYS * 24 : ADMIN_SESSION_HOURS;
   const expires = new Date(Date.now() + hours * 3600000).toISOString();
-  await db.run('INSERT INTO sessions(id, user_id, csrf_token, expires_at, ip_hash, user_agent) VALUES (?,?,?,?,?,?)',
-    [sha256(token), user.id, csrf, expires, ipHash || null, String(userAgent || '').slice(0, 200)]);
+  await db.run('INSERT INTO sessions(id, user_id, csrf_token, expires_at, ip_hash, user_agent, mfa_at, last_seen_at) VALUES (?,?,?,?,?,?,?,?)',
+    [sha256(token), user.id, csrf, expires, ipHash || null, String(userAgent || '').slice(0, 200), mfaAt, now()]);
   return { token, csrf, expires, user: publicUser(user) };
 }
 
 async function sessionFromToken(db, token) {
   if (!token) return null;
   const row = await db.get(
-    `SELECT s.id AS session_id, s.csrf_token, s.expires_at, u.* FROM sessions s JOIN users u ON u.id = s.user_id
+    `SELECT s.id AS session_id, s.csrf_token, s.expires_at, s.last_seen_at, s.mfa_at, u.* FROM sessions s JOIN users u ON u.id = s.user_id
      WHERE s.id = ?`, [sha256(token)]);
   if (!row) return null;
   if (Date.parse(row.expires_at) < Date.now() || row.disabled) {
     await db.run('DELETE FROM sessions WHERE id = ?', [row.session_id]);
     return null;
   }
-  return { sessionId: row.session_id, csrf: row.csrf_token, user: publicUser(row) };
+  // Última actividad de la sesión (como mucho una escritura cada 5 minutos).
+  if (!row.last_seen_at || Date.now() - Date.parse(row.last_seen_at) > 300000) {
+    await db.run('UPDATE sessions SET last_seen_at = ? WHERE id = ?', [now(), row.session_id]);
+  }
+  return { sessionId: row.session_id, csrf: row.csrf_token, mfa: !!row.mfa_at, user: publicUser(row) };
 }
 
 async function logout(db, token) {
@@ -102,7 +119,8 @@ async function logout(db, token) {
 
 function publicUser(u) {
   return { id: u.id, username: u.username, role: u.role, display_name: u.display_name, email: u.email || null,
-    country_code: u.country_code || null, play_variant: u.play_variant || null };
+    country_code: u.country_code || null, play_variant: u.play_variant || null,
+    title: u.role === 'player' ? undefined : (u.title || null), mfa_enabled: u.role === 'player' ? undefined : !!u.mfa_enabled_at };
 }
 
 // Permisos por rol. El panel solo muestra lo que el rol permite, pero la
@@ -112,18 +130,20 @@ const PERMISSIONS = {
   owner: ['dashboard', 'catalog.read', 'catalog.write', 'catalog.delete', 'sources.read', 'sources.write', 'imports.review',
     'submissions.read', 'submissions.moderate', 'reports.manage', 'languages.write', 'settings.write', 'users.manage', 'audit.read', 'jobs.run',
     'analytics.read', 'players.read', 'players.pii', 'players.manage', 'privacy.manage', 'games.read', 'alerts.read', 'alerts.manage',
-    'export.data', 'export.pii', 'bank.read', 'bank.run', 'bank.audit'],
+    'export.data', 'export.pii', 'bank.read', 'bank.run', 'bank.audit',
+    'company.read', 'company.write', 'approvals.request', 'approvals.decide', 'legal.write', 'content.write', 'security.manage'],
   // Administrador de contenido: catálogo, fuentes e importaciones, y el rendimiento de los crípticos.
   editor: ['dashboard', 'catalog.read', 'catalog.write', 'sources.read', 'sources.write', 'imports.review', 'reports.manage', 'jobs.run',
-    'analytics.read', 'alerts.read', 'export.data', 'bank.read', 'bank.run', 'bank.audit'],
+    'analytics.read', 'alerts.read', 'export.data', 'bank.read', 'bank.run', 'bank.audit',
+    'company.read', 'approvals.request', 'content.write'],
   // Moderador: propuestas de usuarios y reportes; sin datos personales ni estadísticas de usuarios.
   moderator: ['dashboard', 'catalog.read', 'submissions.read', 'submissions.moderate', 'reports.manage', 'bank.read', 'bank.audit'],
   // Analista: estadísticas agregadas, partidas y fichas de usuario sin correo electrónico.
-  analyst: ['dashboard', 'catalog.read', 'analytics.read', 'players.read', 'games.read', 'alerts.read', 'export.data', 'bank.read'],
+  analyst: ['dashboard', 'catalog.read', 'analytics.read', 'players.read', 'games.read', 'alerts.read', 'export.data', 'bank.read', 'company.read'],
   player: [],
 };
 
-const ROLE_LABELS = { owner: 'Superadministrador', editor: 'Administrador de contenido', moderator: 'Moderador', analyst: 'Analista de estadísticas', player: 'Jugador' };
+const ROLE_LABELS = { owner: 'Superadministrador (CEO)', editor: 'Administrador de contenido', moderator: 'Moderador', analyst: 'Analista de estadísticas', player: 'Jugador' };
 const STAFF_ROLES = ['owner', 'editor', 'moderator', 'analyst'];
 
 const can = (user, perm) => !!user && (PERMISSIONS[user.role] || []).includes(perm);

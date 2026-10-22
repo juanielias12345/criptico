@@ -1,0 +1,36 @@
+# Pruebas: corre las pruebas unitarias, de integración y en navegador en cada
+# cambio de main y en cada pull request. No usa la base de producción.
+# Es el proceso real de los agentes de «Pruebas automatizadas» y «QA visual»
+# del centro de operaciones (docs/EMPRESA.md).
+name: Pruebas
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Pruebas unitarias y de integración
+        run: npm test
+      - name: Pruebas en navegador (Chrome del runner)
+        run: npm run test:e2e
+        env:
+          CHROMIUM_PATH: /usr/bin/google-chrome

@@ -232,7 +232,7 @@ test('#13 un moderador o analista no ejecuta acciones de superadministrador', as
   assert.equal(hist.json.items[0].action, 'user.suspend');
   assert.equal((await owner.c.post(`/api/admin/players/${p.id}/reactivate`, {})).status, 200);
   // La auditoría no se puede modificar.
-  await assert.rejects(env.db.run("UPDATE audit_log SET action = 'otra'"), /append_only/);
+  await assert.rejects(env.db.run("UPDATE audit_log SET action = 'otra'"), /audit_log_immutable/);
 });
 
 test('#14 #15 propuestas siempre con aprobación manual; tareas no las publican', async () => {

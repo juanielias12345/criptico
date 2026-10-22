@@ -38,6 +38,7 @@ function table(m) {
   await seedReference(db);
   if (cmd === 'run') {
     const minutes = Number(arg('minutes', 0));
+    const startedAt = new Date().toISOString();
     const r = await bank.runCells(db, {
       langs: list(arg('lang')), difficulties: (list(arg('difficulty')) || ['1', '2', '3', '4', '5']).map(Number),
       batches: Number(arg('batches', 1)), size: Number(arg('size', 0)) || undefined, concurrency: Number(arg('concurrency', 2)),
@@ -47,6 +48,11 @@ function table(m) {
     });
     const errors = r.results.filter((x) => x.error);
     if (errors.length) process.exitCode = 1;
+    // Registro de la ejecución del equipo editorial en el centro de operaciones (con evidencia).
+    const pub = r.results.reduce((s, x) => s + (x.published || 0), 0);
+    const run = process.env.GITHUB_RUN_ID ? `https://github.com/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}` : 'línea de comandos';
+    await require('../src/services/company').recordAgentRun(db, { agentId: 'editorial', status: errors.length ? 'error' : 'ok', startedAt,
+      summary: `${r.results.length} lotes, ${pub} publicados`, evidence: run, error: errors.length ? errors.map((x) => x.error).join('; ').slice(0, 500) : null });
   }
   const m = await bank.matrix(db);
   console.log(table(m));

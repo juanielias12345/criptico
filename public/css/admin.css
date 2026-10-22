@@ -188,3 +188,13 @@ td.heat[data-v="4"] { background: color-mix(in srgb, var(--series-1) 45%, transp
 .bank-cell b { font: 500 var(--t-xl)/1.1 var(--font-display); font-variant-numeric: tabular-nums; }
 .bank-cell .bar-track { display: block; width: 100%; }
 #bank-cell th[scope="row"] { text-align: left; white-space: nowrap; }
+
+/* Empresa: aprobaciones, legal y seguridad */
+.pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+.legal-text { max-height: 60vh; overflow: auto; font-size: var(--t-sm); line-height: 1.55; }
+.post-preview { border: var(--b-1); border-radius: var(--r-1); padding: var(--s-4); background: var(--sheet); max-width: 560px; }
+.post-preview .pre { margin: var(--s-2) 0 0; }
+.codes { columns: 2; list-style: none; padding: 0; font-size: var(--t-lg); }
+.codes li { margin-bottom: var(--s-2); }
+.secret { font-size: var(--t-lg); letter-spacing: .05em; overflow-wrap: anywhere; }
+.copy-input { flex: 1 1 320px; min-width: 0; font-family: ui-monospace, monospace; font-size: var(--t-sm); }

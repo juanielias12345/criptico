@@ -1,9 +1,14 @@
 'use strict';
 
-async function audit(db, { actorId, action, targetKind, targetId, details, ipHash }) {
+// Registro de auditoría. Es inalterable: la base rechaza borrar o reescribir
+// registros (ver 005_company.sql). Cada entrada dice quién (persona, agente o
+// sistema), qué, sobre qué objeto, con qué resultado y, si lo hubo, qué costo.
+async function audit(db, { actorId, actorKind, actorLabel, action, targetKind, targetId, details, ipHash, outcome, costAmount, costCurrency }) {
   await db.run(
-    'INSERT INTO audit_log(actor_id, action, target_kind, target_id, details, ip_hash) VALUES (?,?,?,?,?,?)',
-    [actorId || null, action, targetKind || null, targetId || null, details ? JSON.stringify(details) : null, ipHash || null]);
+    `INSERT INTO audit_log(actor_id, actor_kind, actor_label, action, target_kind, target_id, details, ip_hash, outcome, cost_amount, cost_currency)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+    [actorId || null, actorKind || (actorId ? 'person' : 'system'), actorLabel || null, action, targetKind || null, targetId || null,
+      details ? JSON.stringify(details) : null, ipHash || null, outcome || 'ok', costAmount ?? null, costAmount != null ? (costCurrency || 'USD') : null]);
 }
 
 async function logError(db, scope, err, details) {

@@ -68,6 +68,8 @@ Así, ni un error de programación ni una edición directa pueden saltarse los d
 - Las IP se guardan como hash con sal (`IP_HASH_SALT`).
 - Límites de uso por IP guardados en la base (sirven entre instancias de Vercel).
 - CSP sin scripts ni estilos en línea.
+- Equipo: MFA TOTP con secreto cifrado (`MFA_ENCRYPTION_KEY`, o derivado de `IP_HASH_SALT`), códigos de un solo uso, alerta por dispositivo nuevo, invitaciones y enlaces de recuperación de un solo uso (`staff_tokens`, solo se guarda el hash). `src/services/security.js`.
+- `audit_log` no se puede borrar ni modificar (disparadores de la migración `005_company.sql`).
 
 ## Tareas
 
@@ -76,3 +78,7 @@ Así, ni un error de programación ni una edición directa pueden saltarse los d
 ## Perfil personal
 
 Servicio `src/services/profile.js`, API `src/routes/profile.js` (montada antes de `routes/api`), migración `003_profile.sql` y la interfaz `public/js/profile.js`, que se carga solo en «Mi perfil». La resolución del jugador de cada pedido (`resolvePlayer` en `src/app.js`) decide qué identificador usa la API y nunca une partidas anónimas sin permiso. Detalle en [PERFIL.md](PERFIL.md).
+
+## Empresa
+
+Migración `005_company.sql`; servicios `src/services/governance.js` (aprobaciones por versión con hash canónico, políticas de uno o dos CEO, conflictos), `src/services/company.js` (agentes, tareas, riesgos, costos, integraciones, contenido, legal y resumen del centro de operaciones) y `src/db/company-seed.js` (organigrama, tareas, riesgos, integraciones y jurisdicciones iniciales, cargados sin pisar cambios). API en `src/routes/admin-company.js`. La base repite las reglas críticas con disparadores: completar tareas y publicar piezas exige evidencia, programar exige aprobación vigente y un texto legal no se aprueba sin un pedido aprobado con su hash. Detalle en [EMPRESA.md](EMPRESA.md).
