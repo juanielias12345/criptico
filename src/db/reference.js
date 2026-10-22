@@ -10,10 +10,33 @@ const LANGUAGES = [
   ['fr', 'Français', 0, 3], ['pt', 'Português', 0, 4], ['it', 'Italiano', 0, 5], ['de', 'Deutsch', 0, 6],
 ];
 
+// Una variante por cada país de habla hispana (22/10/2026: todos al mismo nivel).
+// Rasgos fonéticos para validar homófonos: en América, seseo + yeísmo; en España y
+// Guinea Ecuatorial, solo yeísmo (distinguen la Z de la S).
+const LATAM = ['seseo', 'yeismo'];
 const VARIANTS = [
-  ['es-AR', 'es', 'Español rioplatense', ['seseo', 'yeismo']],
+  ['es-AR', 'es', 'Español de Argentina', LATAM],
+  ['es-BO', 'es', 'Español de Bolivia', LATAM],
+  ['es-CL', 'es', 'Español de Chile', LATAM],
+  ['es-CO', 'es', 'Español de Colombia', LATAM],
+  ['es-CR', 'es', 'Español de Costa Rica', LATAM],
+  ['es-CU', 'es', 'Español de Cuba', LATAM],
+  ['es-EC', 'es', 'Español de Ecuador', LATAM],
+  ['es-SV', 'es', 'Español de El Salvador', LATAM],
   ['es-ES', 'es', 'Español de España', ['yeismo']],
-  ['es-MX', 'es', 'Español de México', ['seseo', 'yeismo']],
+  ['es-US', 'es', 'Español de Estados Unidos', LATAM],
+  ['es-GQ', 'es', 'Español de Guinea Ecuatorial', ['yeismo']],
+  ['es-GT', 'es', 'Español de Guatemala', LATAM],
+  ['es-HN', 'es', 'Español de Honduras', LATAM],
+  ['es-MX', 'es', 'Español de México', LATAM],
+  ['es-NI', 'es', 'Español de Nicaragua', LATAM],
+  ['es-PA', 'es', 'Español de Panamá', LATAM],
+  ['es-PY', 'es', 'Español de Paraguay', LATAM],
+  ['es-PE', 'es', 'Español de Perú', LATAM],
+  ['es-PR', 'es', 'Español de Puerto Rico', LATAM],
+  ['es-DO', 'es', 'Español de República Dominicana', LATAM],
+  ['es-UY', 'es', 'Español de Uruguay', LATAM],
+  ['es-VE', 'es', 'Español de Venezuela', LATAM],
   ['en-GB', 'en', 'British English', []],
   ['en-US', 'en', 'American English', []],
   ['fr-FR', 'fr', 'Français de France', []],
@@ -124,6 +147,8 @@ async function seedReference(db) {
   for (const [code, lang, name, phon] of VARIANTS) {
     await db.run('INSERT OR IGNORE INTO language_variants(code, language_code, name_native, phonetics) VALUES (?,?,?,?)', [code, lang, name, JSON.stringify(phon)]);
   }
+  // Antes «Español rioplatense»: ahora cada país tiene su nombre (solo si nadie lo cambió).
+  await db.run("UPDATE language_variants SET name_native = 'Español de Argentina' WHERE code = 'es-AR' AND name_native = 'Español rioplatense'");
   for (const [slug, es, en] of CATEGORIES) {
     await db.run('INSERT OR IGNORE INTO categories(slug, name_es, name_en) VALUES (?,?,?)', [slug, es, en]);
   }

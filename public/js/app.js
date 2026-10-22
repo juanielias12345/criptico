@@ -214,7 +214,7 @@
     for (const lang of m.languages) {
       if (!lang.enabled) continue;
       langItems.push({ value: lang.code, label: lang.name_native + ' — ' + t('prefs_all_variants'), extra: String(total(lang.code)) });
-      for (const v of m.variants.filter((x) => x.language_code === lang.code && x.enabled)) {
+      for (const v of m.variants.filter((x) => x.language_code === lang.code && x.enabled).sort((a, b) => a.name_native.localeCompare(b.name_native, 'es'))) {
         langItems.push({ value: v.code, label: v.name_native, extra: v.own + ' + ' + v.general, sub: true });
       }
     }
@@ -674,7 +674,7 @@
     const langSel = el('select', { name: 'language_code', id: 'f-language', required: true }, m.languages.filter((l) => l.enabled).map((l) => el('option', { value: l.code, selected: (prefs.choice || L).startsWith(l.code), text: l.name_native })));
     const varSel = el('select', { name: 'variant_code', id: 'f-variant' });
     const fillVariants = () => {
-      varSel.replaceChildren(el('option', { value: '', text: t('f_variant_general') }), ...m.variants.filter((v) => v.language_code === langSel.value).map((v) => el('option', { value: v.code, selected: v.code === prefs.choice, text: v.name_native })));
+      varSel.replaceChildren(el('option', { value: '', text: t('f_variant_general') }), ...m.variants.filter((v) => v.language_code === langSel.value).sort((a, b) => a.name_native.localeCompare(b.name_native, 'es')).map((v) => el('option', { value: v.code, selected: v.code === prefs.choice, text: v.name_native })));
     };
     langSel.addEventListener('change', fillVariants); fillVariants();
     const mechs = ['anagram', 'hidden', 'reversal', 'container', 'deletion', 'charade', 'homophone', 'double_definition', 'initials', 'cryptic_definition', 'combination'];

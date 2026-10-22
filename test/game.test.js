@@ -104,7 +104,7 @@ test('país e idioma son independientes en el servidor (#2, #3)', async () => {
   assert.equal(a.json.clue.language, 'en', 'vivir en Argentina no cambia el idioma de juego');
   const b = await c.post('/api/game/start', { choice: 'es-AR', country: 'ES', mode: 'infinite' });
   assert.equal(b.json.clue.language, 'es');
-  assert.ok([null, 'es-AR'].includes(b.json.clue.variant), 'en España se puede jugar en rioplatense');
+  assert.ok([null, 'es-AR'].includes(b.json.clue.variant), 'en España se puede jugar con la variante de Argentina');
   const p = await env.db.get('SELECT country_code, play_variant FROM players WHERE id = ?', [c.jar.pid]);
   assert.deepEqual([p.country_code, p.play_variant], ['ES', 'es-AR']);
 });

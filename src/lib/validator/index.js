@@ -13,10 +13,10 @@ const { explain } = require('./explain');
 const lexicon = require('../lexicon');
 const LANG = { es: require('../lang/es'), en: require('../lang/en') };
 
-const DEFAULT_VARIANT_PHONETICS = {
-  es: { 'es': null, 'es-AR': ['seseo', 'yeismo'], 'es-ES': ['yeismo'], 'es-MX': ['seseo', 'yeismo'] },
-  en: { 'en': null, 'en-GB': [], 'en-US': [] },
-};
+const DEFAULT_VARIANT_PHONETICS = { es: { 'es': null }, en: { 'en': null } };
+for (const [code, lang, , phon] of require('../../db/reference').VARIANTS) {
+  if (DEFAULT_VARIANT_PHONETICS[lang]) DEFAULT_VARIANT_PHONETICS[lang][code] = phon;
+}
 
 const ARTICLES = new Set(['EL', 'LA', 'LOS', 'LAS', 'UN', 'UNA', 'LO', 'THE', 'A', 'AN', 'SOME']);
 
