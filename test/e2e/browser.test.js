@@ -543,3 +543,27 @@ test('empresa: invitar a un CEO, aceptar, activar MFA y entrar con código', asy
   assert.deepEqual(b.errors.filter((e) => !/401/.test(e)), []);
   await b.ctx.close();
 });
+
+test('redes: un botón arriba aprueba toda la semana; desde un día también se aprueba su semana', async () => {
+  const owner = await staff(env, 'owner');
+  const { ctx, page, errors } = await newPage({ viewport: { width: 1440, height: 900 } });
+  try {
+    await adminLogin(page, owner);
+    await page.goto(env.base + '/admin#social');
+    const top = page.locator('#admin-main > .toolbar button', { hasText: 'Aprobar toda la semana 1' });
+    await top.waitFor();
+    await top.click();
+    await page.locator('#admin-main .flash', { hasText: 'Aprobadas:' }).waitFor({ timeout: 60000 });
+    const w1 = await env.db.get("SELECT COUNT(*) AS n FROM content_pieces WHERE campaign = 'lanzamiento-60' AND day BETWEEN 0 AND 6 AND status = 'approved'");
+    const all = await env.db.get("SELECT COUNT(*) AS n FROM content_pieces WHERE campaign = 'lanzamiento-60' AND day BETWEEN 0 AND 6 AND platform IN ('instagram','facebook','tiktok','youtube')");
+    assert.equal(w1.n, all.n);
+    await page.locator('#admin-main > .toolbar button', { hasText: 'Aprobar toda la semana 2' }).waitFor();
+    // Desde la carpeta de un día de la semana 3.
+    await page.goto(env.base + '/admin#socialday/15');
+    await page.locator('button', { hasText: 'Aprobar toda la semana 3' }).click();
+    await page.locator('#admin-main .flash', { hasText: 'Semana 3: aprobadas' }).waitFor({ timeout: 60000 });
+    const w3 = await env.db.get("SELECT COUNT(*) AS n FROM content_pieces WHERE campaign = 'lanzamiento-60' AND day BETWEEN 14 AND 20 AND status = 'approved'");
+    assert.ok(w3.n > 0);
+    assert.deepEqual(errors, []);
+  } finally { await ctx.close(); }
+});

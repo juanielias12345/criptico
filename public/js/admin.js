@@ -1624,7 +1624,14 @@
     });
     main.replaceChildren(el('h1', { text: 'Redes: 60 días' }),
       el('p', { class: 'muted', text: `Del ${d.days[0].label} al ${d.days[d.days.length - 1].label}. Cada carpeta es un día: adentro están las imágenes, los videos y los textos de cada red con su horario. Nada se publica sin tu aprobación.` }),
-      d.metricool.configured ? '' : el('p', { class: 'flash warn', text: 'Metricool todavía no está conectado al servidor: lo que apruebes queda listo y se programa solo cuando se conecte. También podés descargarlo y publicarlo a mano.' }),
+      d.metricool.configured ? '' : el('p', { class: 'flash warn', text: 'El servidor no programa solo en Metricool (el plan Starter no trae API): aprobá acá y avisale a Claude en el chat, que programa lo aprobado en su horario. También podés descargarlo y publicarlo a mano.' }),
+      (() => {
+        // Atajo arriba de todo: la primera semana que todavía tiene piezas para aprobar.
+        const w = weeks.findIndex((days) => days.some((x) => x.counts.pending));
+        if (w < 0 || !can('approvals.decide')) return '';
+        const days = weeks[w]; const n = days.reduce((s, x) => s + x.counts.pending, 0);
+        return el('div', { class: 'toolbar' }, btn(`Aprobar toda la semana ${w + 1} (${days[0].label} – ${days[days.length - 1].label}, ${n} publicaciones)`, approveDays(days), 'primary'));
+      })(),
       el('div', { class: 'kpis' }, kpi('Publicaciones', tot.total || 0), kpi('Para aprobar', tot.pending || 0, { warn: !!tot.pending }), kpi('Aprobadas', tot.approved || 0), kpi('Programadas', tot.scheduled || 0), kpi('Publicadas', tot.published || 0)),
       weeks.map((days, w) => el('section', { class: 'panel' }, el('div', { class: 'toolbar' }, el('h3', { text: `Semana ${w + 1}` }), el('span', { class: 'muted small', text: `${days[0].label} – ${days[days.length - 1].label}` }),
         can('approvals.decide') && days.some((x) => x.counts.pending) ? btn('Aprobar toda la semana', approveDays(days), 'primary') : ''),
@@ -1638,6 +1645,19 @@
     const approve = (items) => act(async () => {
       const r = await api('/api/admin/social/approve', { method: 'POST', body: { items } });
       return { flash: `Aprobadas: ${r.approved}.` + (r.scheduled ? ` Programadas en Metricool: ${r.scheduled}.` : '') + (r.schedule_errors ? ` No se pudieron programar: ${r.schedule_errors} (mirá el detalle en cada pieza).` : '') + (r.skipped.length ? ` Sin cambios: ${r.skipped.length}.` : '') };
+    });
+    // Aprobar la semana de este día sin volver al calendario.
+    const weekStart = Math.floor(Number(n) / 7) * 7;
+    const approveWeek = act(async () => {
+      let ok = 0; let skipped = 0; let sch = 0;
+      for (let k = weekStart; k < weekStart + 7 && k < 60; k++) {
+        const full = await api('/api/admin/social/days/' + k);
+        const items = full.pieces.filter((p) => sgroup(p.status) === 'pending').map((p) => ({ id: p.id, hash: p.current_hash }));
+        if (!items.length) continue;
+        const r = await api('/api/admin/social/approve', { method: 'POST', body: { items } });
+        ok += r.approved; skipped += r.skipped.length; sch += r.scheduled;
+      }
+      return { flash: `Semana ${weekStart / 7 + 1}: aprobadas ${ok}.` + (sch ? ` Programadas en Metricool: ${sch}.` : '') + (skipped ? ` Sin cambios: ${skipped}.` : '') };
     });
     const byNet = {};
     for (const p of d.pieces) (byNet[p.platform] = byNet[p.platform] || []).push(p);
@@ -1670,7 +1690,7 @@
     };
     main.replaceChildren(nav, el('h1', { text: `Día ${d.n} · ${d.label}` }),
       el('p', { class: 'muted' }, 'Críptico del día: «', d.clue.clue, '» · respuesta ', el('strong', { text: d.clue.answer }), ' · ', el('a', { href: 'https://playcripticos.com/es/c/' + d.clue.slug, target: '_blank', rel: 'noopener', text: 'ver en el sitio' })),
-      el('div', { class: 'toolbar' }, can('approvals.decide') && pend.length ? btn(`Aprobar todo el día (${pend.length})`, approve(pend.map((p) => ({ id: p.id, hash: p.current_hash }))), 'primary') : '',
+      el('div', { class: 'toolbar' }, can('approvals.decide') && pend.length ? btn(`Aprobar todo el día (${pend.length})`, approve(pend.map((p) => ({ id: p.id, hash: p.current_hash }))), 'primary') : '', can('approvals.decide') ? btn('Aprobar toda la semana ' + (weekStart / 7 + 1), approveWeek) : '',
         btn('Descargar el día (.zip)', async (e) => { const b = e.currentTarget; b.disabled = true; b.textContent = 'Preparando…'; try { await downloadDay(d); } catch (x) { flash(x.message); } b.disabled = false; b.textContent = 'Descargar el día (.zip)'; })),
       Object.entries(byNet).map(([net, ps]) => el('section', { class: 'panel' }, el('h3', { text: NETS[net] || net }), el('div', { class: 'social-list' }, ps.map(card)))));
   };
