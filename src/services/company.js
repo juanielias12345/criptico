@@ -50,6 +50,41 @@ async function seedCompany(db) {
         VALUES (?,1,?,?,?,'published','baseline','sistema')`, [doc, lang, body.trim(), legalHash(doc, 1, lang, body.trim())]);
     }
   }
+  // Borradores de los agentes: entran una sola vez, como borrador, y nunca se publican solos.
+  const AUTHOR = { cookies: 'privacidad', deletion: 'privacidad', consents: 'privacidad', processors: 'privacidad', ugc: 'legal-ugc',
+    community: 'legal-ugc', moderation: 'legal-ugc', ip: 'propiedad-intelectual', incidents: 'seguridad', contracts: 'contratos' };
+  for (const [doc, body] of require('../db/company-drafts').LEGAL_DRAFTS) {
+    if (await db.get('SELECT 1 FROM legal_document_versions WHERE doc_id = ?', [doc])) continue;
+    await db.run(`INSERT INTO legal_document_versions(doc_id, version, language, body, content_hash, status, source_note, created_by)
+      VALUES (?,1,'es',?,?,'draft',?,?)`, [doc, body, legalHash(doc, 1, 'es', body), 'Borrador de agentes del 22/10/2026; requiere abogado', 'agente:' + (AUTHOR[doc] || 'legal-direccion')]);
+    await audit(db, { actorKind: 'agent', actorLabel: AUTHOR[doc] || 'legal-direccion', action: 'legal.draft_created', targetKind: 'legal_version', targetId: doc + ':1:es' });
+  }
+  // Hallazgos iniciales por país: solo completan lo que nadie investigó todavía.
+  for (const j of require('../db/company-drafts').JURISDICTION_FINDINGS) {
+    const r = await db.run(`UPDATE legal_jurisdictions SET status = 'draft_findings', priority = ?, requirements = ?, official_sources = ?, verified_at = '2026-10-22',
+        reviewed_at = '2026-10-22', next_review_at = '2027-01-22', owner_label = 'Agente de legislación por país', affected_docs = ?, risk = ?, pending_action = ?,
+        needs_lawyer = 1, notes = 'Investigación inicial de agentes; no es asesoramiento jurídico.', updated_at = ? WHERE code = ? AND status = 'not_researched'`,
+    [j.priority, j.requirements, j.sources, j.docs, j.risk, j.action, new Date().toISOString(), j.code]);
+    if (r.changes) await audit(db, { actorKind: 'agent', actorLabel: 'legal-paises', action: 'legal.jurisdiction_researched', targetKind: 'jurisdiction', targetId: j.code });
+  }
+  // Primeras piezas de marketing: las que tienen texto y diseño reales van a la bandeja de aprobación;
+  // las que necesitan filmación o una integración quedan en producción.
+  for (const c of require('../db/company-drafts').CONTENT_PIECES) {
+    const r = await db.run(`INSERT OR IGNORE INTO content_pieces(id, title, campaign, objective, audience, country, language, platform, format, idea, script, body,
+        cta, hashtags, link, alt_text, assets, rights, metric, scheduled_at, status, created_by) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+    [c.id, c.title, c.campaign, c.objective, c.audience, c.country || null, c.language, c.platform, c.format, c.idea || null, c.script || null, c.body || null,
+      c.cta || null, c.hashtags || null, c.link || null, c.alt_text || null, JSON.stringify(c.assets || []), c.rights || null, c.metric || null, c.scheduled_at || null,
+      c.ready ? 'editing' : 'production', 'agente:produccion-contenido']);
+    if (!r.changes) continue;
+    await audit(db, { actorKind: 'agent', actorLabel: 'produccion-contenido', action: 'content.created', targetKind: 'content_piece', targetId: c.id,
+      details: c.blocked ? { blocked: c.blocked } : null });
+    if (!c.ready) continue;
+    const p = await db.get('SELECT * FROM content_pieces WHERE id = ?', [c.id]);
+    const item = await gov.createRequest(db, { kind: c.format === 'article' || c.format === 'newsletter' ? 'article' : 'post', title: c.title,
+      summary: `${c.platform} · ${c.format}${c.country ? ' · ' + c.country : ''}${c.scheduled_at ? ' · sugerida ' + c.scheduled_at.slice(0, 10) : ''}`,
+      content: pieceMaterial(p), targetKind: 'content_piece', targetId: c.id, requestedByKind: 'agent', requestedBy: 'produccion-contenido' }, null);
+    await db.run("UPDATE content_pieces SET status = 'pending_approval', approval_id = ?, updated_at = ? WHERE id = ?", [item.id, now(), c.id]);
+  }
   await gov.relaxPending(db);
 }
 

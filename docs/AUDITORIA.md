@@ -7,7 +7,7 @@ Revisión del proyecto real (repositorio, base de producción a través de los f
 - Sitio en producción en playcripticos.com (Vercel, Node 22 + Express, Turso en São Paulo). ~9.500 líneas de JavaScript propio.
 - `npm audit`: 0 vulnerabilidades conocidas.
 - Banco: 16.696 crípticos generados publicados de una meta de 100.000; el generador actual está agotado en todas las celdas (ver docs/BANCO.md).
-- No existen aplicaciones móviles: solo el sitio con manifiesto instalable.
+- No existen aplicaciones móviles: solo el sitio con manifiesto instalable (corregido el 22/10/2026: decía «Cripta» y no tenía íconos PNG; ahora tiene nombre, íconos de 192/512, adaptable y de Apple).
 - No hay cuentas de redes sociales conectadas.
 
 ## Hallazgos

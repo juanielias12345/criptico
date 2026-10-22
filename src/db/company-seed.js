@@ -152,6 +152,7 @@ const RISKS = [
   ['R-007', 'tech', 'Sin monitoreo de errores externo ni copias verificadas', 'Los errores quedan en la base, pero no hay alertas fuera del panel ni prueba de restauración.', 'medium', 'medium', null, 'T-008 y T-018.', 0],
   ['R-008', 'apps', 'No existen aplicaciones móviles', 'Solo hay sitio web con manifiesto instalable.', 'medium', 'high', null, 'T-013 y T-014.', 0],
   ['R-009', 'marketing', 'Sin cuentas sociales conectadas', 'Ninguna API de redes está conectada: no se puede publicar ni medir automáticamente.', 'medium', 'high', null, 'T-011.', 0],
+  ['R-010', 'legal', 'Transferencias internacionales desde Argentina', 'La base está en Brasil (Turso, São Paulo) y el hosting en EE. UU. (Vercel). Ninguno figura como país adecuado para la AAIP: hace falta consentimiento expreso o cláusulas contractuales modelo.', 'high', 'high', 'AR', 'Abogado: cláusulas modelo de la Disp. 60/2016 o Res. 198/2023 con los proveedores.', 1],
 ];
 
 // [id, nombre, categoría, estado, aporta, permisos, datos, costo, acciones, limitaciones, acción del CEO, evidencia, fecha]

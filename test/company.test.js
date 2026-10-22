@@ -277,29 +277,53 @@ test('pieza de contenido: aprobación de la versión exacta, cambio material vue
   await assert.rejects(env.db.run("UPDATE content_pieces SET status = 'published', published_url = 'https://x.com/1' WHERE id = 'directa'"), /approval_required/);
 });
 
+test('primeras piezas de marketing: con diseño real van a la bandeja; sin video quedan en producción; los archivos son privados', async () => {
+  const a = await staff(env, 'owner');
+  const rows = await env.db.all("SELECT id, status, assets, approval_id FROM content_pieces WHERE id LIKE 'mk-%' ORDER BY id");
+  assert.equal(rows.length, 9);
+  const ready = rows.filter((r) => r.status === 'pending_approval');
+  assert.deepEqual(ready.map((r) => r.id), ['mk-a01', 'mk-c01', 'mk-c02', 'mk-c03', 'mk-c04']);
+  assert.ok(ready.every((r) => r.approval_id));
+  assert.ok(rows.filter((r) => /^mk-(r|n)/.test(r.id)).every((r) => r.status === 'production'), 'sin video ni correo no se presentan como listas');
+  const fs = require('fs'); const path = require('path');
+  for (const r of rows) for (const f of JSON.parse(r.assets)) assert.ok(fs.existsSync(path.join(__dirname, '..', 'data', f)), f + ' existe');
+  const img = await a.c.get('/api/admin/content-assets/marketing/c01-que-es-un-criptico/slide-01.png');
+  assert.equal(img.status, 200);
+  assert.equal((await client(env.base).get('/api/admin/content-assets/marketing/c01-que-es-un-criptico/slide-01.png')).status, 401);
+  assert.equal((await a.c.get('/api/admin/content-assets/marketing/../../package.json')).status, 404);
+});
+
 test('documento legal: borrador → aprobación del texto exacto → publicado con evidencia; sin aprobación la base lo rechaza', async () => {
   const a = await staff(env, 'owner');
   const docs = await a.c.get('/api/admin/legal/documents');
   const privacy = docs.json.items.find((d) => d.id === 'privacy');
   assert.ok(privacy.versions.some((v) => v.status === 'published' && v.source_note === 'baseline'), 'el texto publicado hoy queda como versión 1');
-  const d = await a.c.post('/api/admin/legal/documents/cookies/drafts', { language: 'es', body: 'Borrador de política de cookies.' });
+  const d = await a.c.post('/api/admin/legal/documents/promotions/drafts', { language: 'es', body: 'Borrador de concursos y promociones.' });
   assert.equal(d.status, 201);
-  await assert.rejects(env.db.run("UPDATE legal_document_versions SET status = 'approved' WHERE doc_id = 'cookies'"), /approval_required/);
-  await assert.rejects(env.db.run("UPDATE legal_document_versions SET body = 'otro' WHERE doc_id = 'cookies'"), /immutable/);
-  const early = await a.c.post('/api/admin/legal/documents/cookies/1/es/published', { evidence: 'commit abc' });
+  await assert.rejects(env.db.run("UPDATE legal_document_versions SET status = 'approved' WHERE doc_id = 'promotions'"), /approval_required/);
+  await assert.rejects(env.db.run("UPDATE legal_document_versions SET body = 'otro' WHERE doc_id = 'promotions'"), /immutable/);
+  const early = await a.c.post('/api/admin/legal/documents/promotions/1/es/published', { evidence: 'commit abc' });
   assert.equal(early.status, 409);
-  const sub = await a.c.post('/api/admin/legal/documents/cookies/1/es/submit', {});
+  const sub = await a.c.post('/api/admin/legal/documents/promotions/1/es/submit', {});
   assert.equal(sub.json.policy, 'one');
   assert.equal(sub.json.level, 4);
   await a.c.post(`/api/admin/approvals/${sub.json.id}/vote`, { decision: 'approve', version: 1, content_hash: sub.json.content_hash });
-  const v = (await a.c.get('/api/admin/legal/documents/cookies/1/es')).json;
+  const v = (await a.c.get('/api/admin/legal/documents/promotions/1/es')).json;
   assert.equal(v.status, 'approved');
-  const pub = await a.c.post('/api/admin/legal/documents/cookies/1/es/published', { evidence: 'Commit 1234abc publicado en /es/cookies' });
+  const pub = await a.c.post('/api/admin/legal/documents/promotions/1/es/published', { evidence: 'Commit 1234abc publicado en /es/promociones' });
   assert.equal(pub.json.status, 'published');
+  // Borradores de los agentes: entran como borrador, nunca publicados.
+  const drafts = await env.db.all("SELECT doc_id, status FROM legal_document_versions WHERE source_note LIKE 'Borrador de agentes%'");
+  assert.equal(drafts.length, 10);
+  assert.ok(drafts.every((x) => x.status === 'draft'));
+  const ar = await env.db.get("SELECT status, official_sources, needs_lawyer FROM legal_jurisdictions WHERE code = 'AR'");
+  assert.equal(ar.status, 'draft_findings');
+  assert.match(ar.official_sources, /argentina\.gob\.ar/);
+  assert.equal(ar.needs_lawyer, 1);
   // Jurisdicciones: sin fuente oficial no se cargan requisitos.
-  const j = await a.c.put('/api/admin/legal/jurisdictions/AR', { requirements: 'Ley 25.326' });
+  const j = await a.c.put('/api/admin/legal/jurisdictions/CL', { requirements: 'Ley 19.628' });
   assert.equal(j.status, 400);
-  const j2 = await a.c.put('/api/admin/legal/jurisdictions/AR', { requirements: 'Ley 25.326 de Protección de Datos Personales', official_sources: 'https://www.argentina.gob.ar/normativa/nacional/ley-25326-64790', verified_at: '2026-10-22', status: 'draft_findings' });
+  const j2 = await a.c.put('/api/admin/legal/jurisdictions/CL', { requirements: 'Ley 19.628', official_sources: 'https://www.bcn.cl/leychile/navegar?idNorma=141599', verified_at: '2026-10-22', status: 'draft_findings' });
   assert.equal(j2.status, 200);
 });
 
@@ -346,4 +370,14 @@ test('si la política exige MFA, un CEO sin MFA solo puede configurarlo', async 
   } finally {
     await env.db.run("UPDATE settings SET value = 'false' WHERE key = 'security.require_mfa_owner'");
   }
+});
+
+test('app web instalable: manifiesto con el nombre de la marca e íconos que existen', async () => {
+  const fs = require('fs'); const path = require('path');
+  const m = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'public', 'manifest.webmanifest'), 'utf8'));
+  assert.equal(m.name, 'Play Crípticos');
+  assert.ok(m.icons.some((i) => i.sizes === '512x512' && i.purpose === 'maskable'));
+  for (const i of m.icons) assert.ok(fs.existsSync(path.join(__dirname, '..', 'public', i.src)), i.src);
+  const home = await client(env.base).get('/es');
+  assert.match(home.text, /apple-touch-icon\.png/);
 });

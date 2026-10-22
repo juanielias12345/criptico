@@ -106,6 +106,13 @@ module.exports = function companyRoutes({ need }) {
   r.put('/legal/jurisdictions/:code', need('legal.write'), a(async (req, res) => res.json(await company.saveJurisdiction(db(req), String(req.params.code).toUpperCase(), req.body || {}, actor(req)))));
 
   // Contenido
+  // Archivos reales de las piezas (diseños) guardados en data/marketing: solo para el equipo.
+  r.get(/^\/content-assets\/(marketing\/[a-z0-9-]+\/[a-z0-9-]+\.png)$/, need('company.read'), (req, res, next) => {
+    const path = require('path');
+    const file = path.join(__dirname, '..', '..', 'data', req.params[0]);
+    res.set('Cache-Control', 'private, max-age=3600');
+    res.sendFile(file, (err) => { if (err) next(new HttpError(404, 'not_found')); });
+  });
   r.get('/content', need('company.read'), a(async (req, res) => res.json({ items: await company.listPieces(db(req), { status: req.query.status }) })));
   r.get('/content/:id', need('company.read'), a(async (req, res) => res.json(await company.getPiece(db(req), req.params.id))));
   r.post('/content', need('content.write'), a(async (req, res) => res.status(201).json(await company.savePiece(db(req), null, req.body || {}, actor(req)))));

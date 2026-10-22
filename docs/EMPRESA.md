@@ -89,14 +89,15 @@ Cada pieza pasa por 13 estados: idea, en investigación, en producción, en edic
 - Programar exige una aprobación vigente de la versión exacta. Cualquier cambio en el texto, los archivos, la red o el público invalida la aprobación y vuelve la pieza a «pendiente de aprobación».
 - **Publicada** exige el enlace `https` a la publicación real. Sin enlace no hay «publicada».
 - Una pieza no figura con archivos si solo existe una descripción: el campo de archivos guarda enlaces reales.
+- **Piezas cargadas (22/10/2026)**: 4 carruseles con sus imágenes reales (23 PNG en `data/marketing/`, visibles en la bandeja), 1 artículo, 3 guiones de reel (en producción: falta grabar) y 1 newsletter (bloqueada por el correo, T-007). Las 5 listas esperan aprobación.
 - **Pendiente**: no hay ninguna red conectada. Metricool está vinculado a Claude pero la marca no tiene redes conectadas (T-011).
 
 ## 8. Legal
 
 Los agentes legales **investigan y preparan borradores; no son abogados**. Nada de lo que producen es asesoramiento jurídico.
 
-- **Matriz por jurisdicción** (AR, UY, CL, MX, CO, ES, UE, EE. UU., GB, CA, AU): requisitos, fuentes oficiales, fecha de verificación, riesgo, documentos afectados y si hace falta un abogado local. No se puede cargar un requisito ni marcar «cumple» sin fuentes oficiales y fecha. Hoy todas están **sin investigar**.
-- **15 documentos legales** versionados. Los textos de términos y privacidad que ya estaban en el sitio (es/en) se cargaron como versión 1 «publicada de base», sin revisión profesional. Cada borrador nuevo tiene hash; aprobarlo o publicarlo exige un pedido aprobado con ese hash, y la base lo impide si no coincide. **Nunca se publica un documento legal automáticamente.**
+- **Matriz por jurisdicción** (AR, UY, CL, MX, CO, ES, UE, EE. UU., GB, CA, AU): requisitos, fuentes oficiales, fecha de verificación, riesgo, documentos afectados y si hace falta un abogado local. No se puede cargar un requisito ni marcar «cumple» sin fuentes oficiales y fecha. Al 22/10/2026 hay **hallazgos en borrador** para Argentina, México, España, Unión Europea y EE. UU., con fuentes oficiales y fecha; todas marcadas como «requiere abogado». Hallazgo principal: Argentina exige cláusulas contractuales o consentimiento expreso para transferir datos a Brasil (Turso) y EE. UU. (Vercel), riesgo R-010. El resto de los países sigue sin investigar.
+- **15 documentos legales** versionados. Los textos de términos y privacidad que ya estaban en el sitio (es/en) se cargaron como versión 1 «publicada de base», sin revisión profesional. Cada borrador nuevo tiene hash; aprobarlo o publicarlo exige un pedido aprobado con ese hash, y la base lo impide si no coincide. **Nunca se publica un documento legal automáticamente.** Los agentes cargaron 10 borradores (cookies, contenido de usuarios, normas de comunidad, propiedad intelectual, moderación, eliminación de cuenta, consentimientos, encargados de tratamiento, incidentes y contratos) como versión 1 «borrador», con campos `[COMPLETAR]` y la advertencia de que no son asesoramiento jurídico.
 
 ## 9. Mejora continua
 

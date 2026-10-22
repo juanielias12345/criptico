@@ -1458,7 +1458,8 @@
       return el('div', { class: 'post-preview' }, el('div', { class: 'small muted', text: [c.platform, c.format, c.country, c.language].filter(Boolean).join(' · ') }),
         el('h3', { text: c.title }), c.body ? el('p', { class: 'pre', text: c.body }) : '', c.script ? el('details', {}, el('summary', { text: 'Guion' }), el('p', { class: 'pre', text: c.script })) : '',
         c.cta ? el('p', {}, el('strong', { text: c.cta })) : '', c.hashtags ? el('p', { class: 'muted', text: c.hashtags }) : '', c.link ? el('p', {}, linkify(c.link)) : '',
-        (c.assets || []).length ? el('div', {}, el('strong', { text: 'Archivos: ' }), el('ul', {}, c.assets.map((a) => el('li', {}, /^https:/.test(a) ? linkify(a) : el('code', { text: a }))))) : el('p', { class: 'small', text: 'Sin archivos adjuntos.' }),
+        (c.assets || []).length ? el('div', {}, el('strong', { text: 'Archivos: ' }), el('ul', {}, c.assets.map((a) => el('li', {}, /^https:/.test(a) ? linkify(a) : el('code', { text: a })))),
+          el('div', { class: 'asset-strip' }, c.assets.filter((a) => /^marketing\/[a-z0-9-]+\/[a-z0-9-]+\.png$/.test(a)).map((a) => el('img', { src: '/api/admin/content-assets/' + a, alt: a, loading: 'lazy' })))) : el('p', { class: 'small', text: 'Sin archivos adjuntos.' }),
         c.alt_text ? el('p', { class: 'small muted', text: 'Texto alternativo: ' + c.alt_text }) : '', c.rights ? el('p', { class: 'small muted', text: 'Derechos: ' + c.rights }) : el('p', { class: 'small', text: 'Derechos de los recursos: sin indicar.' }));
     }
     if (c && c.body && c.doc) return el('div', { class: 'post-preview' }, el('div', { class: 'small muted', text: 'Documento ' + c.doc + ' · versión ' + c.version + ' · ' + c.language }), el('div', { class: 'pre legal-text', text: c.body }));
