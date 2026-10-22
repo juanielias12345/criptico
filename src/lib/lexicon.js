@@ -5,7 +5,8 @@
 
 const { letters } = require('./normalize');
 
-const PACKAGES = { es: 'an-array-of-spanish-words', en: 'an-array-of-english-words' };
+// require con el nombre literal: así el empaquetado de Vercel incluye las listas en la función.
+const PACKAGES = { es: () => require('an-array-of-spanish-words'), en: () => require('an-array-of-english-words') };
 const cache = {};
 
 function load(lang) {
@@ -13,7 +14,7 @@ function load(lang) {
     const pkg = PACKAGES[lang];
     if (!pkg) return null;
     const set = new Set();
-    for (const w of require(pkg)) set.add(letters(w, lang));
+    for (const w of pkg()) set.add(letters(w, lang));
     cache[lang] = set;
   }
   return cache[lang];
