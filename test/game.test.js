@@ -280,3 +280,12 @@ test('solo español: el inglés no se ofrece, /en redirige y los crípticos en i
     assert.doesNotMatch(home.text, /English/);
   } finally { await e.close(); }
 });
+
+test('SEO: en producción de Vercel el dominio canónico es el propio, nunca *.vercel.app', () => {
+  const { loadConfig } = require('../src/config');
+  const base = { DATABASE_URL: 'file:x.db', IP_HASH_SALT: 'x'.repeat(32), CRON_SECRET: 'y'.repeat(32) };
+  assert.equal(loadConfig({ ...base, VERCEL_ENV: 'production', SITE_URL: 'https://criptico.vercel.app/' }).siteUrl, 'https://playcripticos.com');
+  assert.equal(loadConfig({ ...base, VERCEL_ENV: 'production' }).siteUrl, 'https://playcripticos.com');
+  assert.equal(loadConfig({ ...base, VERCEL_ENV: 'preview', SITE_URL: 'https://x.vercel.app' }).siteUrl, 'https://x.vercel.app');
+  assert.equal(loadConfig({ ...base, SITE_URL: 'https://playcripticos.com/' }).siteUrl, 'https://playcripticos.com');
+});

@@ -10,6 +10,8 @@
 - Guía de mecanismos (`/es/mecanismos` y una página por mecanismo): explicación, ejemplo resoluble, palabras indicadoras (salen de `src/lib/lang/es.js`) y enlaces a crípticos para practicar.
 - Cada críptico enlaza a su mecanismo y a seis crípticos del mismo tipo.
 - Sin desplazamiento horizontal desde 360 px. El diálogo de país solo se abre solo en Jugar y Diario; en las páginas a las que se llega desde Google (inicio, críptico, guía) no tapa el contenido.
+- En producción de Vercel el dominio canónico es siempre https://playcripticos.com aunque `SITE_URL` falte o sea *.vercel.app, y criptico.vercel.app redirige con 301 al dominio propio (salvo /api/).
+- Search Console verificado el 22/10/2026 con `public/googlee415e1c5deea6c8b.html`: no borrar ese archivo.
 - `GOOGLE_SITE_VERIFICATION` (variable de entorno) agrega la etiqueta de verificación de Search Console.
 
 ## Lo que depende de una persona

@@ -5,6 +5,15 @@
 
 const path = require('path');
 
+// Dominio público. En producción de Vercel nunca se usa *.vercel.app: los enlaces
+// canónicos y el sitemap tienen que apuntar al dominio propio para Google.
+const PUBLIC_URL = 'https://playcripticos.com';
+function siteUrlFrom(env) {
+  const url = (env.SITE_URL || '').replace(/\/$/, '');
+  if (env.VERCEL_ENV === 'production' && (!url || /\.vercel\.app$/i.test(url))) return PUBLIC_URL;
+  return url || `http://localhost:${Number(env.PORT) || 3000}`;
+}
+
 function loadConfig(env = process.env) {
   const production = env.NODE_ENV === 'production';
   const cfg = {
@@ -13,7 +22,7 @@ function loadConfig(env = process.env) {
     siteName: env.SITE_NAME || 'Play Crípticos',
     // Código de verificación de Google Search Console (opcional; también se puede verificar por DNS).
     googleSiteVerification: env.GOOGLE_SITE_VERIFICATION || '',
-    siteUrl: (env.SITE_URL || `http://localhost:${Number(env.PORT) || 3000}`).replace(/\/$/, ''),
+    siteUrl: siteUrlFrom(env),
     databaseUrl: env.DATABASE_URL || `file:${path.join(process.cwd(), 'data', 'criptico.db')}`,
     databaseAuthToken: env.DATABASE_AUTH_TOKEN || undefined,
     ipHashSalt: env.IP_HASH_SALT || '',

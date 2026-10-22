@@ -10,6 +10,19 @@
       "includeFiles": "{src/db/migrations/**,seed/**,public/admin.html,data/lexicon/**,data/marketing/**,data/social/plan.json}"
     }
   },
+  "redirects": [
+    {
+      "source": "/:path((?!api/).*)",
+      "has": [
+        {
+          "type": "host",
+          "value": "criptico.vercel.app"
+        }
+      ],
+      "destination": "https://playcripticos.com/:path",
+      "permanent": true
+    }
+  ],
   "rewrites": [
     {
       "source": "/admin",

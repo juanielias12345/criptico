@@ -5,7 +5,7 @@ npm test          # unidad e integración (servidor real + base temporal)
 npm run test:e2e  # navegador Chromium sin interfaz
 ```
 
-Último resultado (22/10/2026, Node 22, Linux): **122/122** en `npm test` y **18/18** en `npm run test:e2e`. También corren en GitHub Actions (flujo «Pruebas») en cada cambio de `main`.
+Último resultado (22/10/2026, Node 22, Linux): **123/123** en `npm test` y **18/18** en `npm run test:e2e`. También corren en GitHub Actions (flujo «Pruebas») en cada cambio de `main`.
 
 ## Cobertura de las 25 pruebas obligatorias
 
