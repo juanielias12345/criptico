@@ -53,7 +53,12 @@
     },
   };
   let memoryPrefs = null;
-  const getPrefs = () => store.get('cripta.prefs') || memoryPrefs;
+  // Solo se juega en español: una preferencia guardada con otro idioma vuelve a «es».
+  const getPrefs = () => {
+    const p = store.get('cripta.prefs') || memoryPrefs;
+    if (p && p.choice && !/^es(-|$)/.test(p.choice)) p.choice = 'es';
+    return p;
+  };
   const setPrefs = (p) => { memoryPrefs = p; store.set('cripta.prefs', p, p.remember); };
   // Contadores de la sesión de juego (solo en esta pestaña).
   const session = {
@@ -121,10 +126,10 @@
       if (!choice) {
         const exact = variants.find((v) => v.code.toLowerCase() === raw.toLowerCase() && v.enabled);
         if (exact) choice = exact.code;
-        else if (['es', 'en'].includes(base.toLowerCase())) choice = base.toLowerCase();
+        else if (base.toLowerCase() === 'es') choice = 'es';
       }
     }
-    return { country, choice: choice || (L === 'en' ? 'en' : 'es') };
+    return { country, choice: choice || 'es' };
   }
 
   function choiceLabel(choice, m) {
@@ -207,7 +212,7 @@
     const total = (code) => (m.totals.find((x) => x.code === code) || { n: 0 }).n;
     const langItems = [];
     for (const lang of m.languages) {
-      if (!lang.enabled) { langItems.push({ value: lang.code, label: lang.name_native, disabled: true, extra: t('prefs_soon') }); continue; }
+      if (!lang.enabled) continue;
       langItems.push({ value: lang.code, label: lang.name_native + ' — ' + t('prefs_all_variants'), extra: String(total(lang.code)) });
       for (const v of m.variants.filter((x) => x.language_code === lang.code && x.enabled)) {
         langItems.push({ value: v.code, label: v.name_native, extra: v.own + ' + ' + v.general, sub: true });

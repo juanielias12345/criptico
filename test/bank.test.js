@@ -181,7 +181,8 @@ test('#7 la atribución del origen se muestra: generados enlazan a créditos y l
   assert.equal(page.status, 200);
   for (const s of ['Multilingual Central Repository', 'WordNet', 'OpenThesaurus', 'CMU', 'wordfreq', 'CC BY 3.0']) assert.ok(page.text.includes(s), s);
   const en = await c.get('/en/credits');
-  assert.equal(en.status, 200);
+  assert.equal(en.status, 301);
+  assert.equal(en.headers.get('location'), '/es/creditos');
   const js = fs.readFileSync(path.join(__dirname, '..', 'public', 'js', 'app.js'), 'utf8');
   assert.match(js, /c\.origin === 'generated'/);
   assert.match(js, /author_unknown/);

@@ -208,7 +208,8 @@ test('páginas públicas: SEO básico, hreflang y caracteres especiales (#23)', 
   const c = client(env.base);
   const home = await c.get('/es');
   assert.match(home.text, /<html lang="es">/);
-  assert.match(home.text, /hreflang="en"/);
+  assert.match(home.text, /hreflang="es"/);
+  assert.doesNotMatch(home.text, /hreflang="en"/);
   assert.match(home.text, /rel="canonical"/);
   const clue = await env.db.get("SELECT slug FROM clues WHERE answer = 'SARTÉN'");
   const page = await c.get('/es/c/' + clue.slug);
@@ -221,5 +222,30 @@ test('páginas públicas: SEO básico, hreflang y caracteres especiales (#23)', 
   assert.match((await c.get('/robots.txt')).text, /Disallow: \/admin/);
   const redirect = await c.get('/', { 'accept-language': 'en-GB,en;q=0.9' });
   assert.equal(redirect.status, 302);
-  assert.equal(redirect.headers.get('location'), '/en');
+  assert.equal(redirect.headers.get('location'), '/es');
+});
+
+test('solo español: el inglés no se ofrece, /en redirige y los crípticos en inglés no se muestran ni se borran', async () => {
+  const e = await makeEnv({ spanishOnly: true });
+  try {
+    const c = client(e.base);
+    const meta = await c.get('/api/meta');
+    assert.deepEqual(meta.json.languages.filter((l) => l.enabled).map((l) => l.code), ['es']);
+    assert.ok(meta.json.totals.every((t) => t.code === 'es'));
+    const r = await c.get('/en/play?x=1');
+    assert.equal(r.status, 301);
+    assert.equal(r.headers.get('location'), '/es/jugar?x=1');
+    assert.equal((await c.get('/en/c/algo')).headers.get('location'), '/es/c/algo');
+    assert.equal((await c.get('/en')).headers.get('location'), '/es');
+    const en = await e.db.get("SELECT slug FROM clues WHERE language_code = 'en' AND status = 'published' LIMIT 1");
+    assert.ok(en, 'los crípticos en inglés siguen guardados');
+    assert.equal((await c.get('/es/c/' + en.slug)).status, 404);
+    assert.ok(!(await c.get('/sitemap.xml')).text.includes('/c/' + en.slug));
+    const list = await c.get('/api/clues?lang=en');
+    assert.equal(list.json.total, 0);
+    const g = await c.post('/api/game/start', { choice: 'en' });
+    assert.ok(!g.json.clue, 'no se juega en inglés');
+    const home = await c.get('/es');
+    assert.doesNotMatch(home.text, /English/);
+  } finally { await e.close(); }
 });

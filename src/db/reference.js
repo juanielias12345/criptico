@@ -6,7 +6,7 @@
 // cambios que el administrador haya hecho después.
 
 const LANGUAGES = [
-  ['es', 'Español', 1, 1], ['en', 'English', 1, 2],
+  ['es', 'Español', 1, 1], ['en', 'English', 0, 2],   // inglés desactivado el 22/10/2026: solo español
   ['fr', 'Français', 0, 3], ['pt', 'Português', 0, 4], ['it', 'Italiano', 0, 5], ['de', 'Deutsch', 0, 6],
 ];
 

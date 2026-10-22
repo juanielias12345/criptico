@@ -165,7 +165,8 @@ function t(lang, key, vars) {
   return s;
 }
 
-const UI_LANGS = ['es', 'en'];
+// Solo español desde el 22/10/2026 (decisión de los CEO). Las rutas /en redirigen a /es.
+const UI_LANGS = ['es'];
 
 function pickUiLang(acceptLanguage) {
   const parts = String(acceptLanguage || '').toLowerCase().split(',').map((p) => p.trim().split(';')[0]);

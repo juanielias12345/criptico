@@ -43,7 +43,7 @@ module.exports = function api() {
       (SELECT COUNT(*) FROM clues c WHERE c.status = 'published' AND c.variant_code = v.code) AS own,
       (SELECT COUNT(*) FROM clues c WHERE c.status = 'published' AND c.language_code = v.language_code AND c.variant_code IS NULL) AS general
       FROM language_variants v ORDER BY v.code`);
-    const totals = await db.all("SELECT language_code AS code, COUNT(*) AS n FROM clues WHERE status = 'published' GROUP BY language_code");
+    const totals = await db.all("SELECT language_code AS code, COUNT(*) AS n FROM clues WHERE status = 'published' AND language_code IN (SELECT code FROM languages WHERE enabled = 1) GROUP BY language_code");
     const categories = await db.all('SELECT slug, name_es, name_en FROM categories WHERE enabled = 1 ORDER BY slug');
     res.set('Cache-Control', 'public, max-age=60');
     res.json({ languages, variants, totals, categories, modes: await getSetting(db, 'modes.enabled'), max_hints: await getSetting(db, 'game.max_hints') });
@@ -123,7 +123,7 @@ module.exports = function api() {
   r.get('/clues', a(async (req, res) => {
     const db = req.app.locals.db;
     const q = req.query;
-    const where = ["status = 'published'"]; const args = [];
+    const where = ["status = 'published'", 'language_code IN (SELECT code FROM languages WHERE enabled = 1)']; const args = [];
     if (/^[a-z]{2}$/.test(q.lang || '')) { where.push('language_code = ?'); args.push(q.lang); }
     if (CHOICE_RE.test(q.variant || '') && q.variant.includes('-')) { where.push('(variant_code IS NULL OR variant_code = ?)'); args.push(q.variant); }
     if (/^[1-5]$/.test(q.difficulty || '')) { where.push('difficulty = ?'); args.push(Number(q.difficulty)); }

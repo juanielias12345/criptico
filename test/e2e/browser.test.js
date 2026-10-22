@@ -122,11 +122,11 @@ test('jugar: respuesta incorrecta, pista, respuesta correcta, explicación y sig
 
 test('revelar muestra solución y explicación; compartir no revela la respuesta', async () => {
   const { ctx, page } = await newPage({ permissions: ['clipboard-read', 'clipboard-write'] });
-  await playReady(page, 'en');
+  await playReady(page, 'es');
   const started = page.waitForResponse((r) => r.url().endsWith('/api/game/start'));
-  await page.goto(env.base + '/en/play');
+  await page.goto(env.base + '/es/jugar');
   const data = await (await started).json();
-  assert.equal(data.clue.language, 'en');
+  assert.equal(data.clue.language, 'es');
   await page.locator('#reveal-btn').click();
   await page.locator('#solution-answer').waitFor();
   const row = await env.db.get('SELECT answer FROM clues WHERE id = ?', [data.clue.id]);

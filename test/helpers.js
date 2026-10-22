@@ -13,11 +13,14 @@ const { createApp } = require('../src/app');
 const { loadConfig } = require('../src/config');
 const { createUser } = require('../src/services/auth');
 
-async function makeEnv({ catalog = true } = {}) {
+// spanishOnly: false reactiva el inglés para las pruebas del motor multilingüe;
+// en producción solo está activo el español (migración 006).
+async function makeEnv({ catalog = true, spanishOnly = false } = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cripta-test-'));
   const db = openDb({ url: 'file:' + path.join(dir, 'test.db') });
   await migrate(db);
   await seedReference(db);
+  if (!spanishOnly) await db.run("UPDATE languages SET enabled = 1 WHERE code = 'en'");
   if (catalog) await seedCatalog(db);
   const config = { ...loadConfig({ NODE_ENV: 'test' }), siteUrl: 'http://localhost', cronSecret: 'test-cron-secret-123456', ipHashSalt: 'salt-for-tests' };
   const app = createApp({ db, config });

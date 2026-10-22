@@ -87,7 +87,7 @@ module.exports = function pages() {
     const urls = [];
     for (const l of UI_LANGS) for (const route of ['home', 'play', 'daily', 'archive', 'contribute', 'help', 'privacy', 'terms', 'credits']) urls.push(href(l, route));
     // Solo páginas con contenido real: crípticos publicados, en el idioma de la interfaz que les corresponde.
-    const clues = await db.all("SELECT slug, language_code, updated_at FROM clues WHERE status = 'published' ORDER BY published_at DESC LIMIT 45000");
+    const clues = await db.all("SELECT slug, language_code, updated_at FROM clues WHERE status = 'published' AND language_code IN (SELECT code FROM languages WHERE enabled = 1) ORDER BY published_at DESC LIMIT 45000");
     const body = urls.map((u) => `<url><loc>${esc(siteUrl + u)}</loc></url>`).join('')
       + clues.map((c) => `<url><loc>${esc(siteUrl + href(UI_LANGS.includes(c.language_code) ? c.language_code : 'en', 'clue', '/' + c.slug))}</loc><lastmod>${esc(String(c.updated_at).slice(0, 10))}</lastmod></url>`).join('');
     res.type('application/xml').send(`<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${body}</urlset>`);
@@ -98,6 +98,18 @@ module.exports = function pages() {
     res.sendFile(require('path').join(__dirname, '..', '..', 'public', 'admin.html'));
   });
 
+  // Idiomas de interfaz retirados: cada ruta se redirige a su equivalente en español.
+  for (const old of Object.keys(ROUTES).filter((l) => !UI_LANGS.includes(l))) {
+    const back = Object.fromEntries(Object.entries(ROUTES[old]).filter(([, seg]) => seg).map(([k, seg]) => [seg, k]));
+    r.get(new RegExp(`^/${old}(/.*)?$`), (req, res) => {
+      const [, seg = '', ...rest] = (req.params[0] || '').split('/');
+      const key = back[seg];
+      const qs = req.originalUrl.includes('?') ? req.originalUrl.slice(req.originalUrl.indexOf('?')) : '';
+      const target = key ? `/es${ROUTES.es[key] ? '/' + ROUTES.es[key] : ''}${rest.length ? '/' + rest.join('/') : ''}` : '/es';
+      res.redirect(301, target + qs);
+    });
+  }
+
   for (const lang of UI_LANGS) {
     const R = ROUTES[lang];
     const P = (route) => `/${lang}${R[route] ? '/' + R[route] : ''}`;
@@ -107,9 +119,9 @@ module.exports = function pages() {
     // ── Inicio ──
     r.get(`/${lang}`, a(async (req, res) => {
       const db = req.app.locals.db;
-      const totals = await db.all("SELECT language_code AS l, COUNT(*) AS n FROM clues WHERE status = 'published' GROUP BY language_code");
+      const totals = await db.all("SELECT language_code AS l, COUNT(*) AS n FROM clues WHERE status = 'published' AND language_code IN (SELECT code FROM languages WHERE enabled = 1) GROUP BY language_code");
       const total = totals.reduce((s, x) => s + x.n, 0);
-      const variants = (await db.get('SELECT COUNT(*) AS n FROM language_variants WHERE enabled = 1')).n;
+      const variants = (await db.get('SELECT COUNT(*) AS n FROM language_variants v JOIN languages l ON l.code = v.language_code AND l.enabled = 1 WHERE v.enabled = 1')).n;
       const mechCounts = Object.fromEntries((await db.all("SELECT mechanism AS m, COUNT(*) AS n FROM clues WHERE status = 'published' AND language_code = ? GROUP BY mechanism", [lang])).map((x) => [x.m, x.n]));
       const mechs = MECHS.filter((m) => mechCounts[m]);
       const sp = ex.specimen;
@@ -121,7 +133,7 @@ module.exports = function pages() {
       });
       render(req, res, {
         page: 'home', path: P('home'), alternates: altFor('home'),
-        jsonLd: { '@context': 'https://schema.org', '@type': 'WebSite', name: req.app.locals.config.siteName, url: req.app.locals.config.siteUrl, inLanguage: ['es', 'en'] },
+        jsonLd: { '@context': 'https://schema.org', '@type': 'WebSite', name: req.app.locals.config.siteName, url: req.app.locals.config.siteUrl, inLanguage: UI_LANGS },
         body: `
 <section class="hero">
   <div>
@@ -134,7 +146,7 @@ module.exports = function pages() {
     </div>
     ${total ? `<ul class="hero-facts" aria-label="${lang === 'es' ? 'Catálogo' : 'Catalogue'}">
       <li><b>${total}</b><span>${esc(t(lang, 'fact_clues'))}</span></li>
-      <li><b>${totals.length}</b><span>${esc(t(lang, 'fact_langs'))}</span></li>
+      ${totals.length > 1 ? `<li><b>${totals.length}</b><span>${esc(t(lang, 'fact_langs'))}</span></li>` : ''}
       <li><b>${variants}</b><span>${esc(t(lang, 'fact_variants'))}</span></li>
     </ul>` : ''}
   </div>
@@ -239,7 +251,7 @@ ${mechs.length ? `<section class="section" aria-labelledby="mech-t">
     r.get(P('archive'), a(async (req, res) => {
       const db = req.app.locals.db; const q = req.query;
       const fl = /^[a-z]{2}$/.test(q.lang || '') ? q.lang : lang;
-      const where = ["c.status = 'published'", 'c.language_code = ?']; const args = [fl];
+      const where = ["c.status = 'published'", 'c.language_code = ?', 'c.language_code IN (SELECT code FROM languages WHERE enabled = 1)']; const args = [fl];
       const search = String(q.q || '').trim().slice(0, 60);
       if (search) { where.push("c.clue_text LIKE ? ESCAPE '\\'"); args.push('%' + search.replace(/[\\%_]/g, (m) => '\\' + m) + '%'); }
       if (/^[a-z]{2}-[A-Z]{2}$/.test(q.variant || '')) { where.push('(c.variant_code IS NULL OR c.variant_code = ?)'); args.push(q.variant); }
@@ -305,7 +317,7 @@ ${mechs.length ? `<section class="section" aria-labelledby="mech-t">
     // ── Página de un críptico ──
     r.get(`${P('clue')}/:slug`, a(async (req, res, next) => {
       const db = req.app.locals.db;
-      const c = await db.get("SELECT * FROM clues WHERE slug = ? AND status = 'published'", [req.params.slug]);
+      const c = await db.get("SELECT * FROM clues WHERE slug = ? AND status = 'published' AND language_code IN (SELECT code FROM languages WHERE enabled = 1)", [req.params.slug]);
       if (!c) return next();
       const pub = publicClue(c);
       const canonicalLang = UI_LANGS.includes(c.language_code) ? c.language_code : lang;

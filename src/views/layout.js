@@ -3,7 +3,7 @@
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
-const { t, ROUTES, T } = require('../i18n');
+const { t, ROUTES, T, UI_LANGS } = require('../i18n');
 const PTEXT = require('./profile-text');
 
 // Versión de los archivos estáticos: cambia en cada despliegue para que nadie
@@ -126,7 +126,7 @@ ${body}
     </nav>
     <div class="fine">
       <span><a href="${href(lang, 'privacy')}">${esc(t(lang, 'privacy_title'))}</a> · <a href="${href(lang, 'terms')}">${esc(t(lang, 'terms_title'))}</a> · <a href="${href(lang, 'credits')}">${esc(t(lang, 'credits_title'))}</a></span>
-      <span>${esc(t(lang, 'ui_language'))}: ${lang === 'es' ? `<strong>Español</strong> · <a href="${alt.en || '/en'}" hreflang="en" lang="en">English</a>` : `<a href="${alt.es || '/es'}" hreflang="es" lang="es">Español</a> · <strong>English</strong>`}</span>
+      ${UI_LANGS.length > 1 ? `<span>${esc(t(lang, 'ui_language'))}: ${lang === 'es' ? `<strong>Español</strong> · <a href="${alt.en || '/en'}" hreflang="en" lang="en">English</a>` : `<a href="${alt.es || '/es'}" hreflang="es" lang="es">Español</a> · <strong>English</strong>`}</span>` : ''}
     </div>
   </div>
 </footer>
