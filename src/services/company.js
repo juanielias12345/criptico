@@ -50,6 +50,7 @@ async function seedCompany(db) {
         VALUES (?,1,?,?,?,'published','baseline','sistema')`, [doc, lang, body.trim(), legalHash(doc, 1, lang, body.trim())]);
     }
   }
+  await gov.relaxPending(db);
 }
 
 // ── Agentes: estado real según cómo se ejecutan ──

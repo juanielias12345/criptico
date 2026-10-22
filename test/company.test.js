@@ -15,6 +15,8 @@ test.before(async () => { env = await makeEnv(); });
 test.after(async () => { await env.close(); });
 // Muchas sesiones desde la misma IP de prueba: se limpia el límite por IP entre pruebas.
 test.beforeEach(async () => { if (env) await env.db.run('DELETE FROM rate_limits'); });
+// La doble aprobación es opcional (los CEO la desactivaron); las pruebas que la cubren la encienden.
+const setDual = (on) => env.db.run("UPDATE settings SET value = ? WHERE key = 'governance.dual_approval'", [JSON.stringify(on)]);
 
 async function loginWith(username, password, extra = {}, headers = {}) {
   const c = client(env.base);
@@ -37,6 +39,7 @@ test('TOTP según RFC 6238 (vectores de prueba) y cifrado del secreto', () => {
 });
 
 test('dos CEO con permisos idénticos; un CEO se suma solo por invitación de un solo uso', async () => {
+  await setDual(true);
   const juan = await staff(env, 'owner', 'juan_ceo');
   const direct = await juan.c.post('/api/admin/users', { username: 'otro_ceo', password: 'Clave-segura-12345', role: 'owner' });
   assert.equal(direct.status, 400);
@@ -70,6 +73,7 @@ test('dos CEO con permisos idénticos; un CEO se suma solo por invitación de un
   assert.equal((await env.db.get('SELECT role FROM users WHERE id = ?', [inesId])).role, 'owner');
   const ap = await env.db.get('SELECT * FROM approval_items WHERE id = ?', [demote.json.approval_id]);
   assert.equal(ap.policy, 'both');
+  await setDual(false);
 });
 
 test('MFA: activar, iniciar sesión con código, código incorrecto, recuperación de un solo uso y sesiones revocables', async () => {
@@ -148,6 +152,7 @@ test('aprobación atada a la versión: un cambio la invalida; votar una versión
 });
 
 test('gasto sobre el umbral exige a los dos CEO; decisiones opuestas pausan y se resuelven', async () => {
+  await setDual(true);
   const a = await staff(env, 'owner');
   const b = await staff(env, 'owner');
   const cr = await a.c.post('/api/admin/approvals', { kind: 'budget', title: 'Anuncios octubre', amount: 500, content: { plan: 'Meta Ads', amount: 500 } });
@@ -177,9 +182,39 @@ test('gasto sobre el umbral exige a los dos CEO; decisiones opuestas pausan y se
   const after = await a.c.get(`/api/admin/approvals/${both.json.id}`);
   assert.equal(after.json.status, 'pending');
   assert.equal(after.json.version, 2);
+  await setDual(false);
+});
+
+test('con la doble aprobación desactivada alcanza un CEO para todo, y lo pendiente se resuelve con los votos que ya tenía', async () => {
+  const gov = require('../src/services/governance');
+  const { getSetting } = require('../src/services/settings');
+  assert.equal(await getSetting(env.db, 'governance.dual_approval'), false, 'decisión de los CEO');
+  const a = await staff(env, 'owner');
+  const b = await staff(env, 'owner');
+  const big = await a.c.post('/api/admin/approvals', { kind: 'contract', title: 'Contrato anual', amount: 5000, content: { vendor: 'X', amount: 5000 } });
+  assert.equal(big.json.policy, 'one');
+  const ok = await a.c.post(`/api/admin/approvals/${big.json.id}/vote`, { decision: 'approve', version: 1, content_hash: big.json.content_hash });
+  assert.equal(ok.json.status, 'approved');
+  // Instrucciones opuestas siguen pausando.
+  const no = await b.c.post(`/api/admin/approvals/${big.json.id}/vote`, { decision: 'reject', version: 1, content_hash: big.json.content_hash, comment: 'No' });
+  assert.equal(no.json.status, 'conflict');
+
+  // Un pedido creado con doble aprobación y con un voto se aplica al desactivarla.
+  await setDual(true);
+  const put = await a.c.put('/api/admin/settings/governance.dual_approval_amount_usd', { value: 20 });
+  const item = (await a.c.get('/api/admin/approvals/' + put.json.approval_id)).json;
+  assert.equal(item.policy, 'both');
+  await a.c.post(`/api/admin/approvals/${item.id}/vote`, { decision: 'approve', version: 1, content_hash: item.content_hash });
+  assert.equal(await getSetting(env.db, 'governance.dual_approval_amount_usd'), 100);
+  await setDual(false);
+  assert.ok(await gov.relaxPending(env.db) >= 1);
+  assert.equal(await getSetting(env.db, 'governance.dual_approval_amount_usd'), 20);
+  assert.equal((await a.c.get('/api/admin/approvals/' + item.id)).json.status, 'executed');
+  await env.db.run("UPDATE settings SET value = '100' WHERE key = 'governance.dual_approval_amount_usd'");
 });
 
 test('ajustes de seguridad y permisos de CEO solo cambian con los dos; la aprobación los aplica', async () => {
+  await setDual(true);
   const a = await staff(env, 'owner');
   const b = await staff(env, 'owner');
   const put = await a.c.put('/api/admin/settings/governance.dual_approval_amount_usd', { value: 250 });
@@ -192,6 +227,7 @@ test('ajustes de seguridad y permisos de CEO solo cambian con los dos; la aproba
   assert.equal(done.json.status, 'executed');
   assert.equal(await getSetting(env.db, 'governance.dual_approval_amount_usd'), 250);
   await env.db.run("UPDATE settings SET value = '100' WHERE key = 'governance.dual_approval_amount_usd'");
+  await setDual(false);
 });
 
 test('la auditoría es inalterable; la limpieza solo quita el hash de IP', async () => {

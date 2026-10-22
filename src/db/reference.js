@@ -77,8 +77,10 @@ const DEFAULT_SETTINGS = {
   'publishing.external_allow_asserted': false,
   'publishing.generated_autopublish': false,
   'publishing.semantic_duplicate_threshold': 0.6,
-  // Gobierno (ver docs/EMPRESA.md). Se cambian solo con la aprobación de los dos CEO.
-  'governance.dual_approval_amount_usd': 100,   // gastos o compromisos por encima de esto exigen a los dos CEO
+  // Gobierno (ver docs/EMPRESA.md). Se cambian con un pedido en la bandeja de aprobaciones.
+  // Decisión de los CEO (22/10/2026): con la aprobación de uno alcanza para todo. En true vuelve la doble aprobación.
+  'governance.dual_approval': false,
+  'governance.dual_approval_amount_usd': 100,   // con governance.dual_approval en true, gastos por encima de esto exigen a los dos CEO
   'security.require_mfa_owner': false,          // si es true, un CEO sin MFA solo puede configurarlo
   // Banco de crípticos (ver docs/BANCO.md)
   'bank.target_per_cell': 10000,

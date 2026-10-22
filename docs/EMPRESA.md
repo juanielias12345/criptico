@@ -11,8 +11,8 @@ Este documento describe cómo funciona la empresa dentro del sistema: quién dec
 
 - Los dos tienen **exactamente los mismos permisos**. No hay jerarquía ni administrador secundario: el código no distingue entre un CEO y otro.
 - Un CEO **solo se suma por invitación** (`Equipo → Invitar a alguien`). La persona invitada elige su usuario y su contraseña; nadie más la conoce. La API rechaza crear un `owner` de forma directa (`owner_requires_invite`).
-- Cambiar el rol de un CEO, desactivarlo o convertir a alguien en CEO **no se aplica en el momento**: crea un pedido en la bandeja que necesita la aprobación de los dos (con dos CEO registrados).
-- Las reglas de seguridad y gobierno (`security.*`, `governance.*`) también pasan por la aprobación de los dos.
+- Cambiar el rol de un CEO, desactivarlo o convertir a alguien en CEO **no se aplica en el momento**: crea un pedido en la bandeja que tiene que aprobar un CEO.
+- Las reglas de seguridad y gobierno (`security.*`, `governance.*`) también pasan por la bandeja.
 
 ### Seguridad de cada cuenta (`Mi seguridad`)
 
@@ -27,13 +27,15 @@ Este documento describe cómo funciona la empresa dentro del sistema: quién dec
 
 Cada pedido tiene tipo, área, resumen, contenido exacto, monto opcional y una política: **un CEO** o **los dos**.
 
+**Decisión de los CEO (22/10/2026): con la aprobación de uno de los dos alcanza para todo** (`governance.dual_approval = false`). Los pedidos que esperaban al segundo CEO se resolvieron con los votos que ya tenían. Si algún día quieren volver a la doble aprobación, se activa ese ajuste en «Reglas y funciones» y vuelve a regir la tabla siguiente:
+
 | Tipo | Política |
 |---|---|
 | Publicación, campaña, artículo, respuesta pública delicada | Un CEO |
 | Funcionalidad, cambio de diseño, cambio en producción, lanzamiento de app, comunicación institucional | Un CEO |
 | Términos y políticas legales | Un CEO (nivel 4: nunca se publican solos) |
 | Presupuesto o gasto **hasta** `governance.dual_approval_amount_usd` (hoy 100 USD) | Un CEO |
-| Gasto **mayor** al umbral, contratos, cambios críticos de seguridad, decisiones legales de alto impacto, cambios de permisos de un CEO | Los dos |
+| Gasto **mayor** al umbral, contratos, cambios críticos de seguridad, decisiones legales de alto impacto, cambios de permisos de un CEO | Los dos (solo con `governance.dual_approval` activo; hoy, un CEO) |
 
 Reglas que impone el servidor:
 
@@ -54,7 +56,7 @@ Reglas que impone el servidor:
 | 1 | Investigar, analizar y preparar borradores internos sin pedir permiso | Auditorías, informes, borradores de piezas y documentos |
 | 2 | Cambios internos reversibles, con pruebas, informando después | Código en una rama, pruebas, documentación, tareas del tablero |
 | 3 | Requiere la aprobación de **un** CEO antes de completar | Cambios en producción, publicaciones, gastos menores, campañas |
-| 4 | Requiere aprobación explícita y nunca se ejecuta solo; si es extraordinario, **los dos** CEO | Seguridad crítica, contratos, textos legales, permisos de un CEO, gastos sobre el umbral |
+| 4 | Requiere aprobación explícita de un CEO y nunca se ejecuta solo (los dos, si se activa la doble aprobación) | Seguridad crítica, contratos, textos legales, permisos de un CEO, gastos sobre el umbral |
 
 Una tarea de nivel 3 o 4 no puede marcarse como completada sin un pedido aprobado.
 

@@ -1119,6 +1119,7 @@
   };
 
   const SETTING_HELP = {
+    'governance.dual_approval': 'Si está activo, lo extraordinario (gastos sobre el umbral, contratos, seguridad, permisos de un CEO) necesita a los dos CEO. Desactivado: alcanza con uno.',
     'game.max_hints': 'Pistas progresivas por críptico (máx. 4 tipos).', 'game.timed_seconds': 'Segundos del modo contrarreloj.', 'game.recent_window': 'Cuántas partidas recientes se consideran para no repetir.',
     'modes.enabled': 'Modos activos.', 'difficulty.labels': 'Nombres de las dificultades.', 'antispam.submissions_per_day': 'Propuestas por persona o IP por día.',
     'antispam.reports_per_hour': 'Reportes por IP por hora.', 'antispam.min_form_seconds': 'Tiempo mínimo para completar el formulario.',
@@ -1153,7 +1154,7 @@
 
   // Respuesta 202: el cambio quedó en la bandeja de aprobaciones de los CEO.
   const viaApproval = (r, okMsg) => (r && r.approval_required
-    ? { flash: 'Este cambio necesita la aprobación de los dos CEO: quedó en «Aprobaciones».', ok: true } : { flash: okMsg, ok: true });
+    ? { flash: 'Este cambio pasa por la bandeja: quedó en «Aprobaciones» para que lo apruebe un CEO.', ok: true } : { flash: okMsg, ok: true });
 
   V.users = async () => {
     const [d, tk] = await Promise.all([api('/api/admin/users'), api('/api/admin/team/tokens')]);
@@ -1167,7 +1168,7 @@
       'Se muestra una sola vez. Mandala por un canal privado (no por un grupo ni un correo compartido). Vence el ' + fmt(path.expires_at) + '.'), copyBox(location.origin + path.path));
     const rowOut = el('div');
     main.replaceChildren(el('h1', { text: 'Equipo' }), el('p', { class: 'muted', text: d.players + ' jugadores con cuenta.' }),
-      el('div', { class: 'panel' }, el('h3', { text: 'Roles' }), el('ul', {}, el('li', { text: (ROLES.owner || 'owner') + ': todo, incluida la configuración, el equipo, los datos personales, la auditoría y las aprobaciones. Los CEO tienen exactamente los mismos permisos; los cambios sobre un CEO y las reglas de seguridad necesitan la aprobación de los dos.' }),
+      el('div', { class: 'panel' }, el('h3', { text: 'Roles' }), el('ul', {}, el('li', { text: (ROLES.owner || 'owner') + ': todo, incluida la configuración, el equipo, los datos personales, la auditoría y las aprobaciones. Los CEO tienen exactamente los mismos permisos; los cambios sobre un CEO y las reglas de seguridad pasan por la bandeja de aprobaciones.' }),
         el('li', { text: (ROLES.editor || 'editor') + ': catálogo, fuentes, importaciones, estadísticas y alertas (sin datos personales).' }),
         el('li', { text: (ROLES.moderator || 'moderator') + ': propuestas de usuarios y reportes.' }),
         el('li', { text: (ROLES.analyst || 'analyst') + ': estadísticas, usuarios y partidas en modo lectura, sin correos ni acciones.' })),
@@ -1254,7 +1255,7 @@
       body.push(el('div', { class: 'panel' }, el('h3', { text: 'Dirección ejecutiva' }),
         d.ceos.length ? table(['CEO', 'Cargo', 'MFA', 'Último acceso'], d.ceos.map((c) => el('tr', {}, el('td', { text: c.display_name || c.username }), el('td', { text: c.title || 'Superadministrador' }),
           el('td', {}, c.mfa ? tag('Activo', 'verified') : tag('Sin MFA', 'failed')), el('td', { text: fmt(c.last_login_at) })))) : el('p', { class: 'muted', text: 'No hay CEO registrados.' }),
-        d.ceos.length < 2 ? el('p', { class: 'small', text: 'Hay ' + d.ceos.length + ' CEO con cuenta. Las decisiones que exigen a los dos quedan pendientes hasta que exista la segunda cuenta (invitación en «Equipo»).' }) : ''));
+        d.ceos.length < 2 ? el('p', { class: 'small', text: 'Hay ' + d.ceos.length + ' CEO con cuenta. La invitación para el segundo se genera en «Equipo».' }) : ''));
       if (D.conflicts.length) body.push(el('div', { class: 'panel' }, el('h3', { text: 'Instrucciones opuestas: en pausa' }), el('ul', {}, D.conflicts.map((c) => el('li', {}, c.description, ' ', el('a', { href: '#approval/' + c.subject_id, text: 'Resolver' }))))));
       body.push(el('div', { class: 'cols' },
         el('div', { class: 'panel' }, el('h3', { text: 'Decisiones pendientes de los CEO' }), D.decisions.length ? el('ul', {}, D.decisions.map((t) => el('li', {}, el('a', { href: '#task/' + t.id, text: t.id + ' · ' + t.title }), ' ', statusTag(TSTATUS, t.status)))) : el('p', { class: 'muted', text: 'Ninguna.' })),
@@ -1442,8 +1443,8 @@
     const nav = el('div', { class: 'tabs' }, [['open', 'Abiertas'], ['approved', 'Aprobadas'], ['executed', 'Ejecutadas'], ['rejected', 'Rechazadas'], ['withdrawn', 'Retiradas']].map(([k, t]) =>
       el('a', { href: '#approvals?status=' + k, class: status === k ? 'active' : '', text: t })));
     main.replaceChildren(el('h1', { text: 'Bandeja de aprobaciones' }),
-      el('p', { class: 'muted', text: 'Cualquiera de los dos CEO aprueba lo ordinario. Lo extraordinario (gastos sobre el umbral, contratos, seguridad crítica, decisiones legales de alto impacto y permisos de un CEO) necesita a los dos. Cada aprobación vale solo para la versión que se vio.' }),
-      d.owners < 2 ? el('p', { class: 'flash warn', text: 'Hay un solo CEO con cuenta: los pedidos que exigen a los dos quedan pendientes hasta que se sume el segundo.' }) : '',
+      el('p', { class: 'muted', text: d.dual ? 'Cualquiera de los dos CEO aprueba lo ordinario. Lo extraordinario (gastos sobre el umbral, contratos, seguridad crítica, decisiones legales de alto impacto y permisos de un CEO) necesita a los dos. Cada aprobación vale solo para la versión que se vio.' : 'Por decisión de los CEO, con la aprobación de uno de los dos alcanza para todo. Cada aprobación vale solo para la versión que se vio; si uno aprueba y el otro rechaza, el pedido queda en pausa.' }),
+      d.dual && d.owners < 2 ? el('p', { class: 'flash warn', text: 'Hay un solo CEO con cuenta: los pedidos que exigen a los dos quedan pendientes hasta que se sume el segundo.' }) : '',
       d.conflicts.length ? el('div', { class: 'panel' }, el('h3', { text: 'Conflictos abiertos' }), el('ul', {}, d.conflicts.map((c) => el('li', {}, c.description, ' ', el('a', { href: '#approval/' + c.subject_id, text: 'Abrir' }))))) : '',
       nav, d.items.length ? table(['Pedido', 'Tipo', 'Área', 'Política', 'Estado', 'Versión', 'Creado'], d.items.map((x) => el('tr', {},
         el('td', {}, el('a', { href: '#approval/' + x.id, text: x.title })), el('td', { text: x.kind_label }), el('td', { text: AREA[x.area] || x.area }),

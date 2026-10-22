@@ -60,7 +60,8 @@ module.exports = function companyRoutes({ need }) {
   // ── Aprobaciones ──
   r.get('/approvals', need('company.read'), a(async (req, res) => {
     res.json({ items: await gov.list(db(req), { status: req.query.status, area: req.query.area, limit: Number(req.query.limit) || 50 }),
-      conflicts: await db(req).all("SELECT * FROM ceo_conflicts WHERE status = 'open' ORDER BY created_at"), owners: await gov.ownersCount(db(req)), kinds: gov.KINDS });
+      conflicts: await db(req).all("SELECT * FROM ceo_conflicts WHERE status = 'open' ORDER BY created_at"), owners: await gov.ownersCount(db(req)), kinds: gov.KINDS,
+      dual: (await require('../services/settings').getSetting(db(req), 'governance.dual_approval')) === true });
   }));
   r.get('/approvals/:id', need('company.read'), a(async (req, res) => res.json(await gov.get(db(req), req.params.id))));
   r.post('/approvals', need('approvals.request'), a(async (req, res) => {

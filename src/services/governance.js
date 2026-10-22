@@ -49,13 +49,34 @@ const hashOf = (content) => sha256(canonical(content));
 async function policyFor(db, kind, amount) {
   const k = KINDS[kind];
   if (!k) throw new HttpError(400, 'invalid_kind');
-  let policy = k.policy || 'one';
   let level = k.level || 3;
-  if (amount != null && Number(amount) > 0) {
+  // Con la doble aprobación desactivada (decisión de los CEO), alcanza con uno para todo.
+  const dual = (await getSetting(db, 'governance.dual_approval')) === true;
+  let policy = dual ? (k.policy || 'one') : 'one';
+  if (dual && amount != null && Number(amount) > 0) {
     const limit = Number(await getSetting(db, 'governance.dual_approval_amount_usd'));
     if (Number(amount) > limit) { policy = 'both'; level = 4; }
   }
   return { policy, level, area: k.area };
+}
+
+// Al desactivar la doble aprobación, los pedidos abiertos que esperaban al segundo CEO pasan a
+// «uno alcanza» y se resuelven con los votos que ya tienen.
+async function relaxPending(db) {
+  if ((await getSetting(db, 'governance.dual_approval')) === true) return 0;
+  const items = await db.all("SELECT * FROM approval_items WHERE policy = 'both' AND status = 'pending'");
+  for (const item of items) {
+    await db.run("UPDATE approval_items SET policy = 'one', updated_at = ? WHERE id = ?", [now(), item.id]);
+    const votes = await db.all('SELECT * FROM approval_votes WHERE item_id = ?', [item.id]);
+    const status = tally({ ...item, policy: 'one' }, votes, await ownersCount(db));
+    if (status === 'pending') continue;
+    await db.run('UPDATE approval_items SET status = ?, decided_at = ?, updated_at = ? WHERE id = ?', [status, now(), now(), item.id]);
+    const voter = votes.find((v) => v.version === item.version && v.decision === 'approve');
+    await audit(db, { actorKind: 'system', action: 'approval.policy_relaxed', targetKind: 'approval', targetId: item.id,
+      details: { result: status, reason: 'governance.dual_approval = false' } });
+    if (status === 'approved' && voter) await onApproved(db, { ...item, policy: 'one', status }, await db.get('SELECT * FROM users WHERE id = ?', [voter.user_id]));
+  }
+  return items.length;
 }
 
 async function ownersCount(db) {
@@ -199,6 +220,7 @@ async function onApproved(db, item, actor) {
     if (/^(security|governance)\./.test(content.setting) && !validateSetting(content.setting, content.value)) {
       await setSetting(db, content.setting, content.value, actor && actor.id);
       await markExecuted(db, item.id, `Ajuste ${content.setting} = ${JSON.stringify(content.value)} aplicado al aprobarse`, actor);
+      if (content.setting === 'governance.dual_approval') await relaxPending(db);
     }
   }
   if (item.target_kind === 'ops_task') {
@@ -236,4 +258,4 @@ async function list(db, { status, area, limit = 50 } = {}) {
   return rows.map((r) => ({ ...r, content: undefined, kind_label: (KINDS[r.kind] || {}).label || r.kind }));
 }
 
-module.exports = { KINDS, canonical, hashOf, policyFor, createRequest, revise, vote, tally, withdraw, resolveConflict, markExecuted, get, list, ownersCount };
+module.exports = { KINDS, canonical, hashOf, policyFor, relaxPending, createRequest, revise, vote, tally, withdraw, resolveConflict, markExecuted, get, list, ownersCount };
