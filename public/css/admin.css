@@ -61,6 +61,8 @@
 .pill { display: inline-block; padding: 3px 9px; border-radius: var(--r-pill); font: 600 var(--t-xs)/1.2 var(--font-ui); letter-spacing: .02em; background: var(--paper-2); color: var(--ink-2); white-space: nowrap; }
 .pill.published, .pill.auto_published, .pill.verified, .pill.active, .pill.success { background: var(--ok-soft); color: var(--ok); }
 .pill.failed, .pill.error, .pill.rejected, .pill.disabled { background: var(--danger-soft); color: var(--danger); }
+.pill-list { display: flex; flex-wrap: wrap; gap: 6px; }
+.pill-list .pill { white-space: normal; }
 .pill.review, .pill.pending, .pill.pending_review, .pill.needs_changes, .pill.asserted, .pill.in_review, .pill.paused { background: var(--near-soft); color: var(--near); }
 .panel { background: var(--sheet); border: var(--b-1); border-radius: var(--r-1); padding: var(--s-5); margin-bottom: var(--s-4); }
 .panel h3 { margin: 0 0 var(--s-3); }

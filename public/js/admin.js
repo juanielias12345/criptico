@@ -1719,7 +1719,7 @@
     }
     const pub = rows.filter((x) => x.v.status === 'published').length;
     box.append(el('p', { class: 'small muted', text: pub + ' de ' + rows.length + ' publicados. Leé cada texto antes de aprobar: la aprobación queda registrada a tu nombre y vale solo para esta versión exacta.' }),
-      el('p', {}, ...rows.map(({ d, v }) => el('a', { href: '#legaldoc/' + d.id + '/' + v.version + '/' + v.language, class: 'pill ' + (v.status === 'published' ? 'verified' : 'pending'), text: d.name + ' · ' + (LSTATUS[v.status] || v.status) }))));
+      el('p', { class: 'pill-list' }, ...rows.map(({ d, v }) => el('a', { href: '#legaldoc/' + d.id + '/' + v.version + '/' + v.language, class: 'pill ' + (v.status === 'published' ? 'verified' : 'pending'), text: d.name + ' · ' + (LSTATUS[v.status] || v.status) }))));
     if (can('approvals.decide') && pub < rows.length) {
       const out = el('div', { class: 'small' });
       box.append(btn('Aprobar y publicar los textos globales', async () => {

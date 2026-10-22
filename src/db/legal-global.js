@@ -13,10 +13,11 @@ const UPDATED = '22 de octubre de 2026';
 
 // Datos del titular, tal como los indique un CEO.
 const OWNER = {
-  name: '',      // nombre legal de la persona o empresa titular
-  address: '',   // domicilio legal (ciudad, provincia o estado, país)
-  country: '',   // país del domicilio, para la ley aplicable
-  email: '',     // correo de contacto para privacidad y reclamos
+  // Datos que indicó Juan Ignacio Elías (CEO) el 22/10/2026. Domicilio: solo el país, a su pedido.
+  name: 'Juan Ignacio Elías',
+  address: 'la República Argentina',
+  country: 'la República Argentina',
+  email: 'playcripticos@gmail.com',
 };
 
 // Documentos que se muestran en el sitio (el resto es de uso interno).
