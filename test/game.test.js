@@ -211,6 +211,11 @@ test('páginas públicas: SEO básico, hreflang y caracteres especiales (#23)', 
   assert.match(home.text, /hreflang="es"/);
   assert.doesNotMatch(home.text, /hreflang="en"/);
   assert.match(home.text, /rel="canonical"/);
+  assert.match(home.text, /<title>Crípticos en español: jugá gratis y sin límite \| Play Crípticos<\/title>/);
+  assert.match(home.text, /og:image" content="http:\/\/localhost\/og-image.png"/);
+  assert.match(home.text, /"@type":"Organization"/);
+  assert.match((await c.get('/es/ayuda')).text, /<title>Qué es un críptico y cómo resolverlo/);
+  assert.equal((await c.get('/og-image.png')).status, 200);
   const clue = await env.db.get("SELECT slug FROM clues WHERE answer = 'SARTÉN'");
   const page = await c.get('/es/c/' + clue.slug);
   assert.equal(page.status, 200);

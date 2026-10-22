@@ -98,6 +98,18 @@ module.exports = function pages() {
     res.sendFile(require('path').join(__dirname, '..', '..', 'public', 'admin.html'));
   });
 
+  // Títulos y descripciones para buscadores: apuntan a «crípticos», «crucigrama críptico» y «críptico del día».
+  const SEO = {
+    es: {
+      home: ['Crípticos en español: jugá gratis y sin límite | Play Crípticos', 'Resolvé crípticos (pistas de crucigrama críptico) en español, gratis y sin límite: ayudas progresivas, explicación paso a paso y un críptico del día. Con variantes de Argentina, España y México.'],
+      play: ['Jugar crípticos online gratis | Play Crípticos', 'Crípticos en español para jugar online, sin registro y sin límite. Elegí la dificultad, pedí pistas y mirá la explicación de cada solución.'],
+      daily: ['Críptico del día: el desafío diario | Play Crípticos', 'Un críptico nuevo cada día, el mismo para todos. Resolvelo, compartí tu resultado y repasá los días anteriores.'],
+      archive: ['Archivo de crípticos en español | Play Crípticos', 'Todos los crípticos publicados, con filtros por dificultad, tema y mecanismo: anagramas, palabras ocultas, iniciales y más.'],
+      help: ['Qué es un críptico y cómo resolverlo, con ejemplos | Play Crípticos', 'Guía paso a paso para aprender a resolver crípticos: la definición, el juego de letras y los mecanismos más comunes, con ejemplos para practicar.'],
+    },
+  };
+  const seo = (lang, key) => (SEO[lang] && SEO[lang][key] ? { seoTitle: SEO[lang][key][0], description: SEO[lang][key][1] } : {});
+
   // Idiomas de interfaz retirados: cada ruta se redirige a su equivalente en español.
   for (const old of Object.keys(ROUTES).filter((l) => !UI_LANGS.includes(l))) {
     const back = Object.fromEntries(Object.entries(ROUTES[old]).filter(([, seg]) => seg).map(([k, seg]) => [seg, k]));
@@ -132,8 +144,11 @@ module.exports = function pages() {
         return `<span data-from="${i}" data-to="${to}" data-n="${i + 1}">${esc(ch)}</span>`;
       });
       render(req, res, {
-        page: 'home', path: P('home'), alternates: altFor('home'),
-        jsonLd: { '@context': 'https://schema.org', '@type': 'WebSite', name: req.app.locals.config.siteName, url: req.app.locals.config.siteUrl, inLanguage: UI_LANGS },
+        page: 'home', path: P('home'), alternates: altFor('home'), ...seo(lang, 'home'),
+        jsonLd: { '@context': 'https://schema.org', '@graph': [
+          { '@type': 'WebSite', name: req.app.locals.config.siteName, url: req.app.locals.config.siteUrl, inLanguage: UI_LANGS },
+          { '@type': 'Organization', name: req.app.locals.config.siteName, url: req.app.locals.config.siteUrl, logo: req.app.locals.config.siteUrl + '/icon-512.png' },
+        ] },
         body: `
 <section class="hero">
   <div>
@@ -191,7 +206,7 @@ ${mechs.length ? `<section class="section" aria-labelledby="mech-t">
 
     // ── Jugar ──
     r.get(P('play'), (req, res) => render(req, res, {
-      page: 'play', path: P('play'), alternates: altFor('play'), title: t(lang, 'nav_play'),
+      page: 'play', path: P('play'), alternates: altFor('play'), title: t(lang, 'nav_play'), ...seo(lang, 'play'),
       boot: { mode: req.query.mode || null },
       body: `<h1 class="sr-only">${esc(t(lang, 'play_title'))}</h1>
 <section class="game" id="game">${skeleton}<noscript><p class="notice">${lang === 'es' ? 'El juego necesita JavaScript.' : 'The game needs JavaScript.'}</p></noscript></section>`,
@@ -228,7 +243,7 @@ ${mechs.length ? `<section class="section" aria-labelledby="mech-t">
           : `<li class="day${isToday ? ' today' : ''}"${isToday ? ` aria-current="date"` : ''}><span${isToday ? '' : ' aria-hidden="true"'}>${d}</span>${isToday ? `<span class="sr-only"> ${esc(t(lang, 'cal_today'))}</span>` : ''}</li>`);
       }
       render(req, res, {
-        page: 'daily', path: P('daily'), alternates: altFor('daily'), title: t(lang, 'daily_title'),
+        page: 'daily', path: P('daily'), alternates: altFor('daily'), title: t(lang, 'daily_title'), ...seo(lang, 'daily'),
         body: `<header class="daily-head">
   <div class="daily-date" aria-hidden="true"><span class="m">${esc(td.toLocaleDateString(loc, { month: 'short', timeZone: 'UTC' }).replace('.', ''))}</span><span class="d">${td.getUTCDate()}</span><span class="w">${esc(td.toLocaleDateString(loc, { weekday: 'long', timeZone: 'UTC' }))}</span></div>
   <div><p class="eyebrow">${esc(t(lang, 'daily_title'))}</p><h1>${esc(td.toLocaleDateString(loc, { day: 'numeric', month: 'long', timeZone: 'UTC' }))}</h1>
@@ -283,7 +298,7 @@ ${mechs.length ? `<section class="section" aria-labelledby="mech-t">
       const filtered = search || q.variant || q.difficulty || q.category || q.mechanism || q.date || q.status;
       const opt = (name, label, options) => `<label class="field"><span>${esc(label)}</span><select name="${name}">${options}</select></label>`;
       render(req, res, {
-        page: 'archive', path: P('archive') + (page > 1 ? `?page=${page}` : ''), alternates: altFor('archive'), title: t(lang, 'archive_title'), noindex: !!filtered,
+        page: 'archive', path: P('archive') + (page > 1 ? `?page=${page}` : ''), alternates: altFor('archive'), title: t(lang, 'archive_title'), noindex: !!filtered, ...seo(lang, 'archive'),
         body: `<header class="page-head"><p class="eyebrow">${esc(t(lang, 'nav_archive'))}</p><h1>${esc(t(lang, 'archive_title'))}</h1><p class="lead">${esc(t(lang, 'archive_lead'))}</p></header>
 <div class="explore">
   <form class="filters" method="get" action="${P('archive')}" role="search" id="filters">
@@ -361,7 +376,7 @@ ${pub.author && c.origin === 'community' ? `<p class="attribution">${esc(t(lang,
 
     // ── Cómo jugar: lecciones con ejemplos resolubles ──
     r.get(P('help'), (req, res) => render(req, res, {
-      page: 'help', path: P('help'), alternates: altFor('help'), title: t(lang, 'help_title'),
+      page: 'help', path: P('help'), alternates: altFor('help'), title: t(lang, 'help_title'), ...seo(lang, 'help'),
       body: `<header class="page-head"><p class="eyebrow">${esc(t(lang, 'nav_help'))}</p><h1>${esc(t(lang, 'help_title'))}</h1><p class="lead">${esc(t(lang, 'help_lead'))}</p></header>
 <div class="lessons">${CONTENT.LESSONS[lang].map((l, i) => `<section class="lesson" aria-labelledby="l${i}">
   <div class="lesson-num"><small>${esc(l.kicker)}</small></div>

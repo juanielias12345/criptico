@@ -11,6 +11,8 @@ function loadConfig(env = process.env) {
     production,
     port: Number(env.PORT) || 3000,
     siteName: env.SITE_NAME || 'Play Crípticos',
+    // Código de verificación de Google Search Console (opcional; también se puede verificar por DNS).
+    googleSiteVerification: env.GOOGLE_SITE_VERIFICATION || '',
     siteUrl: (env.SITE_URL || `http://localhost:${Number(env.PORT) || 3000}`).replace(/\/$/, ''),
     databaseUrl: env.DATABASE_URL || `file:${path.join(process.cwd(), 'data', 'criptico.db')}`,
     databaseAuthToken: env.DATABASE_AUTH_TOKEN || undefined,

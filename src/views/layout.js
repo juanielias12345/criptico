@@ -47,9 +47,11 @@ const ICON = {
 };
 
 // boot: datos para el script del navegador (no ejecutable, compatible con la CSP).
-function layout({ lang, config, title, description, page, path, alternates, body, boot = {}, jsonLd, noindex, scripts = [], ogImage }) {
+// seoTitle: título completo para buscadores (reemplaza «título · sitio»).
+function layout({ lang, config, title, seoTitle, description, page, path, alternates, body, boot = {}, jsonLd, noindex, scripts = [], ogImage }) {
   const site = config.siteName;
-  const fullTitle = title ? `${title} · ${site}` : `${site} · ${t(lang, 'tagline')}`;
+  const fullTitle = seoTitle || (title ? `${title} · ${site}` : `${site} · ${t(lang, 'tagline')}`);
+  const og = ogImage || config.siteUrl + '/og-image.png';
   const canonical = `${config.siteUrl}${path}`;
   const alt = alternates || {};
   const nav = [['play', 'nav_play'], ['archive', 'nav_archive'], ['daily', 'nav_daily'], ['help', 'nav_help']];
@@ -73,7 +75,11 @@ ${noindex ? '<meta name="robots" content="noindex">' : ''}
 <meta property="og:description" content="${esc(description || t(lang, 'home_lead'))}">
 <meta property="og:type" content="website">
 <meta property="og:url" content="${esc(canonical)}">
-${ogImage ? `<meta property="og:image" content="${esc(ogImage)}">\n<meta name="twitter:card" content="summary_large_image">` : ''}
+<meta property="og:image" content="${esc(og)}">
+<meta property="og:locale" content="es_419">
+<meta property="og:site_name" content="${esc(site)}">
+<meta name="twitter:card" content="summary_large_image">
+${config.googleSiteVerification ? `<meta name="google-site-verification" content="${esc(config.googleSiteVerification)}">` : ''}
 <meta name="theme-color" content="#f4eee2" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#15130f" media="(prefers-color-scheme: dark)">
 <link rel="preload" href="/fonts/fraunces-latin-opsz-normal.woff2" as="font" type="font/woff2" crossorigin>
