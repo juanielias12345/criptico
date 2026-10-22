@@ -99,6 +99,7 @@ module.exports = function pages() {
     for (const l of UI_LANGS.filter((x) => GUIDE[x])) {
       urls.push(href(l, 'guide'));
       for (const m of Object.values(GUIDE[l].mechs)) urls.push(href(l, 'guide', '/' + m.slug));
+      if (GUIDE[l].abbr) urls.push(href(l, 'guide', '/' + GUIDE[l].abbr.slug));
     }
     // Solo páginas con contenido real: crípticos publicados, en el idioma de la interfaz que les corresponde.
     const clues = await db.all("SELECT slug, language_code, updated_at FROM clues WHERE status = 'published' AND language_code IN (SELECT code FROM languages WHERE enabled = 1) ORDER BY published_at DESC LIMIT 45000");
@@ -427,9 +428,25 @@ ${GUIDE[lang] ? `<section class="banner section"><div><h2>${esc(GUIDE[lang].titl
             breadcrumbs(site(req), [[t(lang, 'nav_help'), P('help')], [G.title, P('guide')]])] },
           body: `<header class="page-head"><p class="eyebrow">${esc(t(lang, 'nav_help'))}</p><h1>${esc(G.title)}</h1><p class="lead">${esc(G.lead)}</p></header>
 <ul class="mech-index">${MECHS.filter((m) => G.mechs[m]).map((m) => `<li><a href="${P('guide')}/${G.mechs[m].slug}"><span class="name">${esc(t(lang, 'mech_' + m))}</span><span class="n">${counts[m] ? esc(plural(lang, counts[m], 'n_clue', 'n_clues')) : ''}</span><span class="what">${esc(t(lang, 'mechhelp_' + m))}</span></a></li>`).join('')}</ul>
+${G.abbr ? `<section class="banner section"><div><h2>${esc(G.abbr.title)}</h2><p>${esc(G.abbr.lead)}</p></div><a class="btn" href="${P('guide')}/${G.abbr.slug}">${esc(G.abbr.title)}</a></section>` : ''}
 <section class="banner section"><div><h2>${esc(t(lang, 'help_title'))}</h2><p>${esc(t(lang, 'help_lead'))}</p></div><a class="btn" href="${P('help')}">${esc(t(lang, 'nav_help'))}</a></section>`,
         });
       }));
+      if (G.abbr) {
+        const A = G.abbr; const path = `${P('guide')}/${A.slug}`;
+        r.get(path, (req, res) => render(req, res, {
+          page: 'guide', path, alternates: { [lang]: path }, title: A.title, seoTitle: A.seoTitle, description: A.description,
+          jsonLd: { '@context': 'https://schema.org', '@graph': [
+            { '@type': 'Article', headline: A.title, description: A.description, inLanguage: lang, isAccessibleForFree: true },
+            breadcrumbs(site(req), [[t(lang, 'nav_help'), P('help')], [G.title, P('guide')], [A.title, path]])] },
+          body: `<nav class="crumbs" aria-label="Ruta"><a href="${P('guide')}">${esc(G.title)}</a> / ${esc(A.title)}</nav>
+<header class="page-head"><p class="eyebrow">${esc(G.title)}</p><h1>${esc(A.title)}</h1><p class="lead">${esc(A.lead)}</p></header>
+<article class="prose"><p>${esc(A.tip)}</p></article>
+${A.groups.map(([name, rows], i) => `<section class="section" aria-labelledby="ab${i}"><h2 id="ab${i}">${esc(name)}</h2>
+<table class="abbr-table"><thead><tr><th scope="col">${esc(A.word_t)}</th><th scope="col">${esc(A.abbr_t)}</th></tr></thead><tbody>${rows.map(([w, v]) => `<tr><td>${esc(w)}</td><td><strong>${esc(v)}</strong></td></tr>`).join('')}</tbody></table></section>`).join('')}
+<section class="banner section"><div><h2>${esc(t(lang, 'mech_container'))}</h2><p>${esc(t(lang, 'mechhelp_container'))}</p></div><a class="btn" href="${P('guide')}/${G.mechs.container.slug}">${esc(t(lang, 'nav_guide'))}</a></section>`,
+        }));
+      }
       for (const m of MECHS.filter((x) => G.mechs[x])) {
         const M = G.mechs[m];
         const path = `${P('guide')}/${M.slug}`;

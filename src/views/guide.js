@@ -20,6 +20,28 @@ const es = {
   others_t: 'Otros mecanismos',
   related_t: 'Más crípticos con este mecanismo',
   guide_link: 'Cómo se resuelve, con ejemplos →',
+  abbr: {
+    slug: 'abreviaturas',
+    title: 'Abreviaturas en los crípticos',
+    seoTitle: 'Abreviaturas en los crípticos: lista con símbolos y letras | Play Crípticos',
+    description: 'Lista de abreviaturas que usan los crípticos en español: puntos cardinales, ajedrez, números romanos, símbolos químicos, notas musicales y nombres de las letras.',
+    lead: 'Muchas pistas usan una palabra para aportar solo una o dos letras: «norte» vale N, «cien» vale C, «oro» vale AU. Estas son las equivalencias más comunes, las mismas que acepta nuestro validador.',
+    tip: 'Cuando una pieza del juego de palabras parece demasiado larga para la respuesta, probá reemplazarla por su abreviatura. Suele pasar en las inserciones y en las charadas.',
+    groups: [
+      ['Puntos cardinales', [['norte', 'N'], ['sur', 'S'], ['este, oriente', 'E'], ['oeste, occidente', 'O']]],
+      ['Ajedrez', [['rey', 'R'], ['dama, reina', 'D'], ['torre', 'T'], ['alfil', 'A'], ['caballo', 'C'], ['peón', 'P']]],
+      ['Números romanos', [['uno', 'I'], ['cinco', 'V'], ['diez', 'X'], ['cincuenta', 'L'], ['cien', 'C'], ['quinientos', 'D'], ['mil', 'M']]],
+      ['Símbolos químicos', [['oxígeno', 'O'], ['hidrógeno', 'H'], ['carbono', 'C'], ['nitrógeno', 'N'], ['azufre', 'S'], ['fósforo', 'P'], ['potasio', 'K'], ['boro', 'B'], ['uranio', 'U'],
+        ['cobalto', 'CO'], ['cobre', 'CU'], ['hierro', 'FE'], ['oro', 'AU'], ['plata', 'AG'], ['calcio', 'CA'], ['sodio', 'NA'], ['estaño', 'SN'], ['plomo', 'PB'],
+        ['helio', 'HE'], ['neón', 'NE'], ['radio', 'RA'], ['titanio', 'TI'], ['litio', 'LI'], ['argón', 'AR']]],
+      ['Notas musicales', [['nota', 'DO, RE, MI, FA, SOL, LA o SI']]],
+      ['Unidades y tratamientos', [['metro', 'M'], ['kilo', 'K o KG'], ['litro', 'L'], ['gramo', 'G'], ['segundo', 'S'], ['hora', 'H'], ['santo', 'S, SAN o STO'],
+        ['señor', 'SR'], ['señora', 'SRA'], ['usted', 'UD o VD'], ['nada, cero', 'O'], ['número pi', 'PI']]],
+      ['Nombres de las letras', [['be', 'B'], ['ce', 'C'], ['de', 'D'], ['efe', 'F'], ['ge', 'G'], ['hache', 'H'], ['jota', 'J'], ['ka', 'K'], ['ele', 'L'], ['eme', 'M'],
+        ['ene', 'N'], ['eñe', 'Ñ'], ['pe', 'P'], ['cu', 'Q'], ['erre', 'R'], ['ese', 'S'], ['te', 'T'], ['uve, ve', 'V'], ['equis', 'X'], ['ye', 'Y'], ['zeta, zeda', 'Z']]],
+    ],
+    word_t: 'Palabra', abbr_t: 'Vale',
+  },
   mechs: {
     anagram: {
       slug: 'anagrama', ind: ['anagram'],

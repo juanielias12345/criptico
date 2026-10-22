@@ -7,7 +7,7 @@
 - `canonical`, `og:*`, `robots.txt` y `sitemap.xml` con todas las páginas fijas, la guía y los crípticos publicados.
 - Datos estructurados: WebSite + Organization en el inicio, CreativeWork + BreadcrumbList en cada críptico, Article + BreadcrumbList en la guía.
 - `/` redirige con 301 a `/es` mientras haya un solo idioma de interfaz.
-- Guía de mecanismos (`/es/mecanismos` y una página por mecanismo): explicación, ejemplo resoluble, palabras indicadoras (salen de `src/lib/lang/es.js`) y enlaces a crípticos para practicar.
+- Guía de mecanismos (`/es/mecanismos`, una página por mecanismo y `/es/mecanismos/abreviaturas`): explicación, ejemplo resoluble, palabras indicadoras (salen de `src/lib/lang/es.js`) y enlaces a crípticos para practicar.
 - Cada críptico enlaza a su mecanismo y a seis crípticos del mismo tipo.
 - Sin desplazamiento horizontal desde 360 px. El diálogo de país solo se abre solo en Jugar y Diario; en las páginas a las que se llega desde Google (inicio, críptico, guía) no tapa el contenido.
 - En producción de Vercel el dominio canónico es siempre https://playcripticos.com aunque `SITE_URL` falte o sea *.vercel.app, y criptico.vercel.app redirige con 301 al dominio propio (salvo /api/).

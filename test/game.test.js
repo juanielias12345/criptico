@@ -239,9 +239,9 @@ test('SEO: guía de mecanismos con una página por mecanismo, en el sitemap y en
   assert.equal(idx.status, 200);
   assert.match(idx.text, /<title>Mecanismos de los crípticos/);
   const slugs = [...idx.text.matchAll(/href="\/es\/mecanismos\/([a-z-]+)"/g)].map((m) => m[1]);
-  assert.equal(new Set(slugs).size, 9);
+  assert.equal(new Set(slugs.filter((x) => x !== 'abreviaturas')).size, 9);
   const sm = (await c.get('/sitemap.xml')).text;
-  for (const s of slugs) {
+  for (const s of new Set(slugs)) {
     const p = await c.get('/es/mecanismos/' + s);
     assert.equal(p.status, 200, s);
     assert.match(p.text, /<h1>/);
@@ -254,6 +254,11 @@ test('SEO: guía de mecanismos con una página por mecanismo, en el sitemap y en
   assert.match(ana, /href="\/es\/c\//, 'enlaza crípticos para practicar');
   assert.match((await c.get('/es/ayuda')).text, /href="\/es\/mecanismos"/);
   assert.equal((await c.get('/es/mecanismos/no-existe')).status, 404);
+  const ab = await c.get('/es/mecanismos/abreviaturas');
+  assert.equal(ab.status, 200);
+  assert.match(ab.text, /<td>oro<\/td><td><strong>AU<\/strong>/);
+  assert.ok(sm.includes('/es/mecanismos/abreviaturas'));
+  assert.match(idx.text, /href="\/es\/mecanismos\/abreviaturas"/);
 });
 
 test('solo español: el inglés no se ofrece, /en redirige y los crípticos en inglés no se muestran ni se borran', async () => {

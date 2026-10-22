@@ -20,6 +20,7 @@ async function pendingUrls(db, siteUrl, since) {
       if (GUIDE[l]) {
         urls.push(href(l, 'guide'));
         for (const m of Object.values(GUIDE[l].mechs)) urls.push(href(l, 'guide', '/' + m.slug));
+        if (GUIDE[l].abbr) urls.push(href(l, 'guide', '/' + GUIDE[l].abbr.slug));
       }
     }
   }

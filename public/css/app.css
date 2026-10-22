@@ -895,3 +895,8 @@ dialog::backdrop { background: var(--scrim); }
   .chart-svg .tick { font-size: 15px; }
   .pf-controls .field, .pf-inline .field { flex: 1 1 100%; }
 }
+/* Guía: tabla de abreviaturas */
+.abbr-table { width: 100%; max-width: 560px; border-collapse: collapse; font-size: var(--t-sm); }
+.abbr-table th, .abbr-table td { text-align: left; padding: var(--s-2) var(--s-3); border-bottom: var(--b-1); }
+.abbr-table th { font-weight: 500; color: var(--ink-3); text-transform: uppercase; letter-spacing: .06em; font-size: var(--t-xs); }
+.abbr-table td strong { font-family: var(--font-display); letter-spacing: .04em; }
