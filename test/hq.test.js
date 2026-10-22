@@ -57,7 +57,7 @@ test('los dos CEO ven lo mismo con los mismos permisos', async () => {
   const b = await ines.c.get('/api/admin/hq/state');
   assert.equal(a.status, 200); assert.equal(b.status, 200);
   assert.deepEqual(a.json.agents.map((x) => [x.id, x.state]), b.json.agents.map((x) => [x.id, x.state]));
-  assert.equal(a.json.agents.length, 51);
+  assert.equal(a.json.agents.length, 57);
   assert.equal(a.json.ceos.length, 2);
   assert.ok(a.json.zones.find((z) => z.id === 'ceo-juan') && a.json.zones.find((z) => z.id === 'ceo-ines'));
   // Cada agente está en una zona del plano.

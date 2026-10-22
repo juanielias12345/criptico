@@ -93,6 +93,13 @@ const HANDLERS = {
   async exec_report(db) {
     return require('./hq-reports').runScheduled(db);
   },
+  // Agentes de crecimiento (docs/CRECIMIENTO.md): registran sus propias ejecuciones e informes.
+  async social_insights(db) {
+    return require('./growth').runSocial(db);
+  },
+  async commercial_review(db) {
+    return require('./growth').runCommercial(db);
+  },
   async recover_stuck(db) {
     // Ejecuciones que quedaron "running" por una caída del proceso.
     const stale = new Date(Date.now() - LEASE_MINUTES * 60000).toISOString();
@@ -115,6 +122,9 @@ async function acquire(db, name) {
   return r.changes === 1;
 }
 
+// Tareas cuyos agentes registran ejecuciones propias (una por agente, con su informe como evidencia).
+const SELF_RECORDING = new Set(['social_insights', 'commercial_review']);
+
 async function runJob(db, name, ctx = {}) {
   if (!HANDLERS[name]) throw new Error('unknown_job');
   if (!(await acquire(db, name))) return { name, skipped: 'locked' };
@@ -124,7 +134,7 @@ async function runJob(db, name, ctx = {}) {
   // Los agentes cuyo proceso es esta tarea registran la ejecución (prueba de actividad en HQ).
   const hq = require('./hq');
   const agentRuns = [];
-  for (const a of await db.all('SELECT id FROM agents WHERE runtime = ?', ['job:' + name])) {
+  for (const a of SELF_RECORDING.has(name) ? [] : await db.all('SELECT id FROM agents WHERE runtime = ?', ['job:' + name])) {
     agentRuns.push(await hq.startRun(db, { agentId: a.id, summary: `Tarea programada «${name}»`, stage: 'implementation', source: 'job', startedAt: started }));
   }
   try {
