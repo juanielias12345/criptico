@@ -21,6 +21,7 @@ Este documento describe cómo funciona la empresa dentro del sistema: quién dec
 - **Dispositivo nuevo**: un acceso desde una combinación nueva de red y navegador genera una alerta de seguridad en el panel y queda en la auditoría.
 - **Recuperación**: otra persona del equipo con permiso genera un enlace de un solo uso (24 h). Al usarlo se cambia la contraseña, se quita MFA y se cierran todas las sesiones. Nadie puede generarse un enlace para su propia cuenta.
 - **Política opcional**: `security.require_mfa_owner = true` obliga a los CEO a tener MFA; sin MFA solo pueden entrar a «Mi seguridad».
+- **22/10/2026**: a pedido de Juan se quitó el MFA de las cuentas de CEO (migración `008_mfa_off.sql`) porque el código no les funcionaba, y la política quedó en `false`. Cada CEO puede volver a activarlo desde «Mi seguridad».
 - **Pendiente**: avisos por correo (no hay proveedor de correo, tarea T-007).
 
 ## 2. Bandeja de aprobaciones

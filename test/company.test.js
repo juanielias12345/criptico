@@ -117,6 +117,23 @@ test('MFA: activar, iniciar sesión con código, código incorrecto, recuperaci�
   assert.equal((await ok.c.get('/api/admin/security/me')).status, 200, 'la actual sigue');
 });
 
+test('migración 008: quita el MFA de los CEO y vuelven a entrar solo con contraseña', async () => {
+  const u = await env.db.get("SELECT id, mfa_enabled_at FROM users WHERE username = 'ceo_mfa'");
+  assert.ok(u.mfa_enabled_at, 'la prueba anterior lo dejó activado');
+  await env.db.run("UPDATE settings SET value = 'true' WHERE key = 'security.require_mfa_owner'");
+  const sql = require('fs').readFileSync(require('path').join(__dirname, '..', 'src', 'db', 'migrations', '008_mfa_off.sql'), 'utf8');
+  await env.db.exec(sql);
+  const after = await env.db.get('SELECT mfa_secret, mfa_enabled_at, mfa_recovery FROM users WHERE id = ?', [u.id]);
+  assert.deepEqual({ ...after }, { mfa_secret: null, mfa_enabled_at: null, mfa_recovery: null });
+  assert.equal((await env.db.get("SELECT value FROM settings WHERE key = 'security.require_mfa_owner'")).value, 'false');
+  const audit = await env.db.get("SELECT * FROM audit_log WHERE action = 'security.mfa_disabled' AND actor_label = 'migración 008'");
+  assert.ok(audit);
+  await env.db.run('UPDATE users SET password_hash = ? WHERE id = ?', [auth.hashPassword('Clave-de-prueba-008'), u.id]);
+  const login = await loginWith('ceo_mfa', 'Clave-de-prueba-008');
+  assert.equal(login.r.status, 200, login.r.text);
+  assert.equal((await login.c.get('/api/admin/approvals')).status, 200, 'sin MFA el panel no se bloquea');
+});
+
 test('recuperación de cuenta: otro CEO genera el enlace; la propia persona no puede', async () => {
   const a = await staff(env, 'owner', 'ceo_a_rec');
   const b = await staff(env, 'owner', 'ceo_b_rec');
