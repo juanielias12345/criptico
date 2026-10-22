@@ -498,9 +498,15 @@ async function auditVerdict(db, auditId, { verdict, reason }, actor) {
 
 async function suspendBatch(db, batchId, actor, reason) {
   const b = await db.get('SELECT * FROM generation_batches WHERE id = ?', [batchId]);
-  if (!b) throw new HttpError(404, 'not_found');
+  // los lotes del Agente Autónomo de Biblioteca viven en su propia tabla
+  const agentBatch = b ? null : await db.get('SELECT id FROM agent_batches WHERE id = ?', [batchId]);
+  if (!b && !agentBatch) throw new HttpError(404, 'not_found');
   const r = await db.run("UPDATE clues SET status = 'review', updated_at = ? WHERE batch_id = ? AND status = 'published'", [now(), batchId]);
-  await db.run("UPDATE generation_batches SET status = 'suspended', error = ? WHERE id = ?", [reason || 'suspendido por un administrador', batchId]);
+  await db.run(`UPDATE ${b ? 'generation_batches' : 'agent_batches'} SET status = 'suspended', error = ? WHERE id = ?`, [reason || 'suspendido por un administrador', batchId]);
+  if (agentBatch) {
+    await db.run("UPDATE agent_candidates SET status = 'needs_review', invalidated_at = ?, invalidated_reason = ? WHERE batch_id = ? AND status = 'approved' AND invalidated_at IS NULL",
+      [now(), reason || 'lote suspendido', batchId]);
+  }
   await audit(db, { actorId: actor ? actor.id : null, action: 'bank.suspend_batch', targetKind: 'batch', targetId: batchId, details: { unpublished: r.changes, reason: reason || null } });
   return { unpublished: r.changes };
 }

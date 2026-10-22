@@ -279,7 +279,7 @@ test('#18 panel de administración en escritorio y móvil', async () => {
   await c.post(`/api/game/${s.json.game_id}/guess`, { answer: ans });
   const owner = await staff(env, 'owner');
   const views = ['dashboard', 'alerts', 'geo', 'funnel', 'cluestats', 'exports', 'players', 'player/' + reg.json.user.id, 'player/' + reg.json.user.id + '?tab=games',
-    'player/' + reg.json.user.id + '?tab=performance', 'games', 'game/' + s.json.game_id, 'privacy', 'catstats', 'importstats', 'catalog', 'submissions', 'users', 'bank', 'bankaudit',
+    'player/' + reg.json.user.id + '?tab=performance', 'games', 'game/' + s.json.game_id, 'privacy', 'catstats', 'importstats', 'catalog', 'submissions', 'users', 'bank', 'bankaudit', 'library',
     ...['direction', 'agents', 'tech', 'marketing', 'legal', 'community', 'apps', 'audit', 'integrations', 'risks'].map((t) => 'company?tab=' + t),
     'agent/editorial', 'approvals', 'tasks', 'task/T-001', 'content', 'piece/new', 'legal', 'legaldoc/terms/1/es', 'jurisdiction/AR', 'security'];
   for (const viewport of [{ width: 1440, height: 900 }, { width: 375, height: 812 }]) {

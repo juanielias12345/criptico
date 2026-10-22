@@ -1,0 +1,44 @@
+# Agente Autónomo de Biblioteca: cada hora retoma el ciclo diario (zona horaria
+# del proyecto), genera, valida, aprueba o rechaza y guarda crípticos por
+# variante, y actualiza el informe del panel. Ver docs/AGENTE.md.
+# Necesita los secretos DATABASE_URL, DATABASE_AUTH_TOKEN y ANTHROPIC_API_KEY.
+# Sin ANTHROPIC_API_KEY (o con presupuesto 0) cada ejecución deja el ciclo
+# «bloqueado» y lo informa en el panel; no gasta ni simula trabajo.
+name: Agente de biblioteca
+
+on:
+  schedule:
+    - cron: '7 * * * *'
+  workflow_dispatch:
+    inputs:
+      minutes:
+        description: Minutos de trabajo como máximo
+        required: false
+        default: '50'
+
+permissions:
+  contents: read
+
+# Nunca dos ejecuciones a la vez (además del bloqueo en la base).
+concurrency:
+  group: library-agent
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 58
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --omit=dev
+      - name: Correr el agente
+        run: node scripts/library-agent.js run --minutes "${{ inputs.minutes || '50' }}"
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DATABASE_AUTH_TOKEN: ${{ secrets.DATABASE_AUTH_TOKEN }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          SITE_URL: https://playcripticos.com

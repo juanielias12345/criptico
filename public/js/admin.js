@@ -887,6 +887,100 @@
       detail);
   };
 
+  // ── Agente Autónomo de Biblioteca ──
+  const AGENT_STATE = { active: 'Activo', paused: 'Pausado', stopped: 'Detenido', blocked: 'Bloqueado', error: 'Con errores' };
+  const CYCLE_STATUS = { running: 'En curso', blocked: 'Bloqueado', stopped: 'Detenido', completed: 'Cumplido', partial: 'Incumplido', failed: 'Falló', not_started: 'Sin empezar' };
+  const BLOCK_REASON = { missing_credentials: 'Falta la clave ANTHROPIC_API_KEY en los secretos de GitHub.', no_budget: 'No hay presupuesto diario: agent.daily_budget_usd está en 0.',
+    budget_exhausted: 'Se agotó el presupuesto del día.', variant_budget_exhausted: 'El presupuesto por variante se agotó o no alcanza para una llamada más.', price_missing: 'Un modelo no tiene precio configurado.', credentials_rejected: 'La API rechazó la clave.', bad_request: 'La API rechazó el pedido: revisar modelos y configuración.' };
+  const MECH = { anagram: 'Anagrama', hidden: 'Oculta', reversal: 'Inversión', container: 'Inserción', deletion: 'Eliminación', charade: 'Charada', homophone: 'Homófono', double_definition: 'Doble definición', initials: 'Iniciales', combination: 'Combinación' };
+  const usd = (v) => (v === null || v === undefined ? '—' : 'US$ ' + Number(v).toLocaleString('es', { maximumFractionDigits: 4 }));
+
+  V.library = async () => {
+    const d = await api('/api/admin/agent');
+    const t = (d.today && d.today.totals) || {};
+    const ctl = (state, label, cls, confirmText) => btn(label, act(async () => {
+      const reason = confirmText ? prompt(confirmText) : null;
+      if (confirmText && reason === null) return { ok: false, flash: 'Cancelado.' };
+      await api('/api/admin/agent/control', { method: 'POST', body: { state, reason } });
+    }, 'Listo.'), cls);
+    const controls = can('agent.control') ? el('div', { class: 'toolbar' },
+      d.control.state !== 'active' ? ctl('active', 'Reanudar', 'primary') : '',
+      d.control.state === 'active' ? ctl('paused', 'Pausar', '', 'Motivo de la pausa (termina el lote en curso y no empieza otro):') : '',
+      d.control.state !== 'stopped' ? ctl('stopped', 'Detener', '', 'Motivo para detener (corta el ciclo de hoy hasta que alguien lo reanude):') : '') : '';
+    const blocked = d.today && d.today.blocked_reason ? el('p', { class: 'flash bad', text: 'Bloqueado: ' + (BLOCK_REASON[d.today.blocked_reason] || d.today.blocked_reason) + ' No se marca nada como cumplido.' }) : '';
+    const vRows = d.variants.map((v) => {
+      const pct = v.library_target ? Math.min(100, (v.library / v.library_target) * 100) : 0;
+      return el('tr', {},
+        el('th', { scope: 'row' }, el('strong', { text: v.variant }), el('div', { class: 'small muted', text: v.name })),
+        el('td', {}, pill(v.status === 'active' ? 'active' : v.status === 'maintenance' ? 'verified' : 'paused'), v.paused_reason ? el('div', { class: 'small muted', text: v.paused_reason }) : ''),
+        el('td', { text: nn(v.daily_target) }), el('td', { text: nn(v.candidates) }), el('td', {}, el('b', { text: nn(v.approved) })), el('td', { text: nn(v.needs_review) }),
+        el('td', { text: nn(v.rejected) }), el('td', { text: nn(v.duplicates) }), el('td', { text: v.approval_rate === null ? '—' : v.approval_rate + ' %' }),
+        el('td', { text: v.compliance + ' %' }), el('td', { text: usd(v.cost_usd) }),
+        el('td', {}, el('span', { class: 'bar-track', title: pct.toFixed(1) + ' %' }, el('span', { class: 'bar-fill', style: 'width:' + pct + '%' })),
+          el('span', { class: 'small', text: nn(v.library) + ' / ' + nn(v.library_target) })),
+        el('td', {}, el('button', { class: 'btn small', type: 'button', onclick: () => showVariant(v), text: 'Detalle' })));
+    });
+    const detail = el('div', { id: 'agent-variant' });
+    const showVariant = async (v) => {
+      const items = (await api('/api/admin/agent/candidates?cycle=' + d.today.date + '&variant=' + v.variant + '&limit=30')).items;
+      detail.replaceChildren(el('div', { class: 'panel' },
+        el('h3', { text: v.variant + ' · ' + v.name }),
+        v.shortfall_reason ? el('p', { class: 'small', text: 'Por qué falta: ' + v.shortfall_reason }) : el('p', { class: 'small', text: 'Cuota del día cumplida.' }),
+        v.corrective_actions.length ? el('p', { class: 'small muted', text: 'Acciones correctivas: ' + v.corrective_actions.join('; ') }) : '',
+        table(['Mecanismo', 'Meta', 'Aprobados', 'Faltan'], v.by_mechanism.map((m) => el('tr', {}, el('td', { text: MECH[m.mechanism] || m.mechanism }), el('td', { text: nn(m.target) }), el('td', { text: nn(m.approved) }), el('td', { text: nn(Math.max(0, m.target - m.approved)) })))),
+        can('agent.control') ? el('div', { class: 'toolbar' },
+          btn(v.status === 'paused' ? 'Reanudar variante' : 'Pausar variante', act(() => api('/api/admin/agent/variants/' + v.variant, { method: 'PATCH', body: { status: v.status === 'paused' ? 'active' : 'paused' } }), 'Listo.'))) : '',
+        el('h3', { text: 'Últimos candidatos y sus controles' }),
+        items.length ? table(['Estado', 'Pista', 'Respuesta', 'Mecanismo', 'Controles', 'Motivos'], items.map((c) => el('tr', {},
+          el('td', {}, pill(c.status === 'approved' ? 'published' : c.status === 'needs_review' ? 'review' : 'rejected'), c.invalidated_at ? el('div', { class: 'small muted', text: 'Aprobación invalidada: ' + c.invalidated_reason }) : ''),
+          el('td', {}, c.clue_id ? el('a', { href: '#clue/' + c.clue_id, text: c.clue_text }) : c.clue_text), el('td', { text: c.answer }), el('td', { text: MECH[c.mechanism] || c.mechanism }),
+          el('td', { class: 'small', text: ['A', 'B', 'C', 'D', 'E', 'F'].map((k) => k + (c.checks[k] ? (c.checks[k].ok === true ? '✓' : c.checks[k].ok === false ? '✗' : '·') : '·')).join(' ') }),
+          el('td', { class: 'small', text: c.reasons.join(', ') || '—' })))) : el('p', { class: 'muted', text: 'Sin candidatos en este ciclo.' })));
+      detail.scrollIntoView({ block: 'nearest' });
+    };
+    main.replaceChildren(
+      el('div', { class: 'adm-head' }, el('h1', { text: 'Agente Autónomo de Biblioteca' }),
+        el('p', { class: 'muted small', text: 'Meta: ' + nn(d.settings.daily_target) + ' aprobados por día y por variante, repartidos en partes iguales entre ' + d.settings.mechanisms.length + ' mecanismos (' + nn(Math.floor(d.settings.daily_target / Math.max(1, d.settings.mechanisms.length))) + ' cada uno), hasta ' + nn(d.settings.library_target) + ' por variante. Solo cuenta lo aprobado: los dudosos quedan en revisión y no suman.' }),
+        controls),
+      blocked,
+      el('div', { class: 'cards' },
+        kpi('Estado', AGENT_STATE[d.state] || d.state, { fmt: (x) => x, txt: true }),
+        kpi('Última ejecución', fmt(d.last_run.at), { fmt: (x) => x, txt: true, href: d.last_run.evidence || null, link: 'Ver en GitHub' }),
+        kpi('Próxima ejecución', d.next_run ? fmt(d.next_run) : '—', { fmt: (x) => x, txt: true }),
+        kpi('Ciclo de hoy', (d.today.date || '') + ' · ' + (CYCLE_STATUS[d.today.status] || d.today.status), { fmt: (x) => x, txt: true }),
+        kpi('Aprobados hoy', t.approved || 0), kpi('Meta de hoy', t.daily_target || 0), kpi('Candidatos', t.candidates || 0),
+        kpi('Pendientes de revisión', t.needs_review || 0), kpi('Rechazados', t.rejected || 0), kpi('Duplicados', t.duplicates || 0),
+        kpi('Aprobación', t.candidates ? Math.round((t.approved / t.candidates) * 1000) / 10 : null, { fmt: (x) => (x === null ? '—' : x + ' %') }),
+        kpi('Costo medido hoy', t.cost_usd || 0, { fmt: usd }), kpi('Costo por aprobado', t.approved ? t.cost_usd / t.approved : null, { fmt: usd }),
+        kpi('Biblioteca', t.library || 0), kpi('Faltan para la meta', t.library_missing || 0)),
+      el('p', { class: 'small muted', text: 'Programación: ' + d.schedule + '. Última ejecución: ' + (d.last_run.summary || 'ninguna') + '. Presupuesto diario: ' + usd(d.settings.daily_budget_usd) + ' · generador ' + d.settings.generator_model + ' · revisor ' + d.settings.reviewer_model + ' · zona horaria ' + d.settings.timezone + '. Las reglas se cambian en «Reglas y funciones» (claves agent.*).' }),
+      d.alerts.length ? el('div', {}, el('h2', { text: 'Alertas' }), table(['Gravedad', 'Alerta', 'Última vez'], d.alerts.map((x) => el('tr', {}, el('td', {}, el('span', { class: 'pill sev-' + x.severity, text: x.severity })), el('td', { text: x.title }), el('td', { text: fmt(x.last_seen_at) }))))) : '',
+      el('h2', { text: 'Variantes (' + d.variants.length + ')' }),
+      el('div', { class: 'tbl-wrap' }, el('table', {}, el('thead', {}, el('tr', {}, ['Variante', 'Estado', 'Meta del día', 'Candidatos', 'Aprobados', 'En revisión', 'Rechazados', 'Duplicados', 'Aprobación', 'Cumplimiento', 'Costo', 'Biblioteca', ''].map((h) => el('th', { text: h })))), el('tbody', {}, vRows))),
+      detail,
+      el('h2', { text: 'Historial de ciclos' }),
+      d.history.length ? table(['Día', 'Estado', 'Ejecuciones', 'Aprobados', 'Meta', 'Costo', 'Inicio', 'Fin', ''], d.history.map((h) => el('tr', {},
+        el('td', { text: h.cycle_date }), el('td', { text: (CYCLE_STATUS[h.status] || h.status) + (h.blocked_reason ? ' (' + h.blocked_reason + ')' : '') }), el('td', { text: nn(h.runs) }),
+        el('td', { text: h.totals ? nn(h.totals.approved) : '—' }), el('td', { text: h.totals ? nn(h.totals.daily_target) : '—' }), el('td', { text: usd(h.cost_usd) }),
+        el('td', { text: fmt(h.started_at) }), el('td', { text: fmt(h.finished_at) }),
+        el('td', {}, btn('Informe', async () => {
+          const r = await api('/api/admin/agent/cycles/' + h.cycle_date);
+          const box = el('div', { class: 'panel' }, el('h3', { text: 'Informe del ' + r.date + ' · ' + (CYCLE_STATUS[r.status] || r.status) }),
+            r.blocked_reason ? el('p', { class: 'small', text: 'Bloqueo: ' + (BLOCK_REASON[r.blocked_reason] || r.blocked_reason) }) : '',
+            table(['Variante', 'Meta', 'Candidatos', 'Aprobados', 'Pendientes', 'Rechazados', 'Duplicados', 'Cumplimiento', 'Costo', 'Biblioteca', 'Faltan', 'Motivo del déficit'], r.variants.map((v) => el('tr', {},
+              el('td', { text: v.variant }), el('td', { text: nn(v.daily_target) }), el('td', { text: nn(v.candidates) }), el('td', { text: nn(v.approved) }), el('td', { text: nn(v.needs_review) }),
+              el('td', { text: nn(v.rejected) }), el('td', { text: nn(v.duplicates) }), el('td', { text: v.compliance + ' %' }), el('td', { text: usd(v.cost_usd) }),
+              el('td', { text: nn(v.library) }), el('td', { text: nn(v.library_missing) }), el('td', { class: 'small', text: v.shortfall_reason || '—' })))));
+          detail.replaceChildren(box); box.scrollIntoView({ block: 'nearest' });
+        }, 'small'))))) : el('p', { class: 'muted', text: 'Todavía no hubo ciclos.' }),
+      el('h2', { text: 'Últimos lotes' }),
+      d.batches.length ? table(['Inicio', 'Variante', '#', 'Tipo', 'Estado', 'Candidatos', 'Aprobados', 'Revisión', 'Rechazados', 'Duplicados', 'Costo', 'Duración', 'Error'], d.batches.map((b) => el('tr', {},
+        el('td', { text: fmt(b.started_at) }), el('td', { text: b.variant_code }), el('td', { text: b.seq }), el('td', { text: b.kind === 'pilot' ? 'piloto' : b.kind === 'probation' ? 'prueba controlada' : 'normal' }),
+        el('td', { text: BATCH_STATUS[b.status] || b.status }), el('td', { text: nn(b.candidates) }), el('td', { text: nn(b.approved) }), el('td', { text: nn(b.needs_review) }),
+        el('td', { text: nn(b.rejected) }), el('td', { text: nn(b.duplicates) }), el('td', { text: usd(b.cost_usd) }), el('td', { text: b.duration_ms ? (b.duration_ms / 1000).toFixed(1) + ' s' : '—' }),
+        el('td', { class: 'small', text: b.error || '' })))) : el('p', { class: 'muted', text: 'Todavía no hubo lotes.' }));
+  };
+
   V.bankaudit = async () => {
     const d = await api('/api/admin/bank/audits?limit=20');
     const card = (x) => {
@@ -1157,6 +1251,10 @@
     'publishing.external_allow_asserted': 'Permitir publicar solos externos con afirmaciones semánticas no comprobables (sinónimos, dobles definiciones).',
     'publishing.generated_autopublish': 'Publicar sin revisión los crípticos del generador (no recomendado).',
     'publishing.semantic_duplicate_threshold': 'Umbral de similitud para marcar posibles duplicados (0–1).',
+    'agent.daily_target_per_variant': 'Crípticos aprobados por día que busca el agente en cada variante.', 'agent.library_target_per_variant': 'Tope de la biblioteca por variante; al llegar, la variante pasa a mantenimiento.',
+    'agent.mechanisms': 'Mecanismos entre los que se reparte la cuota diaria en partes iguales.', 'agent.timezone': 'Zona horaria del ciclo diario.',
+    'agent.daily_budget_usd': 'Presupuesto diario en dólares para la API de Claude. En 0 el agente no gasta y queda bloqueado.', 'agent.variant_budget_usd': 'Tope por variante y por día (0 = el diario repartido en partes iguales).',
+    'agent.prices_usd_per_mtok': 'Precio por millón de tokens [entrada, salida] de cada modelo, para medir y limitar el gasto.',
     'retention.games_days': 'Días que se conservan las partidas.', 'retention.audit_days': 'Días que se conserva la auditoría.',
   };
   const ALL_MODES = ['quick', 'infinite', 'daily', 'archive', 'beginner', 'intermediate', 'expert', 'guided', 'timed', 'themed', 'practice', 'streak', 'shared'];
