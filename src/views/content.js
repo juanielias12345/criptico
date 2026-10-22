@@ -53,6 +53,25 @@ module.exports = {
 <p>Las partidas se conservan hasta 400 días; el detalle de eventos de cada partida, 180 días; los registros de seguridad, hasta 2 años; las sesiones vencen solas. Podés borrar tu cuenta desde tu perfil en cualquier momento: se eliminan tus datos personales y tus partidas quedan solo en estadísticas anónimas.</p>
 <h2>Tus derechos</h2>
 <p>Desde tu perfil podés descargar una copia de tus datos, pedir una corrección o eliminar tu cuenta. También podés escribir al contacto del responsable del sitio.</p>`,
+    credits: `
+<p>Play Crípticos reúne crípticos de cuatro orígenes. Cada uno muestra de dónde viene al ver la solución.</p>
+<h2>Crípticos propios</h2>
+<p>Los escribe el equipo editorial o los arma el generador de Play Crípticos. El generador no copia pistas de ningún lado: combina palabras de diccionarios abiertos con reglas de construcción (anagramas, palabras ocultas, inversiones, charadas, inserciones, homófonos y dobles definiciones). Cada pista generada pasa un validador que comprueba que el juego de palabras produce exactamente la respuesta, y cada definición o sinónimo debe figurar en las fuentes léxicas de abajo; en español, además, debe confirmarlo una segunda fuente. Lo que tiene cualquier duda queda pendiente de revisión humana, y una muestra de cada lote publicado se audita a mano.</p>
+<h2>Fuentes léxicas del generador</h2>
+<ul>
+<li><strong>Multilingual Central Repository 3.0</strong> (wordnet en español), Gonzalez-Agirre, Laparra y Rigau, 2012. Licencia <a href="https://creativecommons.org/licenses/by/3.0/" rel="noopener">CC BY 3.0</a>.</li>
+<li><strong>Princeton WordNet 3.0</strong>. WordNet 3.0 Copyright 2006 by Princeton University. All rights reserved. <a href="https://wordnet.princeton.edu/license-and-commercial-use" rel="noopener">Licencia de WordNet</a>.</li>
+<li><strong>OpenThesaurus – Tesauro Español</strong>, Marcelo Garrone y colaboradores. Licencia LGPL 2.1. Se usa solo para confirmar sinónimos en español.</li>
+<li><strong>CMU Pronouncing Dictionary 0.7a</strong>, Carnegie Mellon University. Licencia BSD. Se usa para comprobar homófonos en inglés.</li>
+<li><strong>wordfreq 3.1</strong>, Robyn Speer. Datos <a href="https://creativecommons.org/licenses/by-sa/4.0/" rel="noopener">CC BY-SA 4.0</a>. Se usa para ordenar palabras por frecuencia de uso.</li>
+<li>Listas de palabras <em>an-array-of-spanish-words</em> y <em>an-array-of-english-words</em> (MIT), para comprobar que cada respuesta existe.</li>
+</ul>
+<h2>Crípticos externos</h2>
+<p>Solo se publican si la fuente es de dominio público, tiene una licencia compatible o dio permiso expreso, y ese permiso quedó registrado. Junto a la solución se muestran la fuente, el autor (o «autor desconocido») y la licencia. Lo que no tiene permiso verificado queda en cuarentena y nunca se publica; cuando una fuente solo permite enlazar, se guarda la referencia sin copiar el contenido.</p>
+<h2>Propuestas de la comunidad</h2>
+<p>Siempre las aprueba una persona del equipo antes de publicarlas, y llevan el nombre público que eligió quien las propuso.</p>
+<p>Si sos titular de derechos y ves un problema, escribinos desde la página de <a href="/es/contribuir">propuestas</a> o reportá el críptico desde la partida.</p>
+`,
     terms: `
 <p><em>Base adaptable: revisala antes de publicar en cada mercado.</em></p>
 <h2>Uso del sitio</h2>
@@ -116,6 +135,25 @@ module.exports = {
 <p>Games are kept for up to 400 days, per-game event details for 180 days, security logs for up to 2 years, and sessions expire automatically. You can delete your account from your profile at any time: your personal data is erased and your games remain only in anonymous statistics.</p>
 <h2>Your rights</h2>
 <p>From your profile you can download a copy of your data, request a correction or delete your account. You can also contact the site operator.</p>`,
+    credits: `
+<p>Play Crípticos brings together clues from four origins. Each one shows where it comes from when you see the solution.</p>
+<h2>Our own clues</h2>
+<p>They are written by the editorial team or built by the Play Crípticos generator. The generator does not copy clues from anywhere: it combines words from open dictionaries with construction rules (anagrams, hidden words, reversals, charades, containers, homophones and double definitions). Every generated clue goes through a validator that checks the wordplay produces exactly the answer, and every definition or synonym must appear in the lexical sources below; in Spanish a second source must confirm it too. Anything with the slightest doubt waits for human review, and a sample of every published batch is audited by hand.</p>
+<h2>Lexical sources used by the generator</h2>
+<ul>
+<li><strong>Princeton WordNet 3.0</strong>. WordNet 3.0 Copyright 2006 by Princeton University. All rights reserved. <a href="https://wordnet.princeton.edu/license-and-commercial-use" rel="noopener">WordNet licence</a>.</li>
+<li><strong>CMU Pronouncing Dictionary 0.7a</strong>, Carnegie Mellon University. BSD licence. Used to check English homophones.</li>
+<li><strong>Multilingual Central Repository 3.0</strong> (Spanish wordnet), Gonzalez-Agirre, Laparra and Rigau, 2012. <a href="https://creativecommons.org/licenses/by/3.0/" rel="noopener">CC BY 3.0</a>.</li>
+<li><strong>OpenThesaurus – Tesauro Español</strong>, Marcelo Garrone and contributors. LGPL 2.1. Used only to confirm Spanish synonyms.</li>
+<li><strong>wordfreq 3.1</strong>, Robyn Speer. Data <a href="https://creativecommons.org/licenses/by-sa/4.0/" rel="noopener">CC BY-SA 4.0</a>. Used to rank words by how common they are.</li>
+<li>Word lists <em>an-array-of-english-words</em> and <em>an-array-of-spanish-words</em> (MIT), to check that every answer exists.</li>
+</ul>
+<h2>External clues</h2>
+<p>They are published only when the source is in the public domain, has a compatible licence or gave express permission, and that permission is on record. The source, the author (or "unknown author") and the licence are shown next to the solution. Anything without verified permission stays in quarantine and is never published; when a source only allows linking, we keep the reference without copying the content.</p>
+<h2>Community submissions</h2>
+<p>A team member always approves them before publication, and they carry the public name chosen by whoever submitted them.</p>
+<p>If you hold rights and see a problem, contact us from the <a href="/en/contribute">submissions</a> page or report the clue while playing.</p>
+`,
     terms: `
 <p><em>Adaptable template: review before launching in each market.</em></p>
 <h2>Using the site</h2>

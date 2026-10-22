@@ -4,7 +4,7 @@
   "functions": {
     "api/index.js": {
       "maxDuration": 60,
-      "includeFiles": "{src/db/migrations/**,seed/**,public/admin.html}"
+      "includeFiles": "{src/db/migrations/**,seed/**,public/admin.html,data/lexicon/**}"
     }
   },
   "rewrites": [

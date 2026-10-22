@@ -1,5 +1,6 @@
 node_modules/
-data/
+data/*
+!data/lexicon/
 *.db
 *.db-*
 .env

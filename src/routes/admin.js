@@ -62,13 +62,15 @@ module.exports = function admin() {
     const db = req.app.locals.db; const q = req.query; const { page, per, offset } = paging(q);
     const where = ['1=1']; const args = [];
     if (q.q) { where.push('(clue_text LIKE ? OR answer LIKE ?)'); args.push(`%${q.q}%`, `%${q.q}%`); }
-    for (const f of ['status', 'origin', 'language_code', 'validation_status', 'mechanism', 'category']) {
+    for (const f of ['status', 'origin', 'language_code', 'validation_status', 'mechanism', 'category', 'source_id', 'license_id', 'rights_status', 'batch_id', 'audit_status']) {
       if (q[f]) { where.push(`${f} = ?`); args.push(String(q[f])); }
     }
+    if (q.difficulty) { where.push('difficulty = ?'); args.push(Number(q.difficulty)); }
+    if (q.author) { where.push(q.author === 'desconocido' ? 'author_name IS NULL' : 'author_name LIKE ?'); if (q.author !== 'desconocido') args.push(`%${q.author}%`); }
     if (q.variant_code) { where.push(q.variant_code === 'general' ? 'variant_code IS NULL' : 'variant_code = ?'); if (q.variant_code !== 'general') args.push(q.variant_code); }
     const total = (await db.get(`SELECT COUNT(*) AS n FROM clues WHERE ${where.join(' AND ')}`, args)).n;
     const items = await db.all(`SELECT id, slug, clue_text, answer, language_code, variant_code, category, difficulty, mechanism, origin, status,
-      validation_status, validation_errors, source_id, license_id, created_at, published_at FROM clues WHERE ${where.join(' AND ')}
+      validation_status, validation_errors, source_id, license_id, author_name, rights_status, audit_status, batch_id, created_at, published_at FROM clues WHERE ${where.join(' AND ')}
       ORDER BY created_at DESC LIMIT ? OFFSET ?`, [...args, per, offset]);
     res.json({ total, page, per_page: per, items });
   }));
@@ -382,6 +384,7 @@ module.exports = function admin() {
   }));
 
   r.use(require('./admin-panel')({ need, log }));
+  r.use(require('./admin-bank')({ need, log }));
 
   return r;
 };

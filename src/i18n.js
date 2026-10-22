@@ -5,9 +5,9 @@
 
 const ROUTES = {
   es: { home: '', play: 'jugar', daily: 'diario', archive: 'archivo', clue: 'c', contribute: 'contribuir', submission: 'propuesta',
-    help: 'ayuda', privacy: 'privacidad', terms: 'condiciones', profile: 'perfil', account: 'cuenta' },
+    help: 'ayuda', privacy: 'privacidad', terms: 'condiciones', credits: 'creditos', profile: 'perfil', account: 'cuenta' },
   en: { home: '', play: 'play', daily: 'daily', archive: 'archive', clue: 'c', contribute: 'contribute', submission: 'submission',
-    help: 'help', privacy: 'privacy', terms: 'terms', profile: 'profile', account: 'account' },
+    help: 'help', privacy: 'privacy', terms: 'terms', credits: 'credits', profile: 'profile', account: 'account' },
 };
 
 const T = {
@@ -61,7 +61,8 @@ const T = {
     status_title: 'Estado de tu propuesta', status_code: 'Código de seguimiento', status_check: 'Consultar',
     st_pending: 'Pendiente de aprobación', st_in_review: 'En revisión', st_needs_changes: 'Necesita correcciones', st_approved: 'Aprobado',
     st_published: 'Publicado', st_rejected: 'Rechazado', moderator_note: 'Comentario de moderación', resubmit: 'Enviar corrección',
-    help_title: 'Ayuda', privacy_title: 'Política de privacidad', terms_title: 'Condiciones de uso',
+    help_title: 'Ayuda', privacy_title: 'Política de privacidad', terms_title: 'Condiciones de uso', credits_title: 'Fuentes y créditos',
+    gen_by: 'Creado por el generador de Play Crípticos', gen_sources: 'fuentes léxicas', author_unknown: 'Autor desconocido', author_label: 'Autor', license_label: 'Licencia', indicator_hint: 'Indicador',
     profile_title: 'Tus estadísticas', played: 'Jugados', solved: 'Resueltos', solve_rate: 'Tasa de acierto', best_streak: 'Mejor racha',
     daily_streak: 'Racha diaria', achievements: 'Logros', favorites: 'Favoritos', my_submissions: 'Mis propuestas', notifications: 'Avisos',
     account_title: 'Cuenta opcional', account_lead: 'No hace falta registrarse para jugar. Una cuenta guarda tu historial en varios dispositivos.',
@@ -133,7 +134,8 @@ const T = {
     status_title: 'Submission status', status_code: 'Tracking code', status_check: 'Check',
     st_pending: 'Pending approval', st_in_review: 'In review', st_needs_changes: 'Needs changes', st_approved: 'Approved',
     st_published: 'Published', st_rejected: 'Rejected', moderator_note: 'Moderator note', resubmit: 'Send correction',
-    help_title: 'Help', privacy_title: 'Privacy policy', terms_title: 'Terms of use',
+    help_title: 'Help', privacy_title: 'Privacy policy', terms_title: 'Terms of use', credits_title: 'Sources and credits',
+    gen_by: 'Created by the Play Crípticos generator', gen_sources: 'lexical sources', author_unknown: 'Unknown author', author_label: 'Author', license_label: 'Licence', indicator_hint: 'Indicator',
     profile_title: 'Your statistics', played: 'Played', solved: 'Solved', solve_rate: 'Solve rate', best_streak: 'Best streak',
     daily_streak: 'Daily streak', achievements: 'Achievements', favorites: 'Favourites', my_submissions: 'My submissions', notifications: 'Notifications',
     account_title: 'Optional account', account_lead: "You don't need an account to play. An account keeps your history across devices.",

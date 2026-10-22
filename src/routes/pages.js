@@ -85,7 +85,7 @@ module.exports = function pages() {
     const { siteUrl } = req.app.locals.config;
     const db = req.app.locals.db;
     const urls = [];
-    for (const l of UI_LANGS) for (const route of ['home', 'play', 'daily', 'archive', 'contribute', 'help', 'privacy', 'terms']) urls.push(href(l, route));
+    for (const l of UI_LANGS) for (const route of ['home', 'play', 'daily', 'archive', 'contribute', 'help', 'privacy', 'terms', 'credits']) urls.push(href(l, route));
     // Solo páginas con contenido real: crípticos publicados, en el idioma de la interfaz que les corresponde.
     const clues = await db.all("SELECT slug, language_code, updated_at FROM clues WHERE status = 'published' ORDER BY published_at DESC LIMIT 45000");
     const body = urls.map((u) => `<url><loc>${esc(siteUrl + u)}</loc></url>`).join('')
@@ -361,7 +361,7 @@ ${pub.author && c.origin === 'community' ? `<p class="attribution">${esc(t(lang,
 <section class="banner"><div><h2>${esc(t(lang, 'try_more'))}</h2><p>${esc(t(lang, 'play_lead'))}</p></div><a class="btn" href="${P('play')}">${esc(t(lang, 'home_cta'))}</a></section>`,
     }));
 
-    for (const key of ['privacy', 'terms']) {
+    for (const key of ['privacy', 'terms', 'credits']) {
       r.get(P(key), (req, res) => render(req, res, {
         page: key, path: P(key), alternates: altFor(key), title: t(lang, key + '_title'),
         body: `<article class="prose"><h1>${esc(t(lang, key + '_title'))}</h1>${CONTENT[lang][key]}</article>`,

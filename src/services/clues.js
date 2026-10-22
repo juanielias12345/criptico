@@ -23,10 +23,11 @@ function normalizeCategory(c) {
 }
 
 // Valida un críptico y arma la fila lista para guardar (sin decidir el estado).
-async function buildClue(db, input) {
+async function buildClue(db, input, ctx = {}) {
   const lang = N.baseLang(input.language_code || input.language);
   const variant = input.variant_code || input.variant || null;
-  const report = validateClue({ ...input, language_code: lang, variant_code: variant }, { phonetics: await variantPhonetics(db, lang) });
+  const phonetics = ctx.phonetics || await variantPhonetics(db, lang);
+  const report = validateClue({ ...input, language_code: lang, variant_code: variant }, { phonetics });
   const answer = String(input.answer || '').trim().toUpperCase();
   const mechanism = MECHANISM_SLUGS.has(input.mechanism) ? input.mechanism
     : report.mechanisms.length > 1 ? 'combination' : (report.mechanisms[0] || 'cryptic_definition');
@@ -77,11 +78,22 @@ async function uniqueSlug(db, base) {
 const CLUE_COLUMNS = ['id', 'slug', 'clue_text', 'answer', 'answer_key', 'alt_answers', 'enumeration', 'definition', 'wordplay',
   'explanation', 'note', 'language_code', 'variant_code', 'category', 'difficulty', 'mechanism', 'origin', 'status',
   'author_name', 'source_id', 'source_url', 'license_id', 'attribution', 'submission_id', 'import_item_id',
-  'validation_status', 'validation_errors', 'validation', 'fingerprint', 'proper_noun', 'published_at', 'imported_at'];
+  'validation_status', 'validation_errors', 'validation', 'fingerprint', 'proper_noun', 'published_at', 'imported_at',
+  'mechanisms_secondary', 'hints', 'answer_length', 'dedup_key', 'batch_id', 'generator_version', 'evidence', 'rights_status',
+  'source_title', 'source_accessed_at', 'audit_status', 'shuffle'];
+
+// Estado de derechos de un críptico externo según la licencia de su fuente.
+function rightsStatusFor(licenseId) {
+  if (licenseId === 'written-permission') return 'permission';
+  if (licenseId === 'public-domain' || licenseId === 'cc0-1.0') return 'public_domain';
+  return 'licensed';
+}
 
 async function insertClue(db, row, { actorKind, actorId }) {
   const id = row.id || uuid();
   const full = { ...row, id, slug: row.slug || await uniqueSlug(db, slugBase(row)) };
+  if (full.answer_length === undefined && full.answer_key) full.answer_length = full.answer_key.length;
+  if (full.shuffle === undefined) full.shuffle = Math.floor(Math.random() * 1e9);
   if (full.status === 'published' && !full.published_at) full.published_at = now();
   const cols = CLUE_COLUMNS.filter((c) => full[c] !== undefined);
   await db.run(`INSERT INTO clues(${cols.join(',')}) VALUES (${cols.map(() => '?').join(',')})`, cols.map((c) => full[c]));
@@ -156,7 +168,8 @@ function publicClue(c) {
     id: c.id, slug: c.slug, clue: c.clue_text, enumeration: c.enumeration, language: c.language_code,
     variant: c.variant_code, category: c.category, difficulty: c.difficulty, mechanism: c.mechanism,
     origin: c.origin, author: c.author_name || null, attribution: c.attribution || null,
-    source_url: c.origin === 'external' ? c.source_url : null, published_at: c.published_at,
+    source_url: c.origin === 'external' ? c.source_url : null, license: c.origin === 'external' ? c.license_id || null : null,
+    published_at: c.published_at,
   };
 }
 
@@ -167,4 +180,4 @@ function solutionView(c) {
   };
 }
 
-module.exports = { buildClue, insertClue, setClueStatus, updateClue, publicClue, solutionView, uniqueSlug, normalizeCategory, variantPhonetics, publishBlockedMessage };
+module.exports = { rightsStatusFor, CLUE_COLUMNS, slugBase, buildClue, insertClue, setClueStatus, updateClue, publicClue, solutionView, uniqueSlug, normalizeCategory, variantPhonetics, publishBlockedMessage };

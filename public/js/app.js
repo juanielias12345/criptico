@@ -35,6 +35,8 @@
     bulb: '<path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.6 10.8c.7.6 1.1 1.4 1.1 2.2h5c0-.8.4-1.6 1.1-2.2A6 6 0 0 0 12 3z"/>',
     close: '<path d="M6 6l12 12M18 6 6 18"/>',
   };
+  const LICENSE_NAMES = { 'cc0-1.0': 'CC0 1.0', 'public-domain': L === 'es' ? 'dominio público' : 'public domain', 'cc-by-4.0': 'CC BY 4.0',
+    'cc-by-sa-4.0': 'CC BY-SA 4.0', 'written-permission': L === 'es' ? 'permiso escrito del titular' : 'written permission' };
   const route = (key, rest) => '/' + L + (BOOT.routes[key] ? '/' + BOOT.routes[key] : '') + (rest || '');
   const reduceMotion = () => window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -509,7 +511,8 @@
 
     function hintItems() {
       return st.hints.map((h) => {
-        if (h.kind === 'mechanism') return el('li', {}, el('b', { text: t('mechanism') }), t('mech_' + h.mechanism) + '. ' + t('mechhelp_' + h.mechanism));
+        if (h.kind === 'mechanism') return el('li', {}, el('b', { text: t('mechanism') }), t('mech_' + h.mechanism) + '. ' + t('mechhelp_' + h.mechanism),
+          h.indicator ? el('span', { class: 'hint-ind' }, ' ', el('b', { text: t('indicator_hint') }), '«' + h.indicator + '»') : null);
         if (h.kind === 'definition') return el('li', {}, el('b', { text: t('definition_hint') }), h.text ? '«' + h.text + '»' : '—');
         if (h.kind === 'first_letter') return el('li', {}, el('b', { text: t('first_letter') }), h.letter);
         if (h.kind === 'pattern') return el('li', {}, el('b', { text: t('pattern') }), el('code', { text: h.pattern.split('').join(' ') }));
@@ -596,7 +599,9 @@
           st.mode === 'guided' ? el('p', { class: 'muted small', text: t('mechhelp_' + s.mechanism) }) : null,
           st.daily && st.daily.players ? el('p', { class: 'small', text: t('daily_stats', { p: st.daily.players, s: st.daily.solved }) }) : null,
           kind === 'daily' && st.dailyDone ? el('p', { class: 'small muted', text: t('daily_done') }) : null,
-          c.attribution && c.origin === 'external' ? el('p', { class: 'attribution' }, t('source') + ': ', c.source_url ? el('a', { href: c.source_url, rel: 'noopener nofollow', text: c.attribution }) : c.attribution) : null,
+          c.origin === 'external' ? el('p', { class: 'attribution' }, t('source') + ': ', c.source_url ? el('a', { href: c.source_url, rel: 'noopener nofollow', text: c.attribution || c.source_url }) : (c.attribution || '—'),
+            ' · ', c.author ? t('author_label') + ': ' + c.author : t('author_unknown'), c.license ? ' · ' + t('license_label') + ': ' + (LICENSE_NAMES[c.license] || c.license) : null) : null,
+          c.origin === 'generated' ? el('p', { class: 'attribution' }, t('gen_by') + ' · ', el('a', { href: route('credits'), text: t('gen_sources') })) : null,
           c.author && c.origin === 'community' ? el('p', { class: 'attribution', text: t('by') + ' ' + c.author }) : null);
         sheet.append(sol);
         sheet.append(el('div', { class: 'next-row' },

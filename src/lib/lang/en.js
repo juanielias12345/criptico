@@ -80,7 +80,20 @@ function homophoneVariants(a, b) {
   for (const h of homophones) {
     if (h.words.includes(a) && h.words.includes(b)) return h.variants;
   }
-  return null;
+  return cmuVariants(a, b);
+}
+
+// Respaldo con el CMU Pronouncing Dictionary (pronunciación estadounidense):
+// misma transcripción fonémica = homófonos. Si interviene una R, la igualdad
+// puede no valer en el inglés británico no rótico, así que se limita a en-US.
+function cmuVariants(a, b) {
+  let L = null;
+  try { L = require('../bank/lexicon').load('en'); } catch { return null; }
+  if (!L) return null;
+  const pa = L.pron[String(a).toLowerCase()] || []; const pb = L.pron[String(b).toLowerCase()] || [];
+  const same = pa.find((p) => pb.includes(p));
+  if (!same) return null;
+  return /\bR\b|ER/.test(same) ? ['en-US'] : ['en'];
 }
 
 module.exports = { code: 'en', abbreviations, variantAbbreviations, letterNames, indicators, linkWords, homophones, homophoneVariants };

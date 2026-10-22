@@ -77,6 +77,15 @@ const DEFAULT_SETTINGS = {
   'publishing.external_allow_asserted': false,
   'publishing.generated_autopublish': false,
   'publishing.semantic_duplicate_threshold': 0.6,
+  // Banco de crípticos (ver docs/BANCO.md)
+  'bank.target_per_cell': 10000,
+  'bank.batch_size': 400,
+  'bank.autopublish_strict': true,      // decisión del dueño: publica solo lo que pasa la validación estricta
+  'bank.audit_rate': 0.02,
+  'bank.audit_min': 3,
+  'bank.audit_max_reject_rate': 0.2,
+  'bank.max_clues_per_answer': 6,
+  'bank.max_per_answer_mechanism': 2,
   'retention.games_days': 400,
   'retention.audit_days': 730,
   'retention.game_events_days': 180,

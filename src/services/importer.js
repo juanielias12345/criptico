@@ -5,7 +5,7 @@
 // va a la cola de revisión de importaciones (separada de las propuestas de usuarios).
 
 const N = require('../lib/normalize');
-const { buildClue, insertClue } = require('./clues');
+const { buildClue, insertClue, rightsStatusFor } = require('./clues');
 const { findDuplicates, recordDuplicateFlags } = require('./dedupe');
 const { getSetting } = require('./settings');
 const { logError } = require('./audit');
@@ -223,6 +223,7 @@ async function processItem(db, { source, license, runId, raw, settings }) {
     const clue = await insertClue(db, {
       ...row, origin: 'external', status: 'published', source_id: source.id, source_url: item.url,
       license_id: source.license_id, attribution: source.attribution_text || source.name, import_item_id: itemId, imported_at: now(),
+      ...externalRights(source, item),
     }, { actorKind: 'importer' });
     await save('auto_published', checks, { clue_id: clue.id });
     return 'published';
@@ -230,6 +231,17 @@ async function processItem(db, { source, license, runId, raw, settings }) {
   await save('review', checks);
   await recordDuplicateFlags(db, 'import_item', itemId, dup.matches);
   return dup.matches.length ? 'duplicate_review' : 'review';
+}
+
+// Procedencia de un críptico externo. Si no se conoce el autor se registra como
+// desconocido (NULL, y la interfaz muestra «desconocido»): nunca se inventa un nombre.
+function externalRights(source, item) {
+  return {
+    rights_status: rightsStatusFor(source.license_id),
+    author_name: (item.author && String(item.author).trim()) || source.author_name || null, // NULL = desconocido
+    source_title: item.title || source.title || source.name,
+    source_accessed_at: now(),
+  };
 }
 
 async function processItems(db, source, runId, rawItems) {
@@ -308,6 +320,7 @@ async function publishImportItem(db, itemId, actor, overrides = {}) {
     clue = await insertClue(db, {
       ...row, origin: 'external', status: 'published', source_id: source.id, source_url: item.url, license_id: source.license_id,
       attribution: source.attribution_text || source.name, import_item_id: it.id, imported_at: it.imported_at,
+      ...externalRights(source, item),
     }, { actorKind: 'admin', actorId: actor.id });
   } catch (e) {
     if (/publish_blocked: rights/.test(e.message)) throw new HttpError(422, 'publish_blocked_rights', 'La fuente no tiene permiso de republicación aprobado.');

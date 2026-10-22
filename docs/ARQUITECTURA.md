@@ -20,13 +20,15 @@ src/
     normalize.js          normalización de respuestas (tildes, Ñ, enumeraciones)
     lang/es.js, en.js     abreviaturas, indicadores, fonética y variantes regionales
     validator/            resolución del juego de palabras y explicación automática
-    generator/            generador de crípticos por reglas
+    generator/            generador de crípticos por reglas (propone y deja en revisión)
+    bank/                 generador del banco: léxico, superficies y evidencia (solo lotes, nunca partidas)
     lexicon.js            listas de palabras (MIT) para comprobar respuestas
   services/               lógica: juego, catálogo, propuestas, importación, auth, tareas…
   routes/                 páginas, API pública y API del panel
   views/                  plantillas HTML y textos de ayuda/privacidad/condiciones
 public/                   CSS, JS, panel (admin.html), íconos y manifiesto
-scripts/                  db-setup y create-admin
+scripts/                  db-setup, create-admin, bank.js (lotes) y lexicon/build.py (arma el léxico)
+data/lexicon/             léxicos comprimidos por idioma y sus licencias
 seed/                     catálogo propio verificado (ES y EN)
 test/                     pruebas con node:test; test/e2e en Chromium
 ```
@@ -40,6 +42,7 @@ Tablas principales (ver `src/db/migrations/001_init.sql`; las del centro de cont
 - `submissions` y `submission_events`: propuestas de usuarios con su historial (`pending`, `in_review`, `needs_changes`, `approved`, `published`, `rejected`).
 - `sources`, `licenses`, `import_runs`, `import_items`: fuentes externas, licencias y cada elemento importado con las condiciones evaluadas.
 - `games`, `daily_challenges`, `favorites`, `notifications`, `players`, `users`, `sessions`.
+- `bank_targets`, `generation_batches`, `clue_audits`: metas por idioma y dificultad, lotes reanudables y auditoría por muestra (ver [BANCO.md](BANCO.md), migración `004_bank.sql`).
 - `settings`, `audit_log`, `jobs`, `job_runs`, `error_log`, `rate_limits`, `duplicate_flags`, `clue_reports`.
 
 ## Reglas que impone la base
@@ -48,13 +51,14 @@ Además de la lógica de la aplicación, disparadores en SQLite impiden:
 
 - publicar un críptico con errores de validación o sin validar;
 - publicar uno de la comunidad si su propuesta no fue aprobada por un moderador o propietario;
-- publicar uno externo si la fuente no está aprobada, no permite republicar o su licencia no lo permite.
+- publicar uno externo si la fuente no está aprobada, no permite republicar o su licencia no lo permite;
+- publicar uno solo de referencia o con permiso sin verificar, o de una fuente con revisión legal rechazada o permiso vencido.
 
 Así, ni un error de programación ni una edición directa pueden saltarse los dos circuitos de publicación.
 
 ## Selección de crípticos
 
-`services/game.js` elige un críptico publicado del idioma y la variante elegidos (los de la variante primero, luego los generales del idioma), evita los últimos jugados por ese jugador (`game.recent_window`) y, si se agotan, avisa y recicla. El país es independiente: solo personaliza avisos y estadísticas, no cambia el idioma.
+`services/game.js` elige un críptico publicado del idioma y la variante elegidos (los de la variante primero, luego los generales del idioma), evita los últimos jugados por ese jugador (`game.recent_window`) y, si se agotan, avisa y recicla. Con catálogos grandes sortea por una clave aleatoria fija (`clues.shuffle`) con índice, sin recorrer la tabla. El país es independiente: solo personaliza avisos y estadísticas, no cambia el idioma.
 
 ## Sesiones y seguridad
 

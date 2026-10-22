@@ -112,14 +112,14 @@ const PERMISSIONS = {
   owner: ['dashboard', 'catalog.read', 'catalog.write', 'catalog.delete', 'sources.read', 'sources.write', 'imports.review',
     'submissions.read', 'submissions.moderate', 'reports.manage', 'languages.write', 'settings.write', 'users.manage', 'audit.read', 'jobs.run',
     'analytics.read', 'players.read', 'players.pii', 'players.manage', 'privacy.manage', 'games.read', 'alerts.read', 'alerts.manage',
-    'export.data', 'export.pii'],
+    'export.data', 'export.pii', 'bank.read', 'bank.run', 'bank.audit'],
   // Administrador de contenido: catálogo, fuentes e importaciones, y el rendimiento de los crípticos.
   editor: ['dashboard', 'catalog.read', 'catalog.write', 'sources.read', 'sources.write', 'imports.review', 'reports.manage', 'jobs.run',
-    'analytics.read', 'alerts.read', 'export.data'],
+    'analytics.read', 'alerts.read', 'export.data', 'bank.read', 'bank.run', 'bank.audit'],
   // Moderador: propuestas de usuarios y reportes; sin datos personales ni estadísticas de usuarios.
-  moderator: ['dashboard', 'catalog.read', 'submissions.read', 'submissions.moderate', 'reports.manage'],
+  moderator: ['dashboard', 'catalog.read', 'submissions.read', 'submissions.moderate', 'reports.manage', 'bank.read', 'bank.audit'],
   // Analista: estadísticas agregadas, partidas y fichas de usuario sin correo electrónico.
-  analyst: ['dashboard', 'catalog.read', 'analytics.read', 'players.read', 'games.read', 'alerts.read', 'export.data'],
+  analyst: ['dashboard', 'catalog.read', 'analytics.read', 'players.read', 'games.read', 'alerts.read', 'export.data', 'bank.read'],
   player: [],
 };
 

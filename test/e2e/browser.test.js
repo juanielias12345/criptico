@@ -279,7 +279,7 @@ test('#18 panel de administración en escritorio y móvil', async () => {
   await c.post(`/api/game/${s.json.game_id}/guess`, { answer: ans });
   const owner = await staff(env, 'owner');
   const views = ['dashboard', 'alerts', 'geo', 'funnel', 'cluestats', 'exports', 'players', 'player/' + reg.json.user.id, 'player/' + reg.json.user.id + '?tab=games',
-    'player/' + reg.json.user.id + '?tab=performance', 'games', 'game/' + s.json.game_id, 'privacy', 'catstats', 'importstats', 'catalog', 'submissions', 'users'];
+    'player/' + reg.json.user.id + '?tab=performance', 'games', 'game/' + s.json.game_id, 'privacy', 'catstats', 'importstats', 'catalog', 'submissions', 'users', 'bank', 'bankaudit'];
   for (const viewport of [{ width: 1440, height: 900 }, { width: 375, height: 812 }]) {
     const { ctx, page, errors } = await newPage({ viewport });
     await adminLogin(page, owner);
@@ -415,4 +415,58 @@ test('práctica dirigida desde una recomendación: el críptico es del mecanismo
   assert.equal(c.mechanism, 'anagram');
   assert.deepEqual(errors, []);
   await ctx.close();
+});
+
+test('banco: generar un lote desde la matriz, verlo en la base y jugar un críptico generado', async () => {
+  const owner = await staff(env, 'owner');
+  for (const viewport of [{ width: 1440, height: 900 }, { width: 375, height: 812 }]) {
+    const { ctx, page, errors } = await newPage({ viewport });
+    await adminLogin(page, owner);
+    await page.goto(env.base + '/admin#bank');
+    await page.locator('.bank-matrix').waitFor();
+    assert.ok(await page.locator('.bank-cell').count() >= 10, 'matriz de idiomas por dificultades');
+    if (viewport.width > 800) {
+      await page.locator('.bank-cell[aria-label^="es dificultad 2"]').click();
+      await page.getByRole('button', { name: 'Generar un lote corto' }).click();
+      await page.locator('.flash:has-text("verificado en base")').waitFor({ timeout: 60000 });
+      const n = await env.db.get("SELECT count(*) n FROM clues WHERE origin = 'generated' AND status = 'published' AND language_code = 'es' AND difficulty = 2");
+      assert.ok(n.n > 0, 'los publicados existen en la base');
+      await page.goto(env.base + '/admin#bank?lang=es&difficulty=2');
+      await page.locator('.bank-cell[aria-label^="es dificultad 2"]').waitFor();
+      const label = await page.locator('.bank-cell[aria-label^="es dificultad 2"]').getAttribute('aria-label');
+      const all = await env.db.get("SELECT count(*) n FROM clues WHERE status = 'published' AND language_code = 'es' AND difficulty = 2");
+      assert.equal(Number(label.match(/: (\d+) de/)[1]), all.n, 'la matriz muestra lo que hay en la base');
+      await page.goto(env.base + '/admin#bankaudit');
+      await page.locator('#admin-main h1:has-text("Auditoría")').waitFor();
+      assert.ok(await page.getByRole('button', { name: 'Correcto' }).count() >= 1, 'el lote separó una muestra para auditar');
+    }
+    await page.waitForLoadState('networkidle');
+    const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+    assert.ok(overflow <= 0, `banco desborda ${overflow}px`);
+    assert.deepEqual(errors, []);
+    await ctx.close();
+  }
+  // Partida con un críptico generado: indicador en la pista y atribución en la solución.
+  const others = await env.db.all("SELECT id FROM clues WHERE status = 'published' AND language_code = 'es' AND origin <> 'generated'");
+  await env.db.run("UPDATE clues SET status = 'disabled' WHERE status = 'published' AND language_code = 'es' AND origin <> 'generated'");
+  try {
+    const { ctx, page, errors } = await newPage();
+    await playReady(page);
+    const started = page.waitForResponse((r) => r.url().endsWith('/api/game/start'));
+    await page.goto(env.base + '/es/jugar');
+    const data = await (await started).json();
+    const row = await env.db.get('SELECT answer, origin FROM clues WHERE id = ?', [data.clue.id]);
+    assert.equal(row.origin, 'generated');
+    await page.locator('#clue-text').waitFor();
+    for (let k = 0; k < 2; k++) { await page.click('#hint-btn'); await page.locator('.hints li').nth(k).waitFor(); }
+    await page.fill('#answer', row.answer.toLowerCase());
+    await page.click('#check-btn');
+    await page.locator('#solution-answer').waitFor();
+    assert.ok(await page.locator('#explanation li').count() >= 1);
+    await page.locator('.attribution a[href$="/creditos"]').waitFor();
+    assert.deepEqual(errors, []);
+    await ctx.close();
+  } finally {
+    for (const o of others) await env.db.run("UPDATE clues SET status = 'published' WHERE id = ?", [o.id]);
+  }
 });

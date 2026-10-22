@@ -4,6 +4,7 @@
 // El servidor nunca envía la respuesta antes de que el jugador acierte o la revele.
 
 const N = require('../lib/normalize');
+const { walk } = require('../lib/validator/wordplay');
 const { publicClue, solutionView } = require('./clues');
 const { getSetting } = require('./settings');
 const { uuid, now, parseJson, HttpError, sha256 } = require('./util');
@@ -55,6 +56,26 @@ function poolFilter({ lang, variant, mode, category, difficulty, mechanism }) {
   return { where: where.join(' AND '), args };
 }
 
+// Sorteo rápido: cada críptico tiene una clave aleatoria fija (shuffle) indexada.
+// Se parte de un punto al azar y se toman los siguientes, salteando los que el
+// jugador vio hace poco. Lee unas decenas de filas aunque haya cien mil.
+async function pickUnseen(db, filter, playerId, windowSize) {
+  const recent = new Set((await db.all('SELECT clue_id FROM games WHERE player_id = ? ORDER BY started_at DESC LIMIT ?', [playerId, windowSize])).map((r) => r.clue_id));
+  const start = Math.floor(Math.random() * 1e9);
+  for (const wrap of [false, true]) {
+    let cursor = wrap ? -1 : start - 1;
+    for (let page = 0; page < 5; page++) {
+      const rows = await db.all(`SELECT c.* FROM clues c WHERE ${filter.where} AND c.shuffle > ? ${wrap ? 'AND c.shuffle < ?' : ''}
+        ORDER BY c.shuffle LIMIT 60`, wrap ? [...filter.args, cursor, start] : [...filter.args, cursor]);
+      const fresh = rows.find((r) => !recent.has(r.id));
+      if (fresh) return fresh;
+      if (rows.length < 60) break;
+      cursor = rows[rows.length - 1].shuffle;
+    }
+  }
+  return null;
+}
+
 async function contentNotice(db, sel, pool) {
   if (pool === 0) {
     const others = await db.all(
@@ -83,19 +104,15 @@ async function startGame(db, { playerId, choice, mode = 'infinite', category, di
 
   let clue = null; let recycled = false;
   const filter = poolFilter({ lang: sel.lang, variant: sel.variant, mode, category, difficulty, mechanism });
-  const poolRow = await db.get(`SELECT COUNT(*) AS n FROM clues c WHERE ${filter.where}`, filter.args);
+  // Conteo acotado: con decenas de miles de crípticos solo importa si hay o no.
+  const poolRow = await db.get(`SELECT COUNT(*) AS n FROM (SELECT 1 FROM clues c WHERE ${filter.where} LIMIT 1000)`, filter.args);
   const notice = await contentNotice(db, sel, poolRow.n);
 
   if (clueSlug) {
     clue = await db.get("SELECT * FROM clues WHERE slug = ? AND status = 'published'", [clueSlug]);
     if (!clue) throw new HttpError(404, 'clue_not_found');
   } else if (poolRow.n > 0) {
-    const windowSize = await getSetting(db, 'game.recent_window');
-    // Primero, uno que este jugador no haya visto en sus últimas partidas.
-    clue = await db.get(
-      `SELECT c.* FROM clues c WHERE ${filter.where}
-       AND c.id NOT IN (SELECT g.clue_id FROM games g WHERE g.player_id = ? ORDER BY g.started_at DESC LIMIT ?)
-       ORDER BY random() LIMIT 1`, [...filter.args, player.id, windowSize]);
+    clue = await pickUnseen(db, filter, player.id, await getSetting(db, 'game.recent_window'));
     if (!clue) {
       // Ya vio todo el conjunto: se repite el que vio hace más tiempo.
       recycled = true;
@@ -203,7 +220,12 @@ async function hint(db, { gameId, playerId, level: wanted }) {
 function buildHints(clue, level) {
   const mech = clue.mechanism;
   const wordplay = parseJson(clue.wordplay, null);
-  const out = [{ kind: 'mechanism', mechanism: mech }];
+  // El indicador (la palabra que avisa el tipo de juego) acompaña a la primera pista.
+  let indicator = null;
+  const stored = parseJson(clue.hints, null);
+  if (Array.isArray(stored)) indicator = (stored.find((h) => h.kind === 'indicator') || {}).text || null;
+  else if (wordplay) walk(wordplay, (n) => { if (!indicator && n.indicator) indicator = n.indicator; });
+  const out = [{ kind: 'mechanism', mechanism: mech, indicator }];
   if (level >= 2) {
     const def = clue.definition || (wordplay && wordplay.op === 'double' ? wordplay.definitions[0] : null);
     out.push(def ? { kind: 'definition', text: def } : { kind: 'definition', text: null });
@@ -247,10 +269,12 @@ function today() { return new Date().toISOString().slice(0, 10); }
 async function ensureDaily(db, lang, date = today()) {
   const existing = await db.get('SELECT clue_id FROM daily_challenges WHERE date = ? AND language_code = ?', [date, lang]);
   if (existing) return existing.clue_id;
-  const candidates = await db.all(
-    `SELECT id FROM clues WHERE status = 'published' AND language_code = ? AND variant_code IS NULL AND daily_eligible = 1
-     AND id NOT IN (SELECT clue_id FROM daily_challenges WHERE language_code = ?) ORDER BY id`, [lang, lang]);
-  let pick = candidates;
+  // Primero los escritos por el equipo, los externos y los generados que ya pasaron
+  // la auditoría humana; si no queda ninguno, cualquier publicado.
+  const base = `SELECT id FROM clues WHERE status = 'published' AND language_code = ? AND variant_code IS NULL AND daily_eligible = 1
+     AND id NOT IN (SELECT clue_id FROM daily_challenges WHERE language_code = ?)`;
+  let pick = await db.all(`${base} AND (origin <> 'generated' OR audit_status = 'ok') ORDER BY id`, [lang, lang]);
+  if (!pick.length) pick = await db.all(`${base} ORDER BY id`, [lang, lang]);
   if (!pick.length) {
     pick = await db.all("SELECT id FROM clues WHERE status = 'published' AND language_code = ? AND variant_code IS NULL ORDER BY id", [lang]);
   }

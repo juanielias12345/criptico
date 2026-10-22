@@ -1,0 +1,58 @@
+# Banco de crípticos: genera, valida, deduplica y publica lotes en la base de
+# producción, celda por celda (idioma × dificultad), retomando siempre desde
+# el último lote confirmado. Ver docs/BANCO.md.
+# Corre cada 6 horas y también a mano: Actions → "Banco de crípticos" → Run workflow.
+# Necesita los secretos DATABASE_URL y DATABASE_AUTH_TOKEN.
+name: Banco de crípticos
+
+on:
+  schedule:
+    - cron: '17 */6 * * *'
+  workflow_dispatch:
+    inputs:
+      lang:
+        description: Idiomas (vacío = todos los activos), por ejemplo es,en
+        required: false
+        default: ''
+      difficulty:
+        description: Dificultades, por ejemplo 1,2,3,4,5
+        required: false
+        default: '1,2,3,4,5'
+      batches:
+        description: Lotes por celda como máximo
+        required: false
+        default: '40'
+      size:
+        description: Crípticos por lote
+        required: false
+        default: '400'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: clue-bank
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci --omit=dev
+      - name: Generar lotes
+        run: >-
+          node scripts/bank.js run
+          --lang "${{ inputs.lang || '' }}"
+          --difficulty "${{ inputs.difficulty || '1,2,3,4,5' }}"
+          --batches "${{ inputs.batches || '40' }}"
+          --size "${{ inputs.size || '400' }}"
+          --concurrency 2 --minutes 50
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DATABASE_AUTH_TOKEN: ${{ secrets.DATABASE_AUTH_TOKEN }}
+          SITE_URL: https://playcripticos.com

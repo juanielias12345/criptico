@@ -132,6 +132,23 @@ module.exports = function panel({ need, log }) {
 
   // ── Exportaciones CSV ──
   const EXPORTS = {
+    bank: { perm: 'bank.read', async rows(db, q) {
+      const m = await require('../services/bank').matrix(db, q);
+      return { rows: m.cells, cols: ['lang', 'difficulty', 'target', 'generated', 'validated', 'published', 'published_original', 'published_external',
+        'published_community', 'pending', 'rejected', 'duplicates', 'unverified', 'percent', 'missing', 'last_run', 'status', 'batches'] };
+    } },
+    catalog: { perm: 'catalog.read', async rows(db, q) {
+      const f = require('../services/bank').clueFilter({ lang: q.lang, difficulty: q.difficulty, origin: q.origin, author: q.author,
+        source: q.source, license: q.license, status: q.status, mechanism: q.mechanism });
+      const rows = await db.all(`SELECT c.id, c.slug, c.language_code, c.variant_code, c.difficulty, c.mechanism, c.mechanisms_secondary, c.category,
+          c.clue_text, c.answer, c.answer_length, c.definition, c.explanation, c.origin, c.status, c.validation_status, c.rights_status,
+          COALESCE(c.author_name, 'desconocido') AS author, c.source_id, c.source_url, c.license_id, c.attribution, c.batch_id,
+          c.generator_version, c.dedup_key, c.audit_status, c.created_at, c.published_at
+        FROM clues c WHERE ${f.where} ORDER BY c.language_code, c.difficulty, c.created_at LIMIT ?`, [...f.args, MAX_EXPORT]);
+      return { rows, cols: ['id', 'slug', 'language_code', 'variant_code', 'difficulty', 'mechanism', 'mechanisms_secondary', 'category', 'clue_text', 'answer',
+        'answer_length', 'definition', 'explanation', 'origin', 'status', 'validation_status', 'rights_status', 'author', 'source_id', 'source_url', 'license_id',
+        'attribution', 'batch_id', 'generator_version', 'dedup_key', 'audit_status', 'created_at', 'published_at'] };
+    } },
     users: { perm: 'players.read', async rows(db, q, req) {
       const withEmail = can(req.user, 'export.pii') && q.include_email === '1';
       const out = []; let page = 1;

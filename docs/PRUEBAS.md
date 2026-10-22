@@ -93,3 +93,27 @@ Problemas que encontró la revisión y se corrigieron:
 - Los ejes de los gráficos mostraban valores como 1,3 o 3,8 para conteos.
 - En móvil, el historial ocupaba demasiado.
 - Una prueba del panel fallaba a veces por una condición de carrera.
+
+## Banco de crípticos por idioma y dificultad (`test/bank.test.js` y e2e «banco…»)
+
+Resultado al publicar: `npm test` 93/93 y `npm run test:e2e` 15/15.
+
+| # | Prueba | Dónde |
+| --- | --- | --- |
+| 1 | Idiomas documentados y léxico con licencias | bank «#1…» |
+| 2 | Metas independientes por idioma y dificultad | bank «#2…» |
+| 3 | Los lotes existen de verdad en la base antes de darse por verificados | bank «#3…» y e2e «banco…» |
+| 4 | Sin duplicados; reanudar continúa donde quedó | bank «#4…» |
+| 5 | Rechazados, pendientes, sin permiso o con licencia vencida no cuentan | bank «#5…» y «#5b…» |
+| 6, 8 | Un críptico generado se juega en todos los modos, con pista de indicador, explicación y estadísticas | bank «#6/#8…» y e2e «banco…» |
+| 7 | Créditos y atribución de fuentes | bank «#7…» y e2e «banco…» |
+| 10 | Un fallo de escritura o una caída a mitad de lote no deja registros a medias | bank «#10…» |
+| 11 | Permisos del panel y exportaciones | bank «#11…» |
+| 12 | Una muestra con demasiados rechazos suspende el lote | bank «#12…» |
+| 13 | Jugar no carga el generador; el sorteo usa índice | bank «#13…» y «sorteo rápido…» |
+| — | Matriz en escritorio y móvil, lote corto desde el panel, cola de auditoría | e2e «banco…» y «#18 panel…» |
+
+Problemas que encontró la revisión y se corrigieron:
+
+- Los avisos del panel desaparecían al instante porque la vista se volvía a dibujar después de mostrarlos. Ahora se muestran después del redibujo.
+- La cola de auditoría mostraba «[object HTMLDivElement]» en lugar de las tarjetas.

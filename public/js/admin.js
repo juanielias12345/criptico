@@ -34,12 +34,20 @@
     approved: 'Aprobado', rejected: 'Rechazado', auto_published: 'Publicado automáticamente', discarded: 'Descartado', duplicate: 'Duplicado', error: 'Error',
     active: 'Activa', paused: 'Pausada', pending_review: 'Pendiente de revisión', success: 'Correcta', partial: 'Parcial', running: 'En curso',
     original: 'Original', generated: 'Generado', external: 'Externo', community: 'Comunidad',
+    licensed: 'Con licencia', public_domain: 'Dominio público', permission: 'Con permiso', reference_only: 'Solo referencia', unverified: 'Sin verificar',
   };
   function flash(msg, ok) { const f = el('div', { class: 'flash ' + (ok ? 'ok' : 'bad'), role: 'status', text: msg }); main.prepend(f); setTimeout(() => f.remove(), 6000); }
   const checksList = (checks) => el('ul', { class: 'checks' }, (checks || []).map((c) => el('li', { class: c.level, text: c.msg || c.code })));
   const table = (head, rows) => el('div', { class: 'tbl-wrap' }, el('table', {}, el('thead', {}, el('tr', {}, head.map((h) => el('th', { text: h })))), el('tbody', {}, rows)));
   const btn = (text, onclick, cls) => el('button', { class: 'btn ' + (cls || ''), type: 'button', onclick, text });
-  const act = (fn, okMsg) => async () => { try { await fn(); if (okMsg) flash(okMsg, true); route(); } catch (e) { flash(e.message, false); } };
+  // El aviso se muestra después de volver a dibujar la vista (si no, el redibujo lo borra).
+  // `fn` puede devolver { flash, ok } para avisar con un texto propio.
+  const act = (fn, okMsg) => async () => {
+    try {
+      const res = await fn(); await route();
+      if (res && res.flash) flash(res.flash, res.ok !== false); else if (okMsg) flash(okMsg, true);
+    } catch (e) { flash(e.message, false); }
+  };
 
   // ── Acceso ──
   function loginView(msg) {
@@ -701,6 +709,8 @@
       ['retention', 'Cohortes de retención', 'analytics.read', 'D1, D7 y D30 por semana.'],
       ['imports', 'Fuentes e importaciones', 'sources.read', 'Estado y resultados por fuente externa.'],
       ['submissions', 'Propuestas de usuarios', 'submissions.read', 'Propuestas con estado y cantidad de decisiones.'],
+      ['bank', 'Banco por idioma y dificultad', 'bank.read', 'Meta, generados, validados, publicados, pendientes, rechazados, duplicados y avance real por celda.'],
+      ['catalog', 'Catálogo completo', 'catalog.read', 'Cada críptico con respuesta, explicación, procedencia, licencia, autor y estado de derechos.'],
     ];
     const email = el('input', { type: 'checkbox', id: 'exp-email' });
     const per = filterBar(q);
@@ -727,18 +737,137 @@
     const sOrigin = mk('origin', ['original', 'generated', 'external', 'community']);
     const sLang = mk('language_code', ['es', 'en', 'fr', 'pt', 'it', 'de']);
     const sVal = mk('validation_status', ['verified', 'asserted', 'failed', 'unchecked']);
-    const go = () => { const p = new URLSearchParams(); for (const [k, v] of [['q', search.value], ['status', sStatus.value], ['origin', sOrigin.value], ['language_code', sLang.value], ['validation_status', sVal.value]]) if (v) p.set(k, v); location.hash = location.hash.split('?')[0] + '?' + p; };
+    FILTER_NAMES.difficulty = 'Dificultad: todas'; FILTER_NAMES.rights_status = 'Derechos: todos';
+    const sDiff = mk('difficulty', ['1', '2', '3', '4', '5']);
+    const sRights = mk('rights_status', ['original', 'licensed', 'public_domain', 'permission', 'reference_only', 'unverified']);
+    const author = el('input', { type: 'search', placeholder: 'Autor', value: q.get('author') || '', 'aria-label': 'Autor' });
+    const go = () => { const p = new URLSearchParams(); for (const [k, v] of [['q', search.value], ['status', sStatus.value], ['origin', sOrigin.value], ['language_code', sLang.value], ['validation_status', sVal.value], ['difficulty', sDiff.value], ['rights_status', sRights.value], ['author', author.value], ['batch_id', q.get('batch_id')]]) if (v) p.set(k, v); location.hash = location.hash.split('?')[0] + '?' + p; };
     const page = Number(q.get('page') || 1);
     main.replaceChildren(el('h1', { text: title }),
-      fixed ? '' : el('form', { class: 'toolbar', onsubmit: (e) => { e.preventDefault(); go(); } }, search, sStatus, sOrigin, sLang, sVal, el('button', { class: 'btn', type: 'submit', text: 'Filtrar' })),
+      fixed ? '' : el('form', { class: 'toolbar', onsubmit: (e) => { e.preventDefault(); go(); } }, search, sStatus, sOrigin, sLang, sDiff, sVal, sRights, author, el('button', { class: 'btn', type: 'submit', text: 'Filtrar' })),
+      q.get('batch_id') ? el('p', { class: 'small muted', text: 'Mostrando solo el lote ' + q.get('batch_id').slice(0, 8) + '.' }) : '',
       el('p', { class: 'muted small', text: d.total + ' crípticos' }),
-      table(['Pista', 'Respuesta', 'Idioma', 'Origen', 'Estado', 'Validación', ''], d.items.map((c) => el('tr', {},
+      table(['Pista', 'Respuesta', 'Idioma', 'Dif.', 'Origen', 'Autor', 'Estado', 'Validación', ''], d.items.map((c) => el('tr', {},
         el('td', {}, el('a', { href: '#clue/' + c.id, text: c.clue_text })), el('td', { text: c.answer }), el('td', { text: c.language_code + (c.variant_code ? ' · ' + c.variant_code : '') }),
-        el('td', { text: LABELS[c.origin] }), el('td', {}, pill(c.status)), el('td', {}, pill(c.validation_status)),
+        el('td', { text: c.difficulty }), el('td', { text: LABELS[c.origin] }), el('td', { text: c.author_name || (c.origin === 'generated' ? 'generador' : 'desconocido') }), el('td', {}, pill(c.status)), el('td', {}, pill(c.validation_status)),
         el('td', {}, c.status !== 'published' && c.validation_errors === 0 && can('catalog.write') ? btn('Publicar', act(() => api('/api/admin/clues/' + c.id + '/status', { method: 'POST', body: { status: 'published' } }), 'Publicado.')) : '')))),
       el('div', { class: 'toolbar' }, page > 1 ? btn('← Anterior', () => { q.set('page', page - 1); location.hash = location.hash.split('?')[0] + '?' + q; }) : '',
         d.total > page * d.per_page ? btn('Siguiente →', () => { q.set('page', page + 1); location.hash = location.hash.split('?')[0] + '?' + q; }) : ''));
   }
+  // ── Banco de crípticos: matriz idioma × dificultad ──
+  const DIFF = { 1: 'Muy fácil', 2: 'Fácil', 3: 'Intermedio', 4: 'Difícil', 5: 'Experto' };
+  const CELL_STATUS = { idle: 'En espera', running: 'Generando', paused: 'Pausada', exhausted: 'Sin más candidatos', done: 'Meta cumplida', error: 'Con error' };
+  const BATCH_STATUS = { running: 'En curso', committed: 'Guardado, sin verificar', verified: 'Verificado en base', failed: 'Falló', abandoned: 'Abandonado', suspended: 'Suspendido' };
+  const nn = (v) => Number(v || 0).toLocaleString('es');
+
+  V.bank = async () => {
+    const q = qs();
+    const F = ['lang', 'difficulty', 'origin', 'author', 'source', 'license', 'status', 'mechanism'];
+    const params = new URLSearchParams(); F.forEach((k) => { if (q.get(k)) params.set(k, q.get(k)); });
+    const [m, srcs, lics] = await Promise.all([api('/api/admin/bank/matrix?' + params),
+      can('sources.read') ? api('/api/admin/sources').catch(() => ({ items: [] })) : { items: [] },
+      can('sources.read') ? api('/api/admin/licenses').catch(() => ({ items: [] })) : { items: [] }]);
+    const sel = (name, label, opts) => el('select', { name, 'aria-label': label }, el('option', { value: '', text: label }),
+      opts.map(([v, t]) => el('option', { value: v, selected: q.get(name) === String(v), text: t })));
+    const langs = [...new Set(m.cells.map((c) => c.lang))];
+    const fl = {
+      lang: sel('lang', 'Idioma: todos', langs.map((l) => [l, l])),
+      difficulty: sel('difficulty', 'Dificultad: todas', [1, 2, 3, 4, 5].map((d) => [d, d + ' · ' + DIFF[d]])),
+      origin: sel('origin', 'Origen: todos', ['original', 'generated', 'external', 'community'].map((o) => [o, LABELS[o]])),
+      status: sel('status', 'Estado: todos', ['published', 'review', 'draft', 'disabled'].map((o) => [o, LABELS[o]])),
+      source: sel('source', 'Fuente: todas', (srcs.items || []).map((s) => [s.id, s.name])),
+      license: sel('license', 'Licencia: todas', (lics.items || []).map((l) => [l.id, l.name])),
+      mechanism: sel('mechanism', 'Mecanismo: todos', ['anagram', 'hidden', 'reversal', 'container', 'deletion', 'charade', 'homophone', 'double_definition', 'combination'].map((x) => [x, x])),
+      author: el('input', { name: 'author', type: 'search', placeholder: 'Autor (o «desconocido»)', value: q.get('author') || '' }),
+    };
+    const go = () => { const p = new URLSearchParams(); F.forEach((k) => { if (fl[k].value) p.set(k, fl[k].value); }); location.hash = 'bank' + (String(p) ? '?' + p : ''); };
+    const t = m.totals;
+    const filtered = F.some((k) => q.get(k));
+    const cellOf = (l, d) => m.cells.find((c) => c.lang === l && c.difficulty === d);
+    const detail = el('div', { id: 'bank-cell' });
+    const pctBar = (c) => el('span', { class: 'bar-track', title: c.percent + ' %' }, el('span', { class: 'bar-fill', style: 'width:' + Math.min(100, c.percent) + '%' }));
+    const showCell = async (c) => {
+      const h = await api('/api/admin/bank/batches?lang=' + c.lang + '&difficulty=' + c.difficulty + '&limit=20');
+      const list = (status) => '#catalog?language_code=' + c.lang + '&difficulty=' + c.difficulty + (status ? '&status=' + status : '');
+      const target = el('input', { type: 'number', min: '0', step: '100', value: c.target, 'aria-label': 'Meta de la celda' });
+      const metric = (k, v, hint) => el('tr', {}, el('th', { scope: 'row', text: k }), el('td', { text: v }), el('td', { class: 'small muted', text: hint || '' }));
+      detail.replaceChildren(el('div', { class: 'panel' },
+        el('h3', { text: c.lang.toUpperCase() + ' · ' + DIFF[c.difficulty] + ' (' + c.difficulty + ')' }),
+        el('div', { class: 'tbl-wrap' }, el('table', {}, el('tbody', {},
+          metric('Meta', nn(c.target), 'Independiente para este idioma y esta dificultad.'),
+          metric('Generados', nn(c.generated), 'Candidatos producidos por el generador más los ingresados por otras vías.'),
+          metric('Validados', nn(c.validated), 'Sin errores críticos.'),
+          metric('Publicados', nn(c.published), 'Originales y generados: ' + nn(c.published_original) + ' · externos: ' + nn(c.published_external) + ' · comunidad: ' + nn(c.published_community)),
+          metric('Pendientes', nn(c.pending), 'Esperan revisión humana; no cuentan para la meta.'),
+          metric('Rechazados', nn(c.rejected), 'Descartados por el validador o desactivados.'),
+          metric('Duplicados descartados', nn(c.duplicates), 'Mismo juego de palabras, misma pista o respuesta ya muy usada.'),
+          metric('Permiso sin verificar', nn(c.unverified), 'En cuarentena: nunca se publican.'),
+          metric('Avance real', c.percent + ' %', 'Faltan ' + nn(c.missing) + '.'),
+          metric('Última ejecución', fmt(c.last_run)),
+          metric('Estado del proceso', CELL_STATUS[c.status] || c.status, c.last_error ? 'Último error: ' + c.last_error : (c.generator_version ? 'Generador ' + c.generator_version + ' · posición ' + nn(c.cursor) : ''))))),
+        el('div', { class: 'toolbar' },
+          el('a', { class: 'btn', href: list('published'), text: 'Ver publicados' }), el('a', { class: 'btn', href: list('review'), text: 'Revisar pendientes' }),
+          can('export.data') ? el('a', { class: 'btn', href: '/api/admin/export/catalog.csv?lang=' + c.lang + '&difficulty=' + c.difficulty, text: 'Exportar CSV' }) : '',
+          can('bank.run') ? btn('Generar un lote corto', act(async () => {
+            const r = await api('/api/admin/bank/cells/' + c.lang + '/' + c.difficulty + '/run', { method: 'POST', body: { size: 40 } });
+            return { ok: !r.skipped, flash: r.skipped ? 'La celda está ocupada o en pausa.' : r.done ? 'La meta ya está cumplida.' : r.exhausted ? 'El generador no tiene más candidatos para esta celda.'
+              : 'Lote ' + r.seq + ': ' + r.published + ' publicados, ' + r.pending + ' pendientes, ' + r.duplicates + ' duplicados (verificado en base).' };
+          }), 'primary') : '',
+          can('bank.run') ? btn(c.status === 'paused' ? 'Reanudar' : 'Pausar', act(() => api('/api/admin/bank/cells/' + c.lang + '/' + c.difficulty, { method: 'PATCH', body: { status: c.status === 'paused' ? 'idle' : 'paused' } }), 'Listo.')) : ''),
+        can('bank.run') ? el('form', { class: 'toolbar', onsubmit: (e) => { e.preventDefault(); act(() => api('/api/admin/bank/cells/' + c.lang + '/' + c.difficulty, { method: 'PATCH', body: { target: Number(target.value) } }), 'Meta actualizada.')(); } },
+          el('label', {}, 'Meta ', target), el('button', { class: 'btn', type: 'submit', text: 'Guardar meta' })) : '',
+        el('h3', { text: 'Historial de lotes' }),
+        h.items.length ? table(['#', 'Inicio', 'Estado', 'Candidatos', 'Publicados', 'Pendientes', 'Rechazados', 'Duplicados', 'Duración', ''], h.items.map((b) => el('tr', {},
+          el('td', { text: b.seq }), el('td', { text: fmt(b.started_at) }), el('td', {}, el('span', { class: 'pill ' + (b.status === 'verified' ? 'verified' : b.status === 'failed' || b.status === 'suspended' ? 'failed' : 'pending'), text: BATCH_STATUS[b.status] || b.status })),
+          el('td', { text: nn(b.candidates) }), el('td', { text: nn(b.published) }), el('td', { text: nn(b.pending) }), el('td', { text: nn(b.rejected) }), el('td', { text: nn(b.duplicates) }),
+          el('td', { text: b.duration_ms ? (b.duration_ms / 1000).toFixed(1) + ' s' : '—' }),
+          el('td', {}, el('a', { href: '#catalog?batch_id=' + b.id, text: 'Ver' }), ' ',
+            can('bank.run') && b.status === 'verified' ? btn('Suspender', act(() => api('/api/admin/bank/batches/' + b.id + '/suspend', { method: 'POST', body: { reason: 'suspendido desde el panel' } }), 'Lote suspendido: sus crípticos volvieron a revisión.'), 'small') : '')))) : el('p', { class: 'muted', text: 'Todavía no hay lotes para esta celda.' })));
+      detail.scrollIntoView({ block: 'nearest' });
+    };
+    const head = el('tr', {}, el('th', { text: 'Idioma' }), [1, 2, 3, 4, 5].map((d) => el('th', { text: d + ' · ' + DIFF[d] })));
+    const rows = langs.map((l) => el('tr', {}, el('th', { scope: 'row', text: l.toUpperCase() }), [1, 2, 3, 4, 5].map((d) => {
+      const c = cellOf(l, d);
+      if (!c) return el('td', { class: 'muted', text: '—' });
+      return el('td', {}, el('button', { class: 'bank-cell', type: 'button', onclick: () => showCell(c), 'aria-label': l + ' dificultad ' + d + ': ' + c.published + ' de ' + c.target },
+        el('b', { text: nn(c.published) }), el('span', { class: 'small muted', text: ' / ' + nn(c.target) }), pctBar(c),
+        el('span', { class: 'small', text: c.percent + ' % · ' + nn(c.pending) + ' pend. · ' + (CELL_STATUS[c.status] || c.status) })));
+    })));
+    main.replaceChildren(
+      el('div', { class: 'adm-head' }, el('h1', { text: 'Banco de crípticos' }),
+        el('p', { class: 'muted small', text: 'Meta independiente por idioma y dificultad. Solo cuentan los publicados: validados, sin dudas y con derechos habilitados. Generador ' + (m.generator || '—') + '.' }),
+        el('div', { class: 'toolbar' }, can('export.data') ? el('a', { class: 'btn', href: '/api/admin/export/bank.csv?' + params, text: 'Exportar matriz CSV' }) : '',
+          can('bank.audit') ? el('a', { class: 'btn', href: '#bankaudit', text: 'Auditar muestra (' + nn(m.audits.pending) + ' pendientes)' }) : '')),
+      el('form', { class: 'toolbar', onsubmit: (e) => { e.preventDefault(); go(); } }, Object.values(fl), el('button', { class: 'btn', type: 'submit', text: 'Filtrar' }),
+        filtered ? el('a', { class: 'btn', href: '#bank', text: 'Quitar filtros' }) : ''),
+      el('div', { class: 'cards' },
+        kpi('Meta total', t.target), kpi('Publicados', t.published), kpi('Avance real', t.percent, { fmt: (v) => v + ' %' }), kpi('Faltan', t.missing),
+        kpi('Pendientes de revisión', t.pending), kpi('Duplicados descartados', t.duplicates), kpi('Rechazados', t.rejected), kpi('Permiso sin verificar', t.unverified)),
+      el('p', { class: 'small muted', text: 'Publicados originales y generados: ' + nn(t.published_original) + ' · externos con licencia o permiso: ' + nn(t.published_external) + ' · de la comunidad (aprobados a mano): ' + nn(t.published_community) + '.' }),
+      el('div', { class: 'tbl-wrap' }, el('table', { class: 'bank-matrix' }, el('thead', {}, head), el('tbody', {}, rows))),
+      detail);
+  };
+
+  V.bankaudit = async () => {
+    const d = await api('/api/admin/bank/audits?limit=20');
+    const card = (x) => {
+      const reason = el('input', { placeholder: 'Motivo (si se rechaza)', 'aria-label': 'Motivo del rechazo' });
+      const send = (verdict) => act(async () => {
+        const r = await api('/api/admin/bank/audits/' + x.audit_id, { method: 'POST', body: { verdict, reason: reason.value || null } });
+        if (r.suspended) return { ok: false, flash: 'La muestra de ese lote superó el máximo de rechazos: el lote se retiró de las partidas.' };
+      }, verdict === 'ok' ? 'Marcado como correcto.' : 'Rechazado y retirado de las partidas.');
+      return el('div', { class: 'panel' },
+        el('p', {}, el('strong', { text: x.clue_text })),
+        el('p', {}, 'Respuesta: ', el('strong', { text: x.answer }), ' · ', x.language_code + (x.variant_code ? ' (' + x.variant_code + ')' : ''), ' · ', DIFF[x.difficulty], ' · ', x.mechanism),
+        el('ol', {}, x.explanation.map((s) => el('li', { text: s }))),
+        x.evidence.length ? el('p', { class: 'small muted', text: 'Evidencia léxica: ' + x.evidence.map((e) => e.word + ' → ' + e.def + ' (' + (e.kind === 'hyp' ? 'hiperónimo' : 'sinónimo') + ')').join(' · ') }) : '',
+        el('div', { class: 'toolbar' }, btn('Correcto', send('ok'), 'primary'), reason, btn('Rechazar', send('rejected')), el('a', { class: 'btn', href: '#clue/' + x.id, text: 'Abrir / corregir' })));
+    };
+    main.replaceChildren(el('h1', { text: 'Auditoría por muestra' }),
+      el('p', { class: 'muted', text: 'Cada lote publicado separa una muestra al azar para revisión humana. Rechazar un críptico lo retira de las partidas; si se rechaza más del máximo configurado en la muestra de un lote, el lote completo vuelve a revisión.' }),
+      ...(d.items.length ? d.items.map(card) : [el('p', { class: 'muted', text: 'No hay crípticos pendientes de auditoría.' })]));
+  };
+
   V.catalog = () => catalogList(null, 'Crípticos');
   V.generated = () => catalogList({ origin: 'generated', status: 'review' }, 'Generados en revisión');
 
@@ -1047,7 +1176,7 @@
     if (!me) return;
     const [name, arg] = location.hash.replace(/^#/, '').split('?')[0].split('/');
     const view = V[name || 'dashboard'] ? (name || 'dashboard') : 'dashboard';
-    const PARENT = { player: 'players', game: 'games', clue: 'catalog', submission: 'submissions', source: 'sources' };
+    const PARENT = { player: 'players', game: 'games', clue: 'catalog', submission: 'submissions', source: 'sources', bankaudit: 'bank' };
     const navKey = PARENT[view] || view;
     document.querySelectorAll('#admin-nav a').forEach((a) => {
       const on = a.getAttribute('href') === '#' + navKey;

@@ -38,7 +38,14 @@ function client(base) {
     if (cookie) h.cookie = cookie;
     if (body !== undefined) { h['content-type'] = h['content-type'] || 'application/json'; }
     if (csrf && !('x-csrf-token' in h)) h['x-csrf-token'] = csrf;
-    const res = await fetch(base + url, { method, headers: h, body: body === undefined ? undefined : (typeof body === 'string' ? body : JSON.stringify(body)), redirect: 'manual' });
+    const init = { method, headers: h, body: body === undefined ? undefined : (typeof body === 'string' ? body : JSON.stringify(body)), redirect: 'manual' };
+    let res;
+    try { res = await fetch(base + url, init); } catch (e) {
+      // Una conexión reutilizada que el servidor cerró por inactividad (keep-alive)
+      // falla antes de enviar la petición: se reintenta una vez con una conexión nueva.
+      if (!/other side closed|ECONNRESET|socket/i.test(String((e.cause && (e.cause.code || e.cause.message)) || ''))) throw e;
+      res = await fetch(base + url, init);
+    }
     for (const sc of res.headers.getSetCookie ? res.headers.getSetCookie() : []) {
       const [pair] = sc.split(';'); const i = pair.indexOf('=');
       const k = pair.slice(0, i); const v = pair.slice(i + 1);
