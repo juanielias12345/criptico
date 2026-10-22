@@ -17,7 +17,7 @@ const MODES = {
   guided: { maxDifficulty: 3 }, timed: {}, themed: { needsCategory: true }, daily: {},
 };
 
-async function ensurePlayer(db, playerId, { country, variant } = {}) {
+async function ensurePlayer(db, playerId, { country, variant, origin } = {}) {
   if (playerId && /^[0-9a-f-]{36}$/.test(playerId)) {
     const p = await db.get('SELECT * FROM players WHERE id = ?', [playerId]);
     if (p) {
@@ -27,7 +27,9 @@ async function ensurePlayer(db, playerId, { country, variant } = {}) {
     }
   }
   const id = uuid();
-  await db.run('INSERT INTO players(id, country_code, play_variant) VALUES (?,?,?)', [id, country || null, variant || null]);
+  const o = origin || {};
+  await db.run(`INSERT INTO players(id, country_code, play_variant, origin_source, origin_medium, origin_campaign, origin_referrer, origin_landing)
+    VALUES (?,?,?,?,?,?,?,?)`, [id, country || null, variant || null, o.source || null, o.medium || null, o.campaign || null, o.referrer || null, o.landing || null]);
   return { id, isNew: true };
 }
 
@@ -91,7 +93,7 @@ async function contentNotice(db, sel, pool) {
   return null;
 }
 
-async function startGame(db, { playerId, choice, mode = 'infinite', category, difficulty, mechanism, country, clueSlug }) {
+async function startGame(db, { playerId, choice, mode = 'infinite', category, difficulty, mechanism, country, clueSlug, origin }) {
   if (!MODES[mode]) throw new HttpError(400, 'invalid_mode');
   const enabled = await getSetting(db, 'modes.enabled');
   if (!enabled.includes(mode)) throw new HttpError(403, 'mode_disabled', 'Este modo de juego no está disponible.');
@@ -100,7 +102,7 @@ async function startGame(db, { playerId, choice, mode = 'infinite', category, di
   if (!sel.enabled) {
     return { clue: null, notice: { kind: 'language_unavailable', language: sel.lang } };
   }
-  const player = await ensurePlayer(db, playerId, { country, variant: choice });
+  const player = await ensurePlayer(db, playerId, { country, variant: choice, origin });
 
   let clue = null; let recycled = false;
   const filter = poolFilter({ lang: sel.lang, variant: sel.variant, mode, category, difficulty, mechanism });
@@ -284,12 +286,12 @@ async function ensureDaily(db, lang, date = today()) {
   return (await db.get('SELECT clue_id FROM daily_challenges WHERE date = ? AND language_code = ?', [date, lang])).clue_id;
 }
 
-async function startDaily(db, { playerId, choice, country }) {
+async function startDaily(db, { playerId, choice, country, origin }) {
   const enabled = await getSetting(db, 'modes.enabled');
   if (!enabled.includes('daily')) throw new HttpError(403, 'mode_disabled');
   const sel = await resolveVariant(db, choice || 'es');
   if (!sel.enabled) return { clue: null, notice: { kind: 'language_unavailable', language: sel.lang } };
-  const player = await ensurePlayer(db, playerId, { country, variant: choice });
+  const player = await ensurePlayer(db, playerId, { country, variant: choice, origin });
   const date = today();
   const clueId = await ensureDaily(db, sel.lang, date);
   if (!clueId) return { player_id: player.id, clue: null, notice: { kind: 'empty', alternatives: [] } };

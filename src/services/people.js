@@ -23,7 +23,9 @@ const USER_SORTS = { created: 'u.created_at DESC', active: 'u.last_active_at DES
 function publicRow(u, pii) {
   const o = { id: u.id, username: u.username, display_name: u.display_name, status: statusOf(u), role: u.role,
     email_verified: !!u.email_verified_at, has_email: !!u.email, created_at: u.created_at, last_login_at: u.last_login_at,
-    last_active_at: u.last_active_at, ui_language: u.ui_language, country_code: u.country_code, play_variant: u.play_variant, timezone: u.timezone };
+    last_active_at: u.last_active_at, ui_language: u.ui_language, country_code: u.country_code, play_variant: u.play_variant, timezone: u.timezone,
+    origin_source: u.origin_source || null, origin_medium: u.origin_medium || null, origin_campaign: u.origin_campaign || null,
+    origin_referrer: u.origin_referrer || null, origin_landing: u.origin_landing || null };
   if (pii) o.email = u.email || null;
   return o;
 }

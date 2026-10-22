@@ -84,6 +84,29 @@
   let metaPromise = null;
   const meta = () => (metaPromise = metaPromise || api('/api/meta'));
 
+  // Origen de la visita: de qué sitio llegó (solo el dominio), la campaña del enlace y la primera página.
+  // Se guarda en el almacenamiento de sesión, y solo si la política de privacidad publicada lo prevé.
+  const noTrack = navigator.doNotTrack === '1' || !!navigator.globalPrivacyControl;
+  const entryOrigin = (() => {
+    if (noTrack) return null;
+    try {
+      const nav = performance.getEntriesByType ? performance.getEntriesByType('navigation')[0] : null;
+      if (nav && nav.type !== 'navigate') return null;
+      const u = new URL(location.href); const qp = (k) => (u.searchParams.get(k) || '').slice(0, 80);
+      const ref = document.referrer ? new URL(document.referrer).hostname : '';
+      if (ref === location.hostname && !qp('utm_source')) return null;
+      return { ref, us: qp('utm_source'), um: qp('utm_medium'), uc: qp('utm_campaign'), landing: location.pathname };
+    } catch (e) { return null; }
+  })();
+  let originPromise = null;
+  const visitOrigin = () => (originPromise = originPromise || meta().then((m) => {
+    if (noTrack || !m.store_origin) return undefined;
+    try {
+      if (entryOrigin) sessionStorage.setItem('pc_origin', JSON.stringify(entryOrigin));
+      const v = sessionStorage.getItem('pc_origin'); return v ? JSON.parse(v) : undefined;
+    } catch (e) { return entryOrigin || undefined; }
+  }).catch(() => undefined));
+
   function toast(msg) {
     $$('.toast').forEach((n) => n.remove());
     const n = el('div', { class: 'toast', role: 'status', text: msg });
@@ -254,9 +277,11 @@
   $('#prefs-button').addEventListener('click', () => openPrefs());
   updatePrefsLabel();
   // Visita agregada (sin identificadores): «first» es verdadero si este navegador todavía no eligió idioma y país.
-  if (navigator.doNotTrack !== '1' && !navigator.globalPrivacyControl) {
+  // «entry» es el origen cuando la visita llega desde afuera del sitio (red, buscador, enlace o campaña).
+  if (!noTrack) {
     const p0 = getPrefs();
-    api('/api/visit', { method: 'POST', body: { ui: L, country: p0 && p0.country, first: !p0 }, keepalive: true }).catch(() => {});
+    api('/api/visit', { method: 'POST', body: { ui: L, country: p0 && p0.country, first: !p0, entry: entryOrigin || undefined }, keepalive: true }).catch(() => {});
+    visitOrigin();
   }
   if (!getPrefs() && ['play', 'daily'].includes(BOOT.page)) openPrefs({ first: true });
 
@@ -370,7 +395,7 @@
       const nb = $('#next-btn', root); if (nb) { nb.setAttribute('aria-busy', 'true'); nb.disabled = true; }
       try {
         const body = { choice: kind === 'clue' ? (BOOT.clueVariant || BOOT.clueLang) : focus.choice || prefs.choice, country: prefs.country, mode: kind === 'clue' ? 'shared' : st.mode, category: st.category,
-          mechanism: focus.mechanism || undefined, difficulty: focus.difficulty || undefined };
+          mechanism: focus.mechanism || undefined, difficulty: focus.difficulty || undefined, origin: await visitOrigin() };
         if (kind === 'clue') body.slug = BOOT.slug;
         const data = await api(kind === 'daily' ? '/api/daily/start' : '/api/game/start', { method: 'POST', body });
         Object.assign(st, { game: data.game_id, clue: data.clue, notice: data.notice, recycled: data.recycled, hints: [], solved: false, finished: false,
@@ -791,7 +816,7 @@
         kind === 'register' ? el('label', { class: 'field' }, el('span', { text: t('email_optional') }), e) : null, accept, err, el('div', {}, btn));
       f.addEventListener('submit', async (ev) => {
         ev.preventDefault(); err.textContent = ''; btn.setAttribute('aria-busy', 'true');
-        try { await api('/api/auth/' + kind, { method: 'POST', body: { username: u.value, password: p.value, email: e.value || null, ...(kind === 'register' ? { accept: ok.checked } : {}) } }); location.href = route('profile'); } catch (x) { err.textContent = (x.data && x.data.message) || t('error_generic'); btn.removeAttribute('aria-busy'); }
+        try { await api('/api/auth/' + kind, { method: 'POST', body: { username: u.value, password: p.value, email: e.value || null, ...(kind === 'register' ? { accept: ok.checked, origin: await visitOrigin() } : {}) } }); location.href = route('profile'); } catch (x) { err.textContent = (x.data && x.data.message) || t('error_generic'); btn.removeAttribute('aria-busy'); }
       });
       return f;
     };

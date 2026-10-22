@@ -14,6 +14,7 @@ const { audit } = require('../services/audit');
 const { HttpError, uuid, parseJson, now } = require('../services/util');
 const track = require('../services/tracking');
 const people = require('../services/people');
+const { classify } = require('../lib/origin');
 
 const a = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
 
@@ -46,8 +47,18 @@ module.exports = function api() {
     const totals = await db.all("SELECT language_code AS code, COUNT(*) AS n FROM clues WHERE status = 'published' AND language_code IN (SELECT code FROM languages WHERE enabled = 1) GROUP BY language_code");
     const categories = await db.all('SELECT slug, name_es, name_en FROM categories WHERE enabled = 1 ORDER BY slug');
     res.set('Cache-Control', 'public, max-age=60');
-    res.json({ languages, variants, totals, categories, modes: await getSetting(db, 'modes.enabled'), max_hints: await getSetting(db, 'game.max_hints') });
+    res.json({ languages, variants, totals, categories, modes: await getSetting(db, 'modes.enabled'), max_hints: await getSetting(db, 'game.max_hints'),
+      store_origin: await getSetting(db, 'privacy.store_origin') });
   }));
+
+  // Origen de la visita para un jugador o cuenta nueva. Solo si la política de privacidad
+  // que lo explica está publicada y el navegador no pide no ser rastreado.
+  async function originFor(req, raw) {
+    if (!raw || req.headers.dnt === '1' || req.headers['sec-gpc'] === '1') return null;
+    if (!(await getSetting(req.app.locals.db, 'privacy.store_origin'))) return null;
+    return classify(raw, siteHost(req));
+  }
+  const siteHost = (req) => { try { return new URL(req.app.locals.config.siteUrl).hostname; } catch { return req.hostname; } };
 
   // ── Partidas ──
   function readStart(req) {
@@ -73,14 +84,14 @@ module.exports = function api() {
   }
 
   r.post('/game/start', a(async (req, res) => {
-    const out = await game.startGame(req.app.locals.db, { playerId: req.playerId, ...readStart(req) });
+    const out = await game.startGame(req.app.locals.db, { playerId: req.playerId, ...readStart(req), origin: await originFor(req, (req.body || {}).origin) });
     await linkPlayer(req, res, out.player_id);
     delete out.player_id;
     res.json(out);
   }));
 
   r.post('/daily/start', a(async (req, res) => {
-    const out = await game.startDaily(req.app.locals.db, { playerId: req.playerId, ...readStart(req) });
+    const out = await game.startDaily(req.app.locals.db, { playerId: req.playerId, ...readStart(req), origin: await originFor(req, (req.body || {}).origin) });
     await linkPlayer(req, res, out.player_id);
     delete out.player_id;
     res.json(out);
@@ -115,6 +126,14 @@ module.exports = function api() {
     for (const kind of kinds) {
       await req.app.locals.db.run(`INSERT INTO traffic_daily(day, kind, ui_lang, country, n) VALUES (?,?,?,?,1)
         ON CONFLICT(day, kind, ui_lang, country) DO UPDATE SET n = n + 1`, [day, kind, ui, country]);
+    }
+    // Visita de entrada (llega desde afuera del sitio): se cuenta por origen, sin identificadores.
+    const o = b.entry ? classify(b.entry, siteHost(req)) : null;
+    if (o) {
+      for (const kind of ['entry', ...(b.first === true ? ['new_visitor'] : [])]) {
+        await req.app.locals.db.run(`INSERT INTO traffic_sources_daily(day, kind, source, medium, campaign, n) VALUES (?,?,?,?,?,1)
+          ON CONFLICT(day, kind, source, medium, campaign) DO UPDATE SET n = n + 1`, [day, kind, o.source, o.medium, o.campaign]);
+      }
     }
     res.status(204).end();
   }));
@@ -186,6 +205,16 @@ module.exports = function api() {
     if (b.accept !== true) throw new HttpError(400, 'accept_required', 'Para crear una cuenta tenés que confirmar tu edad y aceptar los Términos y la Política de privacidad.');
     await auth.createUser(db, { username: b.username, password: b.password, email: b.email || null, role: 'player', termsAcceptedAt: new Date().toISOString() });
     const s = await auth.login(db, { username: b.username, password: b.password, ipHash: req.ipHash, userAgent: req.headers['user-agent'] });
+    // Origen de la cuenta: el de esta visita o, si no llegó, el del jugador anónimo de este navegador.
+    const o = await originFor(req, b.origin);
+    if (o) {
+      await db.run('UPDATE users SET origin_source = ?, origin_medium = ?, origin_campaign = ?, origin_referrer = ?, origin_landing = ? WHERE id = ?',
+        [o.source, o.medium, o.campaign || null, o.referrer || null, o.landing || null, s.user.id]);
+    } else if (req.playerId) {
+      await db.run(`UPDATE users SET (origin_source, origin_medium, origin_campaign, origin_referrer, origin_landing) =
+        (SELECT origin_source, origin_medium, origin_campaign, origin_referrer, origin_landing FROM players WHERE id = ? AND origin_source IS NOT NULL)
+        WHERE id = ? AND EXISTS (SELECT 1 FROM players WHERE id = ? AND origin_source IS NOT NULL)`, [req.playerId, s.user.id, req.playerId]);
+    }
     cookie(res, req.app.locals.config, 'sid', s.token, { maxAge: 30 * 86400 });
     res.status(201).json({ user: s.user, csrf: s.csrf, link_offer: await linkOffer(db, req.playerId) });
   }));

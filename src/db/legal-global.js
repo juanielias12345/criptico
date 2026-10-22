@@ -428,4 +428,31 @@ function fill(text) {
     .replace(/\{\{PAIS\}\}/g, OWNER.country).replace(/\{\{CONTACTO\}\}/g, OWNER.email).replace(/\{\{FECHA\}\}/g, UPDATED);
 }
 
-module.exports = { NOTE, OWNER, PUBLIC, DOCS, ownerReady, fill };
+// Revisión del 22/10/2026: origen de las visitas y de los jugadores nuevos.
+// Se arma sobre el texto global ya cargado y entra como borrador para aprobación.
+const ORIGIN_NOTE = 'origen-2026-10-22';
+function swap(text, from, to) {
+  if (!text.includes(from)) throw new Error('legal-global: no encontré el texto a reemplazar: ' + from.slice(0, 60));
+  return text.replace(from, to);
+}
+const REVISIONS = {
+  privacy: (t) => {
+    t = swap(t, '- **Visitas:** conteos agregados por día, idioma y país elegido, sin cookies ni identificadores. Si tu navegador envía «Do Not Track» o «Global Privacy Control», no se cuentan.',
+      '- **Visitas:** conteos agregados por día, idioma, país elegido y origen de la visita (por ejemplo, Instagram, Google o enlace directo, y la campaña si el enlace la indica), sin cookies ni identificadores. Si tu navegador envía «Do Not Track» o «Global Privacy Control», no se cuentan.\n'
+      + '- **Cómo llegaste:** cuando empezás a jugar por primera vez o creás una cuenta, guardamos de dónde vino esa visita: el sitio que te trajo (solo el dominio, por ejemplo instagram.com), la campaña del enlace si la tiene y la primera página que abriste. Mientras navegás, ese dato queda en el almacenamiento de sesión de tu navegador y se borra al cerrar la pestaña. No seguimos lo que hacés en otros sitios. Si tu navegador envía «Do Not Track» o «Global Privacy Control», no se guarda.');
+    t = swap(t, '| Estadísticas agregadas para mejorar el juego | Interés legítimo, sin identificarte |',
+      '| Estadísticas agregadas para mejorar el juego | Interés legítimo, sin identificarte |\n| Saber por qué canales llegan los jugadores (redes, buscadores, enlaces) | Interés legítimo; podés oponerte con «Do Not Track», «Global Privacy Control» o escribiéndonos |');
+    return t;
+  },
+  cookies: (t) => {
+    t = swap(t, 'Play Crípticos usa solo cookies y almacenamiento estrictamente necesarios para que el sitio funcione.',
+      'Play Crípticos usa cookies y almacenamiento estrictamente necesarios para que el sitio funcione, y un dato propio de origen de la visita que se borra al cerrar la pestaña.');
+    t = swap(t, '| Preferencias | Almacenamiento del navegador | País, idioma y tema | Solo si marcás «Recordar en este dispositivo»; si no, la sesión |',
+      '| Preferencias | Almacenamiento del navegador | País, idioma y tema | Solo si marcás «Recordar en este dispositivo»; si no, la sesión |\n| Origen | Almacenamiento de sesión del navegador | De dónde vino tu visita (dominio y campaña del enlace) para saber por qué canal llegan los jugadores | Hasta cerrar la pestaña |');
+    t = swap(t, 'Como solo usamos elementos estrictamente necesarios para prestar el servicio que pedís, no hace falta un aviso de consentimiento',
+      'El dato de origen es una medición de audiencia propia: queda solo en nuestras estadísticas, no se cruza con otros sitios, dura hasta cerrar la pestaña y no se guarda si tu navegador pide no ser rastreado. El resto son elementos estrictamente necesarios para prestar el servicio que pedís. Por eso no usamos un aviso de consentimiento');
+    return t;
+  },
+};
+
+module.exports = { NOTE, ORIGIN_NOTE, REVISIONS, OWNER, PUBLIC, DOCS, ownerReady, fill };

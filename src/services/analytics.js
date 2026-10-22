@@ -493,5 +493,25 @@ const METRIC_DEFS = {
   errors: 'Errores técnicos registrados por el servidor en el período.',
 };
 
-module.exports = { parsePeriod, readFilters, refresh, rollupDays, overview, geo, funnel, retention, clueStats, catalogStats, importStats,
+// ── Origen: de dónde llegan las visitas, los jugadores nuevos y las cuentas ──
+async function origins(db, q) {
+  const p = parsePeriod(q);
+  const toDay = Date.parse(p.to) % DAY === 0 ? p.to.slice(0, 10) : dayStr(Date.parse(p.to) + DAY);
+  const visits = await db.all(`SELECT source, medium, SUM(CASE WHEN kind = 'entry' THEN n ELSE 0 END) AS entries,
+    SUM(CASE WHEN kind = 'new_visitor' THEN n ELSE 0 END) AS new_visitors FROM traffic_sources_daily
+    WHERE day >= ? AND day < ? GROUP BY source, medium ORDER BY entries DESC LIMIT 100`, [p.from.slice(0, 10), toDay]);
+  const campaigns = await db.all(`SELECT campaign, source, SUM(CASE WHEN kind = 'entry' THEN n ELSE 0 END) AS entries FROM traffic_sources_daily
+    WHERE day >= ? AND day < ? AND campaign <> '' GROUP BY campaign, source ORDER BY entries DESC LIMIT 50`, [p.from.slice(0, 10), toDay]);
+  const players = await db.all(`SELECT COALESCE(pl.origin_source, '') AS source, COALESCE(pl.origin_medium, '') AS medium, COUNT(*) AS players,
+    SUM(CASE WHEN pl.user_id IS NOT NULL THEN 1 ELSE 0 END) AS with_account,
+    SUM((SELECT COUNT(*) FROM games g WHERE g.player_id = pl.id)) AS games
+    FROM players pl WHERE pl.created_at >= ? AND pl.created_at < ? GROUP BY source, medium ORDER BY players DESC LIMIT 100`, [p.from, p.to]);
+  const accounts = await db.all(`SELECT COALESCE(origin_source, '') AS source, COALESCE(origin_medium, '') AS medium, COUNT(*) AS users
+    FROM users WHERE role = 'player' AND deleted_at IS NULL AND created_at >= ? AND created_at < ? GROUP BY source, medium ORDER BY users DESC LIMIT 100`, [p.from, p.to]);
+  const recent = await db.all(`SELECT id, username, created_at, origin_source, origin_medium, origin_campaign, origin_referrer, origin_landing
+    FROM users WHERE role = 'player' AND deleted_at IS NULL AND created_at >= ? AND created_at < ? ORDER BY created_at DESC LIMIT 50`, [p.from, p.to]);
+  return { period: p, visits, campaigns, players, accounts, recent, storing: await require('./settings').getSetting(db, 'privacy.store_origin') };
+}
+
+module.exports = { origins, parsePeriod, readFilters, refresh, rollupDays, overview, geo, funnel, retention, clueStats, catalogStats, importStats,
   periodBlock, gameTotals, METRIC_DEFS, PERIODS, CLUE_SORTS, dayStr };

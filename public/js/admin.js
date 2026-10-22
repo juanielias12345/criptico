@@ -384,6 +384,7 @@
       { k: 'last_active_at', t: 'Última actividad', sort: 'active', f: (u) => (u.last_active_at ? fmt(u.last_active_at) : '') },
       { k: 'country_code', t: 'País elegido', f: (u) => (u.country_code ? country(u.country_code) : '') },
       { k: 'play_variant', t: 'Variante', f: (u) => u.play_variant || '' },
+      { k: 'origin_source', t: 'Origen', f: (u) => originText(u) || '' },
       { k: 'ui_language', t: 'Idioma de interfaz', f: (u) => (u.ui_language ? lang(u.ui_language) : ''), hidden: true },
       { k: 'timezone', t: 'Zona horaria', hidden: true },
       { k: 'games', t: 'Partidas', sort: 'games', num: true },
@@ -433,7 +434,7 @@
             fact('Correo verificado', u.has_email ? (u.email_verified ? 'Sí' : 'No') : null), fact('Registro', fmt(u.created_at)),
             fact('Último acceso', u.last_login_at && fmt(u.last_login_at)), fact('Última actividad', u.last_active_at && fmt(u.last_active_at)),
             fact('Idioma de interfaz', u.ui_language && lang(u.ui_language)), fact('País elegido', u.country_code && country(u.country_code)),
-            fact('Variante de juego', u.play_variant), fact('Zona horaria', u.timezone))),
+            fact('Variante de juego', u.play_variant), fact('Zona horaria', u.timezone), fact('Cómo llegó', originText(u)))),
           section('Preferencias observadas', el('dl', { class: 'facts' },
             fact('Idiomas jugados', pref(d.preferences.languages, lang)), fact('Dificultades', pref(d.preferences.difficulties, (k) => 'nivel ' + k)),
             fact('Categorías', pref(d.preferences.categories, (k) => k || NA)), fact('Modos', pref(d.preferences.modes, (k) => MODES[k] || k)),
@@ -574,6 +575,33 @@
   };
 
   // ── Regiones e idiomas ──
+  // ── Origen del tráfico ──
+  const MEDIUM = { social: 'Redes sociales', search: 'Buscadores', referral: 'Otros sitios', direct: 'Directo', email: 'Correo', ai: 'Asistentes de IA', campaign: 'Campaña' };
+  function originText(o) {
+    if (!o || !o.origin_source) return '';
+    return o.origin_source + (o.origin_medium && o.origin_source !== 'Directo' ? ' · ' + (MEDIUM[o.origin_medium] || o.origin_medium) : '')
+      + (o.origin_campaign ? ' · campaña «' + o.origin_campaign + '»' : '') + (o.origin_landing ? ' · entró por ' + o.origin_landing : '');
+  }
+  V.origins = async () => {
+    const q = qs();
+    const d = await api('/api/admin/analytics/origins?' + apiQs(q, PERIOD_KEYS));
+    const src = (r) => (r.source || 'Sin dato') + (r.medium && r.source !== 'Directo' ? ' · ' + (MEDIUM[r.medium] || r.medium) : '');
+    main.replaceChildren(el('div', { class: 'adm-head' }, el('h1', { text: 'Origen del tráfico' })),
+      el('p', { class: 'muted small', text: 'De qué red, buscador o sitio llegó cada visita. Solo se registra el dominio que la trajo y la campaña del enlace (utm_campaign), nunca la dirección completa. Instagram y TikTok muchas veces no informan el sitio de origen: esas visitas aparecen como «Directo» salvo que el enlace lleve utm_source.' }),
+      d.storing ? '' : el('p', { class: 'flash', text: 'El origen por jugador y por cuenta empieza a guardarse cuando se publique la política de privacidad que lo explica (Legal → Aprobar y publicar). Las visitas se cuentan desde ya, de forma agregada.' }),
+      filterBar(q, { geo: false }),
+      el('div', { class: 'cols' },
+        section('Visitas de entrada', d.visits.length ? barList(d.visits, src, (r) => r.entries, { extra: (r) => nf(r.new_visitors, 0) + ' navegadores nuevos' }) : empty()),
+        section('Jugadores nuevos', d.players.length ? barList(d.players, src, (r) => r.players, { extra: (r) => nf(r.games, 0) + ' partidas · ' + nf(r.with_account, 0) + ' con cuenta' }) : empty()),
+        section('Cuentas nuevas', d.accounts.length ? barList(d.accounts, src, (r) => r.users) : empty())),
+      section('Campañas', d.campaigns.length ? dataTable('origin-campaigns', [{ k: 'campaign', t: 'Campaña' }, { k: 'source', t: 'Origen' }, { k: 'entries', t: 'Visitas', num: true }], d.campaigns, { noPicker: true })
+        : el('p', { class: 'small muted', text: 'Para medir cada publicación, usá enlaces con utm, por ejemplo playcripticos.com/es?utm_source=instagram&utm_campaign=bio.' })),
+      section('Cuentas nuevas y cómo llegaron', d.recent.length ? dataTable('origin-recent', [
+        { k: 'username', t: 'Usuario', f: (u) => el('a', { href: '#player/' + u.id, text: u.username }) }, { k: 'created_at', t: 'Registro', f: (u) => fmt(u.created_at) },
+        { k: 'origin_source', t: 'Origen', f: (u) => originText(u) || 'Sin dato' }, { k: 'origin_referrer', t: 'Sitio que la trajo', f: (u) => u.origin_referrer || '' },
+      ], d.recent, { noPicker: true }) : empty()));
+  };
+
   V.geo = async () => {
     const q = qs();
     const d = await api('/api/admin/analytics/geo?' + apiQs(q, PERIOD_KEYS));

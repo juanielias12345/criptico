@@ -6,6 +6,7 @@
 
 const { uuid, now, parseJson, HttpError } = require('./util');
 const { audit } = require('./audit');
+const { setSetting } = require('./settings');
 const gov = require('./governance');
 const SEED = require('../db/company-seed');
 
@@ -296,6 +297,11 @@ async function markLegalPublished(db, docId, version, language, evidence, actor)
   await db.run("UPDATE legal_document_versions SET status = 'published', effective_at = ? WHERE doc_id = ? AND version = ? AND language = ?", [now(), docId, v.version, language]);
   await gov.markExecuted(db, v.approval_id, evidence, actor);
   await audit(db, { actorId: actor.id, action: 'legal.published', targetKind: 'legal_version', targetId: `${docId}:${v.version}:${language}`, details: { evidence } });
+  // La privacidad que explica el origen de las visitas habilita guardarlo por jugador y cuenta.
+  if (docId === 'privacy' && v.source_note === require('../db/legal-global').ORIGIN_NOTE) {
+    await setSetting(db, 'privacy.store_origin', true, actor.id);
+    await audit(db, { actorId: actor.id, action: 'setting.update', targetKind: 'setting', targetId: 'privacy.store_origin', details: { value: true, reason: 'privacidad publicada' } });
+  }
   return legalVersion(db, docId, v.version, language);
 }
 
@@ -320,6 +326,18 @@ async function seedGlobalLegal(db) {
     await audit(db, { actorKind: 'agent', actorLabel: 'legal-direccion', action: 'legal.draft_created', targetKind: 'legal_version', targetId: `${doc}:${v}:es`, details: { scope: 'global' } });
     loaded++;
   }
+  // Revisiones posteriores (por ejemplo, origen de las visitas): sobre el texto global, una sola vez.
+  for (const [doc, revise] of Object.entries(G.REVISIONS)) {
+    if (await db.get('SELECT 1 FROM legal_document_versions WHERE doc_id = ? AND source_note = ?', [doc, G.ORIGIN_NOTE])) continue;
+    const base = await db.get("SELECT body FROM legal_document_versions WHERE doc_id = ? AND language = 'es' AND source_note = ? ORDER BY version DESC LIMIT 1", [doc, G.NOTE]);
+    if (!base) continue;
+    const body = revise(base.body);
+    const v = ((await db.get("SELECT MAX(version) AS v FROM legal_document_versions WHERE doc_id = ? AND language = 'es'", [doc])).v || 0) + 1;
+    await db.run(`INSERT INTO legal_document_versions(doc_id, version, language, body, content_hash, status, source_note, created_by)
+      VALUES (?,?,'es',?,?,'draft',?,'agente:legal-direccion')`, [doc, v, body, legalHash(doc, v, 'es', body), G.ORIGIN_NOTE]);
+    await audit(db, { actorKind: 'agent', actorLabel: 'legal-direccion', action: 'legal.draft_created', targetKind: 'legal_version', targetId: `${doc}:${v}:es`, details: { scope: 'origin' } });
+    loaded++;
+  }
   return { loaded };
 }
 
@@ -328,11 +346,11 @@ async function seedGlobalLegal(db) {
 // exacto, voto del CEO y, si queda aprobado, publicación con su evidencia.
 async function approveGlobalLegal(db, actor, siteUrl) {
   const G = require('../db/legal-global');
-  const rows = await db.all("SELECT * FROM legal_document_versions WHERE source_note = ? AND language = 'es' ORDER BY doc_id", [G.NOTE]);
+  const rows = await db.all("SELECT * FROM legal_document_versions WHERE source_note IN (?, ?) AND language = 'es' ORDER BY doc_id, version", [G.NOTE, G.ORIGIN_NOTE]);
   if (!rows.length) throw new HttpError(409, 'no_global_drafts', 'Todavía no hay borradores globales: faltan los datos del titular.');
   const out = [];
   for (const v of rows) {
-    if (v.status === 'published') { out.push({ doc: v.doc_id, status: 'published' }); continue; }
+    if (v.status === 'published' || v.status === 'superseded') { out.push({ doc: v.doc_id, version: v.version, status: 'published' }); continue; }
     if (/\[COMPLETAR|\{\{/.test(v.body)) { out.push({ doc: v.doc_id, status: 'incomplete' }); continue; }
     let approvalId = v.approval_id;
     if (v.status === 'draft') approvalId = (await submitLegal(db, v.doc_id, v.version, 'es', actor)).id;
@@ -351,8 +369,8 @@ async function approveGlobalLegal(db, actor, siteUrl) {
         ? `Publicado en ${siteUrl}${doc.public_route}: la página lee la versión aprobada de la base`
         : 'Documento interno: vigente desde la aprobación, visible en el panel';
       await markLegalPublished(db, v.doc_id, v.version, 'es', evidence, actor);
-      out.push({ doc: v.doc_id, status: 'published' });
-    } else out.push({ doc: v.doc_id, status: now2.status });
+      out.push({ doc: v.doc_id, version: v.version, status: 'published' });
+    } else out.push({ doc: v.doc_id, version: v.version, status: now2.status });
   }
   return { items: out, published: out.filter((x) => x.status === 'published').length };
 }

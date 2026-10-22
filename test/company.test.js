@@ -423,8 +423,8 @@ test('textos legales globales: sin datos del titular no se cargan; con datos, un
   try { assert.equal((await company.seedGlobalLegal(env.db)).missing, 'owner', 'sin titular no se carga nada'); } finally { Object.assign(G.OWNER, saved); }
   assert.ok(G.ownerReady(), 'los datos del titular están completos');
   assert.ok(await env.db.get("SELECT 1 FROM legal_jurisdictions WHERE code = 'ROW'"), 'la matriz cubre el resto del mundo');
-  const n = Object.keys(G.DOCS).length;
-  const drafts = await env.db.all('SELECT doc_id, status, body FROM legal_document_versions WHERE source_note = ?', [G.NOTE]);
+  const n = Object.keys(G.DOCS).length + Object.keys(G.REVISIONS).length;
+  const drafts = await env.db.all('SELECT doc_id, status, body FROM legal_document_versions WHERE source_note IN (?, ?)', [G.NOTE, G.ORIGIN_NOTE]);
   assert.equal(drafts.length, n, 'el despliegue los carga como borrador');
   assert.ok(drafts.every((d) => !/\{\{|\[COMPLETAR/.test(d.body)), 'sin datos sin completar');
   assert.ok(drafts.every((d) => d.status === 'draft'));
@@ -438,6 +438,9 @@ test('textos legales globales: sin datos del titular no se cargan; con datos, un
   const page = await client(env.base).get('/es/legal/cookies');
   assert.equal(page.status, 200);
   assert.match(page.text, /estrictamente necesarios/);
+  assert.match((await client(env.base).get('/es/privacidad')).text, /Cómo llegaste/, 'la privacidad publicada explica el origen');
+  const { getSetting } = require('../src/services/settings');
+  assert.equal(await getSetting(env.db, 'privacy.store_origin'), true, 'publicarla habilita guardar el origen');
   assert.match((await client(env.base).get('/es/condiciones')).text, new RegExp(G.OWNER.name));
   assert.match((await client(env.base).get('/es/legal/ip')).text, new RegExp(G.OWNER.name));
   assert.match((await client(env.base).get('/es/legal')).text, /\/es\/legal\/cookies/);

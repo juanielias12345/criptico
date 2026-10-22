@@ -37,6 +37,7 @@ module.exports = function panel({ need, log }) {
   // ── Indicadores ──
   r.get('/analytics/overview', need('analytics.read'), a(async (req, res) => res.json(await analytics.overview(req.app.locals.db, req.query))));
   r.get('/analytics/geo', need('analytics.read'), a(async (req, res) => res.json(await analytics.geo(req.app.locals.db, req.query))));
+  r.get('/analytics/origins', need('analytics.read'), a(async (req, res) => res.json(await analytics.origins(req.app.locals.db, req.query))));
   r.get('/analytics/funnel', need('analytics.read'), a(async (req, res) => res.json(await analytics.funnel(req.app.locals.db, req.query))));
   r.get('/analytics/retention', need('analytics.read'), a(async (req, res) => res.json(await analytics.retention(req.app.locals.db, req.query))));
   r.get('/analytics/clues', need('analytics.read'), a(async (req, res) => res.json(await analytics.clueStats(req.app.locals.db, req.query))));
