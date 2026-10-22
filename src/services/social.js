@@ -25,18 +25,17 @@ const nets = (p) => (p && p.networks) || ['instagram', 'facebook', 'tiktok', 'yo
 
 // Piezas de redes que la marca dejó de usar: se pausan (no se borran) si todavía no
 // salieron; su aprobación pendiente se retira. Lo programado o publicado no se toca.
-async function retireOffPlan(db, all) {
-  const keep = new Set(all.map((x) => x.id));
-  const rows = await db.all("SELECT id, status, approval_id FROM content_pieces WHERE campaign = ? AND status NOT IN ('paused','scheduled','published')", [CAMPAIGN]);
-  const off = rows.filter((r) => !keep.has(r.id));
-  for (const r of off) {
-    const ap = r.approval_id && await db.get("SELECT status FROM approval_items WHERE id = ? AND status = 'pending'", [r.approval_id]);
-    if (ap) await gov.withdraw(db, r.approval_id, { id: null });
-    await db.run("UPDATE content_pieces SET status = 'paused', updated_at = ? WHERE id = ?", [now(), r.id]);
-  }
-  if (off.length) await audit(db, { actorKind: 'agent', actorLabel: 'produccion-contenido', action: 'content.networks_dropped', targetKind: 'campaign', targetId: CAMPAIGN,
-    details: { paused: off.length, networks: nets(plan()) } });
-  return off.length;
+async function retireOffPlan(db) {
+  const N = nets(plan()); const inN = N.map(() => '?').join(',');
+  // En pocas consultas: el despliegue habla con la base por red y muchas idas y vueltas cortan la conexión.
+  const off = `SELECT id FROM content_pieces WHERE campaign = ? AND platform NOT IN (${inN}) AND status NOT IN ('paused','scheduled','published')`;
+  const n = (await db.get(`SELECT COUNT(*) AS n FROM (${off})`, [CAMPAIGN, ...N])).n;
+  if (!n) return 0;
+  await db.run(`UPDATE approval_items SET status = 'withdrawn', updated_at = ? WHERE status = 'pending' AND target_kind = 'content_piece' AND target_id IN (${off})`, [now(), CAMPAIGN, ...N]);
+  await db.run(`UPDATE content_pieces SET status = 'paused', updated_at = ? WHERE id IN (${off})`, [now(), CAMPAIGN, ...N]);
+  await audit(db, { actorKind: 'agent', actorLabel: 'produccion-contenido', action: 'content.networks_dropped', targetKind: 'campaign', targetId: CAMPAIGN,
+    details: { paused: n, networks: N } });
+  return n;
 }
 
 // Carga el calendario en el panel: cada pieza queda «en edición», lista para revisar.
@@ -45,7 +44,7 @@ async function seedPlan(db) {
   const p = plan();
   if (!p) return { loaded: 0 };
   const all = p.days.flatMap((d) => d.pieces);
-  await retireOffPlan(db, all);
+  await retireOffPlan(db);
   const have = (await db.get('SELECT COUNT(*) AS n FROM content_pieces WHERE campaign = ? AND platform IN (' + nets(p).map(() => '?').join(',') + ')', [CAMPAIGN, ...nets(p)])).n;
   if (have >= all.length) return { loaded: 0 };
   const stmts = all.map((x) => ({

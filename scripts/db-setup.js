@@ -8,7 +8,11 @@ const { openDb, migrate } = require('../src/db');
 const { seedReference } = require('../src/db/reference');
 const { seedCatalog } = require('../src/services/seed');
 
-(async () => {
+// Un corte de red con la base (Turso) durante el despliegue se reintenta: todo es idempotente.
+const TRANSIENT = /UND_ERR_SOCKET|ECONNRESET|ETIMEDOUT|EPIPE|other side closed|fetch failed/i;
+const isTransient = (e) => TRANSIENT.test([e && e.code, e && e.message, e && e.cause && e.cause.code, e && e.cause && e.cause.message].join(' '));
+
+async function setup() {
   const config = loadConfig();
   if (!process.env.DATABASE_URL && process.env.VERCEL) {
     console.error('Falta DATABASE_URL: configurala en Vercel antes de desplegar.');
@@ -25,4 +29,14 @@ const { seedCatalog } = require('../src/services/seed');
     if (r.failed.length) process.exitCode = 1;
   }
   db.close();
+}
+
+(async () => {
+  for (let attempt = 1; ; attempt++) {
+    try { await setup(); return; } catch (e) {
+      if (attempt >= 3 || !isTransient(e)) throw e;
+      console.warn(`Corte de conexión con la base (intento ${attempt} de 3): ${e.code || e.message}. Reintentando…`);
+      await new Promise((r) => setTimeout(r, 3000 * attempt));
+    }
+  }
 })().catch((e) => { console.error(e); process.exit(1); });
