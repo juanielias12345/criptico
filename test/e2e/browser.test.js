@@ -470,3 +470,21 @@ test('banco: generar un lote desde la matriz, verlo en la base y jugar un crípt
     for (const o of others) await env.db.run("UPDATE clues SET status = 'published' WHERE id = ?", [o.id]);
   }
 });
+
+test('el menú desplegable lleva a «Mi perfil» en móvil y escritorio', async () => {
+  for (const viewport of [{ width: 375, height: 812 }, { width: 1440, height: 900 }]) {
+    const { ctx, page, errors } = await newPage({ viewport });
+    await playReady(page);
+    await page.goto(env.base + '/es/ayuda');
+    if (viewport.width < 800) await page.click('.nav-toggle');
+    const link = page.locator('#nav-links a[href="/es/perfil"]');
+    assert.equal(await link.isVisible(), true);
+    await link.click();
+    await page.waitForURL(/\/es\/perfil/);
+    assert.equal(await page.locator('#nav-links a[href="/es/perfil"]').getAttribute('aria-current'), 'page');
+    const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+    assert.ok(overflow <= 0, `desborda ${overflow}px`);
+    assert.deepEqual(errors, []);
+    await ctx.close();
+  }
+});

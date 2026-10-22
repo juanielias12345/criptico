@@ -96,7 +96,7 @@ Problemas que encontró la revisión y se corrigieron:
 
 ## Banco de crípticos por idioma y dificultad (`test/bank.test.js` y e2e «banco…»)
 
-Resultado al publicar: `npm test` 93/93 y `npm run test:e2e` 15/15.
+Resultado al publicar: `npm test` 93/93 y `npm run test:e2e` 16/16.
 
 | # | Prueba | Dónde |
 | --- | --- | --- |

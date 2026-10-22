@@ -39,7 +39,7 @@ En desarrollo no hacen falta `IP_HASH_SALT` ni `CRON_SECRET`; en producción son
 
 ```bash
 npm test          # 93 pruebas: validador, juego, propuestas, importaciones, seguridad, base, tareas, panel, perfil y banco
-npm run test:e2e  # 15 pruebas en Chromium: preferencias, juego, móvil, propuesta, panel, perfil y banco
+npm run test:e2e  # 16 pruebas en Chromium: preferencias, juego, móvil, menú, propuesta, panel, perfil y banco
 ```
 
 Las pruebas de navegador usan `playwright-core` con un Chromium ya instalado (`CHROMIUM_PATH` si no está en `/opt/pw-browsers/chromium`). Detalle en [docs/PRUEBAS.md](docs/PRUEBAS.md).

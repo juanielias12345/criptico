@@ -90,7 +90,7 @@ ${jsonLd ? `<script type="application/ld+json">${JSON.stringify(jsonLd).replace(
     <a class="brand" href="${href(lang, 'home')}" aria-label="${esc(site)} — ${lang === 'es' ? 'inicio' : 'home'}">${LOGO}${brandName(site)}</a>
     <nav class="main-nav" id="main-nav" aria-label="${lang === 'es' ? 'Principal' : 'Main'}">
       <ul id="nav-links">
-        ${nav.map(([r, k]) => `<li><a href="${href(lang, r)}"${page === r || (r === 'archive' && page === 'clue') ? ' aria-current="page"' : ''}>${esc(t(lang, k))}</a></li>`).join('')}
+        ${[...nav, ['profile', 'nav_profile']].map(([r, k]) => `<li><a href="${href(lang, r)}"${page === r || (r === 'archive' && page === 'clue') ? ' aria-current="page"' : ''}>${esc(t(lang, k))}</a></li>`).join('')}
       </ul>
     </nav>
     <div class="header-tools">
