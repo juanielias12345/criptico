@@ -1740,6 +1740,7 @@
     const jur = ov.legal.jurisdictions;
     main.replaceChildren(el('h1', { text: 'Legal y cumplimiento' }),
       el('p', { class: 'flash', text: 'Investigación y borradores preparados por agentes: no son asesoramiento jurídico ni reemplazan a un abogado matriculado. Un borrador nunca reemplaza al texto público sin aprobación.' }),
+      globalLegal(docs.items),
       el('h2', { text: 'Documentos' }), table(['Documento', 'Versiones', 'Publicada', ''], docs.items.map((d) => {
         const pub = d.versions.filter((v) => v.status === 'published');
         return el('tr', {}, el('td', {}, el('strong', { text: d.name }), d.public_route ? el('small', { class: 'muted', text: ' · ' + d.public_route }) : ''),
@@ -1747,7 +1748,6 @@
           el('td', { text: pub.length ? pub.map((v) => v.language + (v.source_note === 'baseline' ? ' (texto actual del sitio, sin revisión profesional)' : '')).join(', ') : '—' }),
           el('td', {}, can('legal.write') ? el('a', { href: '#legaldoc/' + d.id + '/new', text: 'Nuevo borrador' }) : ''));
       })),
-      globalLegal(docs.items),
       el('h2', { text: 'Matriz por país y región' }),
       el('p', { class: 'small muted', text: 'Un requisito se carga solo con fuente oficial y fecha de verificación. Que exista una fila no significa que se cumpla en ese país.' }),
       table(['País', 'Mercado', 'Estado', 'Requisitos', 'Fuente oficial', 'Verificado', 'Próxima revisión', 'Abogado', 'Pendiente', ''], jur.map((j) => el('tr', {},
