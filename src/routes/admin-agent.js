@@ -1,9 +1,10 @@
 'use strict';
 
 // API del Agente Autónomo de Biblioteca: estado, informes, registros auditables
-// y controles (pausar, reanudar, detener). Las reglas del agente (metas,
-// presupuesto, modelos) se cambian en «Reglas y funciones», no acá: el agente
-// no puede modificar sus propias reglas ni sus permisos.
+// y controles (pausar, reanudar, detener, retirar). Las reglas del agente (metas,
+// pesos por mecanismo, presupuesto, modelos) se guardan como ajustes con el permiso
+// settings.write (PUT /admin/settings/agent.*), también desde esta sección del panel:
+// el agente no puede modificar sus propias reglas ni sus permisos.
 
 const express = require('express');
 const agent = require('../services/library-agent');
@@ -26,9 +27,19 @@ module.exports = function agentRoutes({ need }) {
   r.get('/agent/candidates', need('bank.read'), a(async (req, res) => {
     const q = req.query;
     if (q.cycle && !DATE.test(q.cycle)) throw new HttpError(400, 'invalid_date');
+    if (q.from && !DATE.test(q.from)) throw new HttpError(400, 'invalid_date');
+    if (q.to && !DATE.test(q.to)) throw new HttpError(400, 'invalid_date');
     if (q.variant && !VARIANT.test(q.variant)) throw new HttpError(400, 'invalid_variant');
-    if (q.status && !['approved', 'needs_review', 'rejected'].includes(q.status)) throw new HttpError(400, 'invalid_status');
-    res.json({ items: await agent.candidates(req.app.locals.db, { cycle: q.cycle, variant: q.variant, status: q.status, limit: q.limit }) });
+    if (q.status && !agent.STATES.includes(q.status)) throw new HttpError(400, 'invalid_status');
+    if (q.mechanism && !/^[a-z_]{3,30}$/.test(q.mechanism)) throw new HttpError(400, 'invalid_mechanism');
+    if (q.difficulty && !/^[1-5]$/.test(q.difficulty)) throw new HttpError(400, 'invalid_difficulty');
+    res.json({ items: await agent.candidates(req.app.locals.db, { cycle: q.cycle, variant: q.variant, mechanism: q.mechanism, difficulty: q.difficulty,
+      status: q.status, from: q.from, to: q.to, limit: q.limit }) });
+  }));
+
+  // Retirar contenido cuestionado (derechos, posible copia, error): sale del juego y queda en cuarentena.
+  r.post('/agent/candidates/:id/quarantine', need('agent.control'), a(async (req, res) => {
+    res.json(await agent.quarantine(req.app.locals.db, String(req.params.id), req.user, (req.body || {}).reason));
   }));
 
   r.post('/agent/control', need('agent.control'), a(async (req, res) => {

@@ -8,7 +8,7 @@
 // El cliente se puede reemplazar (pruebas): cualquier objeto con
 // `beta.messages.create(params)` que responda como la API.
 
-const PROMPT_VERSION = 'agent-prompt-1.0';
+const PROMPT_VERSION = 'agent-prompt-2.0';
 
 // Errores que no se arreglan reintentando: credenciales, permisos o un pedido mal armado.
 class CriticalLlmError extends Error {
@@ -74,20 +74,17 @@ function maxCostOf(prices, model, inputTokensEstimate, maxTokens) {
   return (inputTokensEstimate * p[0] + maxTokens * p[1]) / 1e6;
 }
 
-const MECHANISM_HELP = {
-  anagram: 'anagrama: { "op":"anagram", "indicator":"<indicador de la pista>", "of":[{ "op":"lit", "text":"<palabras de la pista>" }] }',
-  hidden: 'palabra oculta: { "op":"hidden", "indicator":"<indicador>", "in":"<tramo exacto de la pista que la contiene>" }',
-  reversal: 'inversión: { "op":"reverse", "indicator":"<indicador>", "of":{ "op":"lit"|"syn", ... } }',
-  container: 'inserción: { "op":"insert", "indicator":"<indicador>", "outer":{...}, "inner":{...} }',
-  deletion: 'eliminación: { "op":"delete", "indicator":"<indicador>", "remove":"first"|"last"|"<letras>", "of":{...} }',
-  charade: 'charada: { "op":"concat", "parts":[{...},{...}] } (piezas lit, syn, abbr o letter)',
-  homophone: 'homófono: { "op":"homophone", "indicator":"<indicador>", "of":{ "op":"lit", "text":"<palabra de la pista>" } }',
-  double_definition: 'doble definición: { "op":"double", "definitions":["<definición 1>","<definición 2>"] } (las dos de la lista dada)',
-  initials: 'iniciales: { "op":"initials", "indicator":"<indicador>", "in":"<tramo de la pista>" }',
-  combination: 'combinación: una charada o inserción que contiene otro mecanismo (inversión, anagrama, eliminación)',
-};
+// La forma de cada mecanismo y sus reglas las define su agente (src/lib/agent/mechanisms).
+const MECH = require('./mechanisms');
+const MECHANISM_HELP = Object.fromEntries(MECH.modules.map((m) => [m.code, `${m.label.toLowerCase()}: ${m.shape}`]));
 
-function generatorSystem() {
+// Instrucciones del agente de un mecanismo: las reglas comunes más las propias del mecanismo.
+function generatorSystem(mechanism) {
+  const m = mechanism ? MECH.get(mechanism) : null;
+  const own = m ? ['', `Sos el agente especialista en ${m.label.toLowerCase()}. Solo escribís pistas de este mecanismo.`,
+    `Forma del desglose: ${m.shape}`, 'Reglas del mecanismo (un control automático las comprueba y rechaza lo que no las cumple):',
+    ...m.rules.map((x) => '- ' + x), 'Cómo trabajar:', ...m.guide.map((x) => '- ' + x),
+    '- El desglose tiene que ser el procedimiento que realmente produce la respuesta: no inventes una regla para justificarla después.'] : [];
   return [
     'Sos el autor de crípticos de Play Crípticos. Escribís pistas crípticas originales en español, correctas y con superficie natural.',
     'Cada pista tiene una definición (al principio o al final) y un juego de palabras que produce exactamente la respuesta.',
@@ -103,6 +100,7 @@ function generatorSystem() {
     '- "wordplay_json" es el árbol del juego de palabras en JSON (como texto). Nodos: lit {text}, syn {from,text}, abbr {from,text}, letter {from,text},',
     '  concat {parts}, anagram {of:[...],indicator}, reverse {of,indicator}, insert {outer,inner,indicator}, delete {of,remove,indicator},',
     '  hidden {in,indicator}, initials {in,indicator}, homophone {of,indicator}, double {definitions}.',
+    ...own,
   ].join('\n');
 }
 

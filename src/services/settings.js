@@ -22,6 +22,12 @@ function validateSetting(key, value) {
   if (Array.isArray(def) !== Array.isArray(value)) return 'invalid_type';
   if (typeof def !== typeof value) return 'invalid_type';
   if (typeof def === 'number' && (!Number.isFinite(value) || value < 0 || value > 100000)) return 'invalid_range';
+  if (key === 'agent.mechanism_weights') {
+    const known = new Set(require('../lib/agent/mechanisms').production());
+    for (const [m, w] of Object.entries(value || {})) if (!known.has(m) || typeof w !== 'number' || !Number.isFinite(w) || w < 0 || w > 100) return 'invalid_weights';
+  }
+  if (key === 'agent.mechanisms' && !value.every((m) => require('../lib/agent/mechanisms').production().includes(m))) return 'invalid_mechanism';
+  if (key === 'agent.concurrency' && (!Number.isInteger(value) || value < 1 || value > 8)) return 'invalid_range';
   return null;
 }
 

@@ -23,14 +23,16 @@ const set = (k, v) => setSetting(env.db, k, v);
 async function fresh() {
   // cada prueba arranca sin ciclos ni registros del agente
   for (const t of ['clue_audits', 'agent_candidates', 'agent_batches', 'agent_cycles']) await db().run(`DELETE FROM ${t}`);
-  await db().run("DELETE FROM clues WHERE generator_version = 'agent-1.0'");
+  await db().run("DELETE FROM clues WHERE generator_version = 'agent-2.0'");
   await db().run("DELETE FROM alerts WHERE kind = 'agent'");
-  await db().run("UPDATE agent_variants SET status = 'active', paused_reason = NULL, probation = 0, cursor = 0, library_target = NULL, pilot_done = 0");
+  await db().run("UPDATE agent_variants SET status = 'active', paused_reason = NULL, probation = 0, cursor = 0, library_target = NULL, pilot_done = 0, exhausted_at = NULL");
   await db().run("UPDATE agent_control SET state = 'active', reason = NULL, lease_holder = NULL, lease_until = NULL, last_run_status = NULL");
   await set('agent.daily_budget_usd', 50);
   await set('agent.daily_target_per_variant', 20);
   await set('agent.batch_size', 40);
   await set('agent.pilot_batch_size', 10);
+  await set('agent.concurrency', 1);
+  await set('agent.mechanism_weights', require('../src/db/reference').DEFAULT_SETTINGS['agent.mechanism_weights']);
 }
 
 const cycleRow = async () => db().get('SELECT * FROM agent_cycles ORDER BY cycle_date DESC LIMIT 1');
@@ -125,7 +127,7 @@ test('la duda del revisor deja el críptico en revisión, nunca aprobado', async
   assert.ok(r.batches.length);
   assert.equal((await db().get("SELECT COUNT(*) AS n FROM agent_candidates WHERE status = 'approved'")).n, 0);
   assert.ok((await db().get("SELECT COUNT(*) AS n FROM agent_candidates WHERE status = 'needs_review'")).n > 0);
-  assert.equal((await db().get("SELECT COUNT(*) AS n FROM clues WHERE generator_version = 'agent-1.0' AND status = 'published'")).n, 0);
+  assert.equal((await db().get("SELECT COUNT(*) AS n FROM clues WHERE generator_version = 'agent-2.0' AND status = 'published'")).n, 0);
 });
 
 test('si el revisor es el mismo modelo que el generador, no hay aprobación', async () => {
@@ -169,14 +171,23 @@ test('calibración: pistas defectuosas nunca se aprueban', async () => {
 test('recupera lotes cortados sin duplicar ni perder registros', async () => {
   await fresh();
   const c = await agent.runOnce(db(), { llm: { available: false } }) && await cycleRow();
-  await db().run("INSERT INTO agent_batches(id, cycle_id, variant_code, seq, generator_version, status) VALUES ('cut-1', ?, 'es-AR', 90, 'agent-1.0', 'running')", [c.id]);
+  await db().run("INSERT INTO agent_batches(id, cycle_id, variant_code, seq, generator_version, status) VALUES ('cut-1', ?, 'es-AR', 90, 'agent-2.0', 'running')", [c.id]);
+  // el proceso murió con candidatos generados y en validación: nada se aprobó todavía
+  await db().run(`INSERT INTO agent_candidates(id, batch_id, cycle_id, variant_code, status, mechanism, checks, generator_version) VALUES ('cand-v', 'cut-1', ?, 'es-AR', 'validating', 'anagram', '{}', 'agent-2.0')`, [c.id]);
   // un lote cuya escritura llegó a la base pero el proceso murió antes de verificarlo
-  await db().run("INSERT INTO agent_batches(id, cycle_id, variant_code, seq, generator_version, status) VALUES ('cut-2', ?, 'es-AR', 91, 'agent-1.0', 'committed')", [c.id]);
-  await db().run(`INSERT INTO agent_candidates(id, batch_id, cycle_id, variant_code, status, mechanism, checks, generator_version) VALUES ('cand-x', 'cut-2', ?, 'es-AR', 'rejected', 'anagram', '{}', 'agent-1.0')`, [c.id]);
+  await db().run("INSERT INTO agent_batches(id, cycle_id, variant_code, seq, generator_version, status) VALUES ('cut-2', ?, 'es-AR', 91, 'agent-2.0', 'committed')", [c.id]);
+  await db().run(`INSERT INTO agent_candidates(id, batch_id, cycle_id, variant_code, status, mechanism, checks, generator_version) VALUES ('cand-x', 'cut-2', ?, 'es-AR', 'rejected', 'anagram', '{}', 'agent-2.0')`, [c.id]);
   const r = await agent.recover(db());
   assert.deepEqual(r.map((x) => x.result).sort(), ['abandoned', 'verified']);
   assert.equal((await db().get("SELECT status FROM agent_batches WHERE id = 'cut-1'")).status, 'abandoned');
   assert.equal((await db().get("SELECT status FROM agent_batches WHERE id = 'cut-2'")).status, 'verified');
+  const v = await db().get("SELECT status, reasons, clue_id FROM agent_candidates WHERE id = 'cand-v'");
+  assert.deepEqual([v.status, JSON.parse(v.reasons)[0], v.clue_id], ['failed', 'interrupted', null]);
+  // la ejecución siguiente sigue normalmente desde el último estado confirmado
+  const before = (await db().get("SELECT cursor FROM agent_variants WHERE variant_code = 'es-AR'")).cursor;
+  await run({ llm: fakeLlm() });
+  assert.ok((await db().get("SELECT cursor FROM agent_variants WHERE variant_code = 'es-AR'")).cursor > before);
+  assert.equal((await db().get("SELECT COUNT(*) AS n FROM agent_candidates WHERE status IN ('generated','validating')")).n, 0);
 });
 
 test('un solo proceso a la vez: el bloqueo impide ejecuciones simultáneas', async () => {
@@ -288,6 +299,26 @@ test('panel: datos reales, permisos en el servidor y controles pausar, reanudar 
   assert.equal(o.json.variants.length, 2);
   assert.equal(o.json.today.totals.approved, (await db().get("SELECT COUNT(*) AS n FROM agent_candidates WHERE status = 'approved'")).n);
   assert.ok(o.json.next_run);
+  // los contadores del panel salen de la base: biblioteca por variante y mecanismo
+  for (const v of o.json.variants) {
+    for (const m of v.by_mechanism) {
+      const n = (await db().get("SELECT COUNT(*) AS n FROM clues WHERE variant_code = ? AND mechanism = ? AND status = 'published'", [v.variant, m.mechanism])).n;
+      assert.equal(m.library, n, `${v.variant} ${m.mechanism}`);
+    }
+    assert.equal(v.library, (await db().get("SELECT COUNT(*) AS n FROM clues WHERE variant_code = ? AND status = 'published'", [v.variant])).n);
+  }
+  assert.equal(o.json.agents.length, 10);
+  assert.ok(o.json.taxonomy.some((x) => x.code === 'direct_definition'));
+  assert.ok(o.json.infrastructure && o.json.costs && Array.isArray(o.json.reject_reasons));
+  // filtros de registros
+  const f = await analyst.c.get('/api/admin/agent/candidates?variant=es-AR&mechanism=anagram&status=approved&difficulty=1');
+  assert.equal(f.status, 200);
+  assert.ok(f.json.items.every((x) => x.variant_code === 'es-AR' && x.mechanism === 'anagram' && x.status === 'approved' && x.difficulty === 1));
+  assert.equal((await analyst.c.get('/api/admin/agent/candidates?status=inventado')).status, 400);
+  // cuotas: solo quien tiene settings.write; el agente no puede cambiarlas
+  assert.equal((await analyst.c.put('/api/admin/settings/agent.mechanism_weights', { value: { anagram: 5 } })).status, 403);
+  assert.equal((await owner.c.put('/api/admin/settings/agent.mechanism_weights', { value: { inventado: 1 } })).status, 400);
+  assert.equal((await owner.c.put('/api/admin/settings/agent.concurrency', { value: 50 })).status, 400);
   assert.equal((await analyst.c.post('/api/admin/agent/control', { state: 'paused' })).status, 403);
   assert.equal((await owner.c.post('/api/admin/agent/control', { state: 'paused', reason: 'prueba' })).status, 200);
   const r = await run({ llm: fakeLlm() });
@@ -314,4 +345,94 @@ test('la programación es persistente: GitHub Actions cada hora, sin ejecuciones
   assert.match(yml, /group: library-agent/);
   assert.match(yml, /ANTHROPIC_API_KEY: \$\{\{ secrets\.ANTHROPIC_API_KEY \}\}/);
   assert.match(yml, /scripts\/library-agent\.js run/);
+});
+
+test('cuotas por peso: proporcionales, configurables y un peso 0 saca el mecanismo', () => {
+  const q = agent.quotas(100000, ['anagram', 'hidden', 'homophone'], { anagram: 2, hidden: 1, homophone: 1 });
+  assert.deepEqual(q, { anagram: 50000, hidden: 25000, homophone: 25000 });
+  assert.deepEqual(agent.quotas(10, ['a', 'b'], { a: 1, b: 0 }), { a: 10, b: 0 });
+  const eq = agent.quotas(100000, require('../src/lib/agent/mechanisms').production());
+  assert.ok(Object.values(eq).every((n) => n === 10000), 'pesos iguales: 10.000 por mecanismo');
+});
+
+test('sin tope diario: produce hasta la meta de biblioteca por mecanismo y pasa a mantenimiento', async () => {
+  await fresh();
+  await set('agent.daily_target_per_variant', 0);
+  await db().run("UPDATE agent_variants SET library_target = 10 WHERE variant_code = 'es-AR'");
+  await db().run("UPDATE agent_variants SET status = 'paused' WHERE variant_code = 'es-ES'");
+  const prev = {};
+  for (const m of await db().all("SELECT mechanism, COUNT(*) AS n FROM clues WHERE variant_code = 'es-AR' AND status = 'published' GROUP BY mechanism")) prev[m.mechanism] = m.n;
+  await run({ llm: fakeLlm() });
+  // 10 de meta entre 10 mecanismos: 1 por mecanismo, contando lo que ya había; nunca se compensa con otro
+  const added = await db().all("SELECT mechanism, COUNT(*) AS n FROM clues WHERE variant_code = 'es-AR' AND status = 'published' AND generator_version = 'agent-2.0' GROUP BY mechanism");
+  assert.ok(added.length > 0);
+  for (const m of added) assert.ok(m.n <= Math.max(0, 1 - (prev[m.mechanism] || 0)), `${m.mechanism}: ${m.n} nuevos y ${prev[m.mechanism] || 0} previos`);
+  const rep = JSON.parse((await cycleRow()).report);
+  assert.equal(rep.daily_cap, false);
+  assert.equal(rep.totals.daily_target, null);
+  const ar = rep.variants.find((v) => v.variant === 'es-AR');
+  assert.equal(ar.library_target, 10);
+  assert.ok(ar.by_mechanism.every((m) => m.library_target === 1 && m.target === null));
+});
+
+test('estados: nada queda a medias; la sospecha de copia va a cuarentena y no se guarda', async () => {
+  await fresh();
+  const base = fakeLlm();
+  const llm = { ...base, async json(args) {
+    const r = await base.json(args);
+    if (args.schema.properties.reviews) r.data.reviews.forEach((x, k) => { if (k === 0) x.copied_suspect = true; });
+    return r;
+  } };
+  await run({ llm });
+  const states = (await db().all('SELECT DISTINCT status FROM agent_candidates')).map((x) => x.status);
+  assert.ok(!states.includes('generated') && !states.includes('validating'), states.join());
+  const q = await db().all("SELECT * FROM agent_candidates WHERE status = 'quarantined'");
+  assert.ok(q.length > 0);
+  assert.ok(q.every((x) => x.clue_id === null && JSON.parse(x.reasons).includes('copied_suspect')));
+  // cada aprobado pasó también las reglas de su mecanismo (control M) y registra sus hechos
+  for (const a of await db().all("SELECT checks, mechanism FROM agent_candidates WHERE status = 'approved'")) {
+    const ch = JSON.parse(a.checks);
+    assert.equal(ch.M.ok, true);
+    assert.equal(ch.M.agent, a.mechanism);
+    assert.ok(ch.M.facts);
+  }
+});
+
+test('retirar contenido cuestionado: sale del juego, queda en cuarentena y en la auditoría', async () => {
+  await fresh();
+  await run({ llm: fakeLlm() });
+  const a = await db().get("SELECT id, clue_id FROM agent_candidates WHERE status = 'approved' LIMIT 1");
+  assert.equal((await analyst.c.post(`/api/admin/agent/candidates/${a.id}/quarantine`, { reason: 'x' })).status, 403);
+  assert.equal((await owner.c.post(`/api/admin/agent/candidates/${a.id}/quarantine`, {})).status, 400);
+  assert.equal((await owner.c.post(`/api/admin/agent/candidates/${a.id}/quarantine`, { reason: 'posible copia de un libro' })).status, 200);
+  assert.equal((await db().get('SELECT status FROM clues WHERE id = ?', [a.clue_id])).status, 'disabled');
+  assert.equal((await db().get('SELECT status FROM agent_candidates WHERE id = ?', [a.id])).status, 'quarantined');
+  assert.ok(await db().get("SELECT 1 FROM audit_log WHERE action = 'agent.quarantine'"));
+});
+
+test('concurrencia: dos variantes a la vez sin pasarse del presupuesto ni repetir juegos de palabras', async () => {
+  await fresh();
+  await set('agent.concurrency', 2);
+  await set('agent.daily_target_per_variant', 3000);
+  await set('agent.daily_budget_usd', 5);
+  const r = await run({ llm: fakeLlm() });
+  assert.equal(r.concurrency, 2);
+  const c = await cycleRow();
+  assert.ok(c.cost_usd <= 5, `gastó ${c.cost_usd}`);
+  const vb = await db().all('SELECT variant_code, status, error, cost_usd FROM agent_batches');
+  assert.equal(new Set(vb.filter((b) => b.status === 'verified').map((b) => b.variant_code)).size, 2, JSON.stringify({ vb, batches: r.batches }));
+  const dup = await db().get("SELECT dedup_key, COUNT(*) AS n FROM clues WHERE generator_version = 'agent-2.0' GROUP BY dedup_key HAVING n > 1");
+  assert.ok(!dup, JSON.stringify(dup));
+});
+
+test('idempotencia: repetir la verificación o la recuperación no duplica nada', async () => {
+  await fresh();
+  await run({ llm: fakeLlm() });
+  const count = async () => (await db().get("SELECT COUNT(*) AS n FROM clues WHERE generator_version = 'agent-2.0'")).n;
+  const n = await count();
+  for (const b of await db().all("SELECT id FROM agent_batches WHERE status = 'verified'")) await agent.verifyBatch(db(), b.id);
+  await agent.recover(db());
+  assert.equal(await count(), n);
+  // cada registro aprobado está efectivamente guardado y publicado
+  assert.equal((await db().get("SELECT COUNT(*) AS n FROM agent_candidates c LEFT JOIN clues k ON k.id = c.clue_id WHERE c.status = 'approved' AND (k.id IS NULL OR k.status <> 'published')")).n, 0);
 });
