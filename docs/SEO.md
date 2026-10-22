@@ -11,7 +11,7 @@
 - Cada críptico enlaza a su mecanismo y a seis crípticos del mismo tipo.
 - Sin desplazamiento horizontal desde 360 px. El diálogo de país solo se abre solo en Jugar y Diario; en las páginas a las que se llega desde Google (inicio, críptico, guía) no tapa el contenido.
 - En producción de Vercel el dominio canónico es siempre https://playcripticos.com aunque `SITE_URL` falte o sea *.vercel.app, y criptico.vercel.app redirige con 301 al dominio propio (salvo /api/).
-- Search Console verificado el 22/10/2026 con `public/googlee415e1c5deea6c8b.html`: no borrar ese archivo.
+- Search Console verificado el 22/10/2026 con `public/googlee415e1c5deea6c8b.html` y Bing Webmaster con `public/BingSiteAuth.xml`: no borrar esos archivos.
 - IndexNow (Bing, Yandex, Seznam, Naver): la tarea diaria `indexnow` manda las páginas nuevas a api.indexnow.org; la clave está en `public/f976081f456136a4fab4599b0fb1881f.txt` (pública por diseño). La primera vez manda las páginas fijas, la guía y hasta 10.000 crípticos. Solo corre con el dominio público.
 - El Organization del inicio lista los perfiles oficiales (Instagram, Facebook, YouTube) en `sameAs`. TikTok queda afuera mientras la cuenta conectada sea personal.
 - `GOOGLE_SITE_VERIFICATION` (variable de entorno) agrega la etiqueta de verificación de Search Console.
