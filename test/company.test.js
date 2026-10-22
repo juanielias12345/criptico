@@ -400,3 +400,15 @@ test('app web instalable: manifiesto con el nombre de la marca e íconos que exi
   const home = await client(env.base).get('/es');
   assert.match(home.text, /apple-touch-icon\.png/);
 });
+
+test('tareas de posicionamiento: cargadas una vez, cada una con fecha límite y sin pisar cambios', async () => {
+  const company = require('../src/services/company');
+  const rows = await env.db.all("SELECT id, due_at, status, area FROM ops_tasks WHERE id LIKE 'SEO-%' ORDER BY id");
+  assert.equal(rows.length, 9);
+  assert.ok(rows.every((r) => /^\d{4}-\d{2}-\d{2}$/.test(r.due_at) && r.status === 'pending' && r.area === 'marketing'));
+  await env.db.run("UPDATE ops_tasks SET status = 'in_progress', due_at = '2026-12-01' WHERE id = 'SEO-01'");
+  await company.seedCompany(env.db);
+  const t = await env.db.get("SELECT status, due_at FROM ops_tasks WHERE id = 'SEO-01'");
+  assert.deepEqual({ ...t }, { status: 'in_progress', due_at: '2026-12-01' }, 'volver a sembrar no pisa lo que cambió un CEO');
+  assert.equal((await env.db.get("SELECT COUNT(*) AS n FROM ops_tasks WHERE id LIKE 'SEO-%'")).n, 9);
+});

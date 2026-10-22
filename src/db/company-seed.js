@@ -193,4 +193,19 @@ const LEGAL_DOCS = [
   ['incidents', 'Registro de incidentes y procedimiento de respuesta', null],
 ];
 
-module.exports = { AGENTS, TASKS, RISKS, INTEGRATIONS, JURISDICTIONS, LEGAL_DOCS, AUDIT_DATE };
+// Tareas de posicionamiento (plan del 22/10/2026). Cada una tiene fecha límite y las hace una persona:
+// los pedidos de enlace se envían a mano, uno por destinatario. Plan: https://claude.ai/artifact/JuDs11id66BghpR5adUneL
+// [id, título, agente, categoría, resultado esperado, fecha límite]
+const SEO_TASKS = [
+  ['SEO-01', 'Poner el enlace a playcripticos.com en la biografía de Instagram, Facebook, TikTok y YouTube', 'marketing-direccion', 'important', 'Las cuatro biografías enlazan al sitio', '2026-10-24'],
+  ['SEO-02', 'Revisión semanal de Search Console: Rendimiento y Páginas indexadas', 'analitica', 'important', 'Captura de Rendimiento y de Páginas enviada a Claude cada lunes', '2026-10-26'],
+  ['SEO-03', 'Pedido de enlace: mensaje a David T. Marchand por itch.io', 'alianzas', 'growth', 'Mensaje enviado (texto en el plan de enlaces); respuesta registrada si llega', '2026-10-29'],
+  ['SEO-04', 'Crear fichas de Play Crípticos en itch.io, AlternativeTo y Product Hunt', 'crecimiento', 'growth', 'Tres fichas publicadas con enlace al sitio', '2026-11-05'],
+  ['SEO-05', 'Mandar a Claude la captura de Rendimiento de Search Console para ajustar títulos', 'analitica', 'important', 'Títulos ajustados según las consultas reales', '2026-11-05'],
+  ['SEO-06', 'Pedido de enlace: mensaje a Francisco M. Carriscondo Esquivel (eldiario.es)', 'alianzas', 'growth', 'Mensaje enviado (texto en el plan de enlaces)', '2026-11-12'],
+  ['SEO-07', 'Pedido de enlace: tres sitios de recursos para docentes de español (ELE)', 'alianzas', 'growth', 'Tres mensajes enviados a sitios distintos', '2026-11-19'],
+  ['SEO-08', 'Comprobar que «play crípticos» aparece primero en Google', 'analitica', 'important', 'Captura de la búsqueda; si no aparece, avisar a Claude', '2026-11-22'],
+  ['SEO-09', 'Presentar Play Crípticos una sola vez en una comunidad de crípticos de Reddit', 'comunidad', 'growth', 'Post publicado respetando las reglas de autopromoción', '2026-11-26'],
+];
+
+module.exports = { SEO_TASKS, AGENTS, TASKS, RISKS, INTEGRATIONS, JURISDICTIONS, LEGAL_DOCS, AUDIT_DATE };

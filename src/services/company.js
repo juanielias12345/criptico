@@ -25,6 +25,10 @@ async function seedCompany(db) {
     await db.run(`INSERT OR IGNORE INTO ops_tasks(id, title, area, category, agent_id, expected, risk, approval_level, status, blocked_reason, objective)
       VALUES (?,?,?,?,?,?,?,?,?,?,?)`, [id, title, area, category, agent, expected, risk, level, status, blocked, 'Surge de la auditoría inicial del ' + SEED.AUDIT_DATE]);
   }
+  for (const [id, title, agent, category, expected, due] of SEED.SEO_TASKS) {
+    await db.run(`INSERT OR IGNORE INTO ops_tasks(id, title, area, category, agent_id, expected, risk, approval_level, status, due_at, objective)
+      VALUES (?,?,'marketing',?,?,?,'low',1,'pending',?,?)`, [id, title, category, agent, expected, due, 'Plan de posicionamiento en Google del 22/10/2026']);
+  }
   for (const r of SEED.RISKS) {
     const [id, area, title, desc, sev, lik, jur, mit, lawyer] = r;
     await db.run(`INSERT OR IGNORE INTO risks(id, area, title, description, severity, likelihood, jurisdiction, mitigation, needs_lawyer, owner_label)

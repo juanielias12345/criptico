@@ -1350,9 +1350,17 @@
 
   function taskTable(items) {
     if (!items.length) return el('p', { class: 'muted', text: 'Sin tareas.' });
-    return table(['ID', 'Tarea', 'Categoría', 'Responsable', 'Estado', 'Riesgo'], items.map((t) => el('tr', {},
+    return table(['ID', 'Tarea', 'Categoría', 'Responsable', 'Estado', 'Fecha límite', 'Riesgo'], items.map((t) => el('tr', {},
       el('td', {}, el('a', { href: '#task/' + t.id, text: t.id })), el('td', {}, t.title, t.blocked_reason ? el('small', { class: 'muted', text: ' · ' + t.blocked_reason }) : ''),
-      el('td', { text: CAT[t.category] || t.category }), el('td', { text: t.agent_name || t.owner_username || '—' }), el('td', {}, statusTag(TSTATUS, t.status)), el('td', {}, t.risk ? sevTag(t.risk) : '—'))));
+      el('td', { text: CAT[t.category] || t.category }), el('td', { text: t.agent_name || t.owner_username || '—' }), el('td', {}, statusTag(TSTATUS, t.status)), el('td', {}, dueCell(t)), el('td', {}, t.risk ? sevTag(t.risk) : '—'))));
+  }
+  // Fecha límite en formato local; vencida si pasó y la tarea sigue abierta.
+  function dueCell(t) {
+    if (!t.due_at) return '—';
+    const d = String(t.due_at).slice(0, 10);
+    const txt = d.split('-').reverse().join('/');
+    const open = !['done', 'cancelled'].includes(t.status);
+    return open && d < new Date().toISOString().slice(0, 10) ? tag(txt + ' · vencida', 'failed') : txt;
   }
   function riskTable(items) {
     if (!items.length) return el('p', { class: 'muted', text: 'Sin riesgos abiertos.' });
