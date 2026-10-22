@@ -16,7 +16,7 @@ Código:
 | Panel | `src/routes/admin-agent.js` y `public/js/admin.js` (`#library`) |
 | Línea de comandos | `scripts/library-agent.js` |
 | Programación | `.github/workflows/library-agent.yml` |
-| Migración | `012_library_agent.sql` |
+| Migraciones | `011_library_agent.sql` y `012_library_agent_states.sql` |
 | Pruebas | `test/library-agent.test.js` y `test/agent-mechanisms.test.js` |
 
 ## Auditoría inicial (22/10/2026)

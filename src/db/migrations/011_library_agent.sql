@@ -28,7 +28,6 @@ CREATE TABLE agent_variants (
   cursor           INTEGER NOT NULL DEFAULT 0,      -- posición en la lista de respuestas
   library_target   INTEGER,                         -- NULL = la meta general; solo la cambian los administradores
   pilot_done       INTEGER NOT NULL DEFAULT 0,      -- ya corrió el piloto de bajo volumen
-  exhausted_at     TEXT,                            -- el léxico no dio más respuestas disponibles (se limpia al encontrar)
   updated_at       TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
 );
 
@@ -67,10 +66,7 @@ CREATE TABLE agent_batches (
   approved         INTEGER NOT NULL DEFAULT 0,
   needs_review     INTEGER NOT NULL DEFAULT 0,
   rejected         INTEGER NOT NULL DEFAULT 0,
-  quarantined      INTEGER NOT NULL DEFAULT 0,
-  failed           INTEGER NOT NULL DEFAULT 0,
   duplicates       INTEGER NOT NULL DEFAULT 0,
-  retries          INTEGER NOT NULL DEFAULT 0,
   input_tokens     INTEGER NOT NULL DEFAULT 0,
   output_tokens    INTEGER NOT NULL DEFAULT 0,
   cost_usd         REAL NOT NULL DEFAULT 0,          -- se suma después de cada llamada, aunque el lote falle
@@ -86,17 +82,15 @@ CREATE TABLE agent_batches (
 CREATE INDEX idx_agent_batches_cycle ON agent_batches(cycle_id, variant_code, status);
 CREATE INDEX idx_agent_batches_status ON agent_batches(status);
 
--- Registro auditable de cada candidato y su recorrido:
---   generated → validating → approved | needs_review | rejected | quarantined | failed
--- con el resultado de cada control. Solo approved cuenta para la meta. Los rechazados,
--- en cuarentena (posible copia o derechos dudosos) y fallidos no llegan a la tabla clues.
+-- Registro auditable de cada candidato: aprobado, pendiente de revisión o rechazado,
+-- con el resultado de cada control. Los rechazados no llegan a la tabla clues.
 CREATE TABLE agent_candidates (
   id               TEXT PRIMARY KEY,
   batch_id         TEXT NOT NULL REFERENCES agent_batches(id),
   cycle_id         TEXT NOT NULL,
   variant_code     TEXT NOT NULL,
   clue_id          TEXT REFERENCES clues(id) ON DELETE SET NULL,
-  status           TEXT NOT NULL CHECK (status IN ('generated','validating','approved','needs_review','rejected','quarantined','failed')),
+  status           TEXT NOT NULL CHECK (status IN ('approved','needs_review','rejected')),
   mechanism        TEXT,
   difficulty       INTEGER,
   clue_text        TEXT,
