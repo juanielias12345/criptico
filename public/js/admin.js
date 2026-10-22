@@ -79,6 +79,8 @@
     if (/^#(invite|reset)\?/.test(location.hash)) return publicTokenView(location.hash.startsWith('#invite') ? 'invite' : 'reset');
     if (!s.user || s.user.role === 'player') return loginView();
     const m = await api('/api/admin/me'); me = m.user; me.role_label = m.role_label; perms = m.permissions;
+    // Quien vino desde /hq sin sesión vuelve a la oficina virtual después de entrar.
+    if (location.hash === '#hq' && perms.includes('hq.read')) { location.href = '/hq'; return; }
     try { meta = await api('/api/admin/panel/meta'); } catch (e) { meta = null; }
     $('#who').textContent = me.username + ' · ' + (m.role_label || me.role);
     $('#logout').hidden = false;

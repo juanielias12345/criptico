@@ -7,7 +7,7 @@
   "functions": {
     "api/index.js": {
       "maxDuration": 60,
-      "includeFiles": "{src/db/migrations/**,seed/**,public/admin.html,data/lexicon/**,data/marketing/**,data/social/plan.json,node_modules/an-array-of-spanish-words/**,node_modules/an-array-of-english-words/**}"
+      "includeFiles": "{src/db/migrations/**,seed/**,public/admin.html,src/views/hq.html,data/lexicon/**,data/marketing/**,data/social/plan.json,node_modules/an-array-of-spanish-words/**,node_modules/an-array-of-english-words/**}"
     }
   },
   "redirects": [

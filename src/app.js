@@ -104,6 +104,13 @@ function createApp({ db, config }) {
   // eslint-disable-next-line no-unused-vars
   app.use(async (err, req, res, next) => {
     if (err instanceof HttpError) {
+      // Acciones rechazadas en el panel: quedan en la auditoría (las usan las alertas de HQ).
+      if (req.user && req.path.startsWith('/api/admin') && (err.status === 403 || ['approval_required', 'stale_version', 'evidence_required'].includes(err.code))) {
+        try {
+          await require('./services/audit').audit(db, { actorId: req.user.id, action: 'security.denied', targetKind: 'route', targetId: req.method + ' ' + req.path.slice(0, 120),
+            details: { code: err.code }, ipHash: req.ipHash, outcome: 'blocked' });
+        } catch { /* la auditoría no debe impedir la respuesta */ }
+      }
       return res.status(err.status).json({ error: err.code, message: err.message, ...(err.details ? { details: err.details } : {}) });
     }
     if (err.type === 'entity.parse.failed') return res.status(400).json({ error: 'invalid_json' });

@@ -44,9 +44,11 @@ async function scan(db) {
   const dbErr = await db.get("SELECT COUNT(*) AS n FROM error_log WHERE created_at >= ? AND (message LIKE '%SQLITE%' OR message LIKE '%libsql%' OR scope = 'db')", [iso(t - DAY)]);
   if (dbErr.n > 0) await push({ key: 'db:' + iso(t).slice(0, 10), kind: 'database', severity: 'critical', title: `${dbErr.n} fallos de base de datos en 24 h`, details: { count: dbErr.n } });
   // 3) Tareas programadas que fallan.
+  const intStreak = await S('hq.integration_failure_streak');
   for (const j of await db.all('SELECT name, consecutive_failures, last_error FROM jobs WHERE consecutive_failures >= 2')) {
-    await push({ key: 'job:' + j.name, kind: 'job', severity: j.consecutive_failures >= 5 ? 'critical' : 'warning',
-      title: `La tarea «${j.name}» falló ${j.consecutive_failures} veces seguidas`, details: { error: j.last_error } });
+    await push({ key: 'job:' + j.name, kind: 'job', severity: j.consecutive_failures >= Math.min(5, intStreak) ? 'critical' : 'warning',
+      title: `La tarea «${j.name}» falló ${j.consecutive_failures} veces seguidas`, details: { error: j.last_error, cause: j.last_error,
+        impact: 'La automatización no está haciendo su trabajo.', owner: 'DevOps y confiabilidad', action: 'Revisar el error en «Tareas y errores» y reintentar desde HQ.' } });
   }
   // 4) Fuentes externas que dejaron de funcionar.
   const maxFail = await S('alerts.source_failures');
@@ -106,10 +108,73 @@ async function scan(db) {
     await push({ key: 'admin_login:' + iso(t).slice(0, 13), kind: 'security', severity: 'critical',
       title: `${failed.n} intentos fallidos de acceso al panel en una hora`, details: { count: failed.n } });
   }
+  await hqRules(db, push, t);
   // Las alertas por hora o día que no se repitieron en una semana se cierran solas.
   await db.run("UPDATE alerts SET status = 'resolved', resolved_at = ? WHERE status <> 'resolved' AND kind IN ('errors','database','security','solve_rate','abandon_rate') AND last_seen_at < ?",
     [now(), iso(t - 7 * DAY)]);
   return { checked: true, alerts: out.length };
+}
+
+// Alertas inmediatas de AI Company HQ: cada una dice gravedad, causa, impacto,
+// responsable y acción recomendada. Se agrupan por clave para no repetirse.
+async function hqRules(db, push, t) {
+  const S = async (k) => getSetting(db, k);
+  const hq = require('./hq');
+  // Agentes con un patrón de fallos.
+  for (const a of await db.all("SELECT DISTINCT r.agent_id, g.name FROM agent_runs r JOIN agents g ON g.id = r.agent_id WHERE r.status = 'error' AND r.started_at >= ?", [iso(t - 7 * DAY)])) {
+    const p = await hq.detectPattern(db, a.agent_id, t);
+    if (!p) continue;
+    await push({ key: 'agent:' + a.agent_id, kind: 'agent', severity: 'warning', title: `${a.name}: ${p.pattern}`,
+      details: { agent: a.agent_id, cause: p.cause_label, impact: 'El trabajo de este agente no se está completando.', owner: 'Supervisión: los dos CEO',
+        action: p.proposal, evidence: p.evidence.slice(0, 5), penalizes: p.penalizes } });
+  }
+  // Informe de 48 h atrasado: el planificador no está corriendo.
+  const rep = await db.get("SELECT next_run_at, enabled FROM jobs WHERE name = 'exec_report'");
+  if (rep && rep.enabled && Date.parse(rep.next_run_at) < t - 3 * HOUR) {
+    await push({ key: 'hq_report_overdue', kind: 'hq_report', severity: 'critical', title: 'El informe ejecutivo de 48 h está atrasado',
+      details: { cause: `Debía generarse a partir de ${rep.next_run_at} y el planificador no lo ejecutó.`, impact: 'Los CEO no reciben el informe a tiempo.',
+        owner: 'DevOps y confiabilidad', action: 'Revisar el flujo «AI Company HQ» en GitHub Actions y el cron de Vercel; se puede generar a mano desde HQ.' } });
+  }
+  // Sobrecostos.
+  const budget = await S('hq.monthly_budget_usd');
+  if (budget > 0) {
+    const spent = (await db.get("SELECT COALESCE(SUM(amount), 0) AS n FROM costs WHERE kind = 'actual' AND created_at >= ?", [iso(t).slice(0, 7) + '-01'])).n;
+    if (spent > budget) {
+      await push({ key: 'budget:' + iso(t).slice(0, 7), kind: 'cost', severity: 'critical', title: `Costos del mes (${spent} USD) por encima del presupuesto (${budget} USD)`,
+        details: { cause: 'Costos reales cargados en el mes.', impact: 'Sobrecosto.', owner: 'Finanzas y presupuestos', action: 'Revisar los costos por proveedor en HQ → Sala de servidores.' } });
+    }
+  }
+  // Publicaciones sin aprobación vigente (la base lo impide; si aparece, es un incidente).
+  const unauthorized = await db.all("SELECT id, title FROM content_pieces WHERE status IN ('scheduled','published') AND (approval_id IS NULL OR approved_hash IS NULL)");
+  for (const p of unauthorized) {
+    await push({ key: 'unauthorized_post:' + p.id, kind: 'content', severity: 'critical', title: `Publicación sin aprobación: «${p.title}»`,
+      details: { cause: 'La pieza figura programada o publicada sin aprobación registrada.', impact: 'Publicación no autorizada.', owner: 'Dirección de marketing',
+        action: 'Pausar la pieza en la red y revisar cómo cambió de estado.' } });
+  }
+  // Cuentas de CEO bloqueadas, desactivadas o con intentos fallidos.
+  for (const u of await db.all("SELECT id, username, disabled, locked_until, failed_logins FROM users WHERE role = 'owner' AND deleted_at IS NULL")) {
+    const locked = u.locked_until && Date.parse(u.locked_until) > t;
+    if (u.disabled || locked || u.failed_logins >= 3) {
+      await push({ key: 'ceo_account:' + u.id + ':' + iso(t).slice(0, 10), kind: 'security', severity: 'critical',
+        title: `Problema con la cuenta de CEO «${u.username}»`,
+        details: { cause: u.disabled ? 'Cuenta desactivada' : locked ? 'Bloqueada por intentos fallidos' : `${u.failed_logins} intentos fallidos`,
+          impact: 'Un CEO puede quedar sin acceso o alguien intenta entrar a su cuenta.', owner: 'Seguridad informática', action: 'Confirmar con el CEO; si no fue él o ella, cambiar la contraseña.' } });
+    }
+  }
+  // Intentos de eludir aprobaciones o permisos.
+  const denied = await db.all("SELECT details, actor_id FROM audit_log WHERE action = 'security.denied' AND created_at >= ?", [iso(t - DAY)]);
+  const bypass = denied.filter((d) => /approval_required|stale_version/.test(d.details || ''));
+  if (bypass.length) {
+    await push({ key: 'approval_bypass:' + iso(t).slice(0, 10), kind: 'security', severity: bypass.length >= 3 ? 'critical' : 'warning',
+      title: `${bypass.length} intento(s) de completar o publicar sin aprobación vigente en 24 h`,
+      details: { cause: 'El servidor rechazó acciones que requerían aprobación.', impact: 'Ninguno: fueron bloqueadas.', owner: 'Seguridad informática',
+        action: 'Revisar la auditoría (acción security.denied).' } });
+  }
+  // Riesgos legales críticos abiertos.
+  for (const r of await db.all("SELECT id, title FROM risks WHERE area = 'legal' AND severity = 'critical' AND status = 'open'")) {
+    await push({ key: 'legal_risk:' + r.id, kind: 'legal', severity: 'critical', title: `Riesgo legal crítico: ${r.title}`,
+      details: { cause: 'Riesgo cargado como crítico.', impact: 'Exposición legal.', owner: 'Dirección de cumplimiento', action: 'Consultar a un profesional (T-009).' } });
+  }
 }
 
 module.exports = { scan, raise };

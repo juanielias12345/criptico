@@ -131,7 +131,9 @@ const PERMISSIONS = {
     'submissions.read', 'submissions.moderate', 'reports.manage', 'languages.write', 'settings.write', 'users.manage', 'audit.read', 'jobs.run',
     'analytics.read', 'players.read', 'players.pii', 'players.manage', 'privacy.manage', 'games.read', 'alerts.read', 'alerts.manage',
     'export.data', 'export.pii', 'bank.read', 'bank.run', 'bank.audit',
-    'company.read', 'company.write', 'approvals.request', 'approvals.decide', 'legal.write', 'content.write', 'security.manage'],
+    'company.read', 'company.write', 'approvals.request', 'approvals.decide', 'legal.write', 'content.write', 'security.manage',
+    // AI Company HQ: privado de los dos CEO, con los mismos permisos para ambos.
+    'hq.read', 'hq.act'],
   // Administrador de contenido: catálogo, fuentes e importaciones, y el rendimiento de los crípticos.
   editor: ['dashboard', 'catalog.read', 'catalog.write', 'sources.read', 'sources.write', 'imports.review', 'reports.manage', 'jobs.run',
     'analytics.read', 'alerts.read', 'export.data', 'bank.read', 'bank.run', 'bank.audit',

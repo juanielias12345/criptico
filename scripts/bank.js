@@ -39,20 +39,30 @@ function table(m) {
   if (cmd === 'run') {
     const minutes = Number(arg('minutes', 0));
     const startedAt = new Date().toISOString();
+    // AI Company HQ: la ejecución queda abierta mientras corre (con latidos), así la oficina
+    // muestra al equipo editorial trabajando solo cuando de verdad hay un lote en curso.
+    const hq = require('../src/services/hq');
+    const runId = await hq.startRun(db, { agentId: 'editorial', summary: 'Lotes del banco de crípticos', stage: 'implementation', source: 'workflow', startedAt });
+    let lastBeat = 0;
     const r = await bank.runCells(db, {
       langs: list(arg('lang')), difficulties: (list(arg('difficulty')) || ['1', '2', '3', '4', '5']).map(Number),
       batches: Number(arg('batches', 1)), size: Number(arg('size', 0)) || undefined, concurrency: Number(arg('concurrency', 2)),
       holder: process.env.GITHUB_RUN_ID ? `gha-${process.env.GITHUB_RUN_ID}` : 'cli',
       deadline: minutes ? Date.now() + minutes * 60000 : undefined,
-      log: (m) => console.log(new Date().toISOString(), m),
+      log: (m) => {
+        console.log(new Date().toISOString(), m);
+        if (Date.now() - lastBeat > 60000) { lastBeat = Date.now(); hq.heartbeat(db, runId).catch(() => {}); }
+      },
     });
     const errors = r.results.filter((x) => x.error);
     if (errors.length) process.exitCode = 1;
     // Registro de la ejecución del equipo editorial en el centro de operaciones (con evidencia).
     const pub = r.results.reduce((s, x) => s + (x.published || 0), 0);
     const run = process.env.GITHUB_RUN_ID ? `https://github.com/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}` : 'línea de comandos';
-    await require('../src/services/company').recordAgentRun(db, { agentId: 'editorial', status: errors.length ? 'error' : 'ok', startedAt,
+    await hq.finishRun(db, runId, { status: errors.length ? 'error' : 'ok', source: 'workflow',
       summary: `${r.results.length} lotes, ${pub} publicados`, evidence: run, error: errors.length ? errors.map((x) => x.error).join('; ').slice(0, 500) : null });
+    await require('../src/services/audit').audit(db, { actorKind: 'agent', actorLabel: 'editorial', action: 'agent.run', targetKind: 'agent', targetId: 'editorial',
+      details: { status: errors.length ? 'error' : 'ok', evidence: run }, outcome: errors.length ? 'error' : 'ok' });
   }
   const m = await bank.matrix(db);
   console.log(table(m));
