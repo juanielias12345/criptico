@@ -136,7 +136,7 @@ test('límite de envíos por día', async () => {
 
 test('con cuenta: notificaciones y "mis propuestas"', async () => {
   const c = client(env.base);
-  const reg = await c.post('/api/auth/register', { username: 'autora1', password: 'una-clave-larga-123' });
+  const reg = await c.post('/api/auth/register', { accept: true, username: 'autora1', password: 'una-clave-larga-123' });
   assert.equal(reg.status, 201, reg.text);
   const r = await c.post('/api/submissions', good({ clue_text: 'Mano revuelta para una simia (4)', answer: 'MONA', definition: 'una simia', explanation: 'Anagrama de MANO: MONA.' }));
   assert.equal(r.status, 201, r.text);

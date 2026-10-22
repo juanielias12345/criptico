@@ -272,7 +272,7 @@ async function adminLogin(page, who) {
 test('#18 panel de administración en escritorio y móvil', async () => {
   const { client } = require('../helpers');
   const c = client(env.base);
-  const reg = await c.post('/api/auth/register', { username: 'panel' + Date.now().toString(36), password: 'Una-clave-de-prueba-9', email: 'panel@example.com' });
+  const reg = await c.post('/api/auth/register', { accept: true, username: 'panel' + Date.now().toString(36), password: 'Una-clave-de-prueba-9', email: 'panel@example.com' });
   assert.equal(reg.status, 201);
   const s = await c.post('/api/game/start', { choice: 'es-AR', country: 'AR' });
   const ans = (await env.db.get('SELECT c.answer FROM games g JOIN clues c ON c.id = g.clue_id WHERE g.id = ?', [s.json.game_id])).answer;
@@ -381,6 +381,7 @@ test('#13 perfil personal en escritorio y móvil: pestañas, detalle de partida,
     await page.goto(env.base + '/es/cuenta');
     await page.fill('#register-form [name=username]', username);
     await page.fill('#register-form [name=password]', 'Una-clave-de-prueba-9');
+    await page.check('#register-form [name=accept]');
     await env.db.run("DELETE FROM rate_limits WHERE bucket LIKE 'register:%'");
     await page.click('#register-form button[type=submit]');
     await page.waitForURL(/\/es\/perfil/);

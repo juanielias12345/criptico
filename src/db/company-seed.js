@@ -180,6 +180,12 @@ const INTEGRATIONS = [
 const JURISDICTIONS = [
   ['AR', 'Argentina'], ['UY', 'Uruguay'], ['CL', 'Chile'], ['MX', 'México'], ['CO', 'Colombia'], ['ES', 'España'], ['EU', 'Unión Europea'],
   ['US', 'Estados Unidos'], ['GB', 'Reino Unido'], ['CA', 'Canadá'], ['AU', 'Australia'],
+  // Ampliación del 22/10/2026 (textos legales globales): resto de los países hispanohablantes y los grandes regímenes de datos.
+  ['PE', 'Perú'], ['EC', 'Ecuador'], ['VE', 'Venezuela'], ['BO', 'Bolivia'], ['PY', 'Paraguay'], ['CR', 'Costa Rica'], ['PA', 'Panamá'],
+  ['DO', 'República Dominicana'], ['GT', 'Guatemala'], ['HN', 'Honduras'], ['SV', 'El Salvador'], ['NI', 'Nicaragua'], ['CU', 'Cuba'],
+  ['PR', 'Puerto Rico'], ['GQ', 'Guinea Ecuatorial'], ['BR', 'Brasil'], ['CH', 'Suiza'], ['IN', 'India'], ['CN', 'China'], ['JP', 'Japón'],
+  ['KR', 'Corea del Sur'], ['SG', 'Singapur'], ['ZA', 'Sudáfrica'], ['NG', 'Nigeria'], ['SA', 'Arabia Saudita'], ['AE', 'Emiratos Árabes Unidos'],
+  ['TR', 'Turquía'], ['NZ', 'Nueva Zelanda'], ['ROW', 'Resto del mundo'],
 ];
 
 // [id, nombre, ruta pública]

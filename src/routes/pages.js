@@ -10,6 +10,8 @@ const PROFILE = require('../services/profile');
 const PTEXT = require('../views/profile-text');
 const { cardText } = require('../views/share-card');
 const GUIDE = require('../views/guide');
+const { legalHtml, legalTitle } = require('../views/legal-md');
+const LEGAL = require('../db/legal-global');
 const { indicators: ES_INDICATORS } = require('../lib/lang/es');
 
 const a = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
@@ -74,6 +76,14 @@ function clueRow(c, lang, cats, { solved, fresh, daily } = {}) {
 const breadcrumbs = (siteUrl, items) => ({ '@type': 'BreadcrumbList',
   itemListElement: items.map(([name, path], i) => ({ '@type': 'ListItem', position: i + 1, name, item: siteUrl + path })) });
 
+// Página de un documento legal publicado, con su versión y fecha de vigencia.
+function legalPage(lang, doc, v) {
+  return `<nav class="crumbs" aria-label="Ruta"><a href="${href(lang, 'legal')}">Información legal</a></nav>
+<article class="prose legal"><h1>${esc(legalTitle(v.body))}</h1>
+<p class="small muted">Versión ${esc(String(v.version))}${v.effective_at ? ` · vigente desde el ${esc(String(v.effective_at).slice(0, 10).split('-').reverse().join('/'))}` : ''}</p>
+${legalHtml(v.body)}</article>`;
+}
+
 const skeleton = '<div class="sheet"><div class="skeleton" aria-hidden="true"><i class="mid"></i><i class="big"></i><i class="big"></i><i class="tiles"></i></div></div>';
 
 module.exports = function pages() {
@@ -96,6 +106,11 @@ module.exports = function pages() {
     const db = req.app.locals.db;
     const urls = [];
     for (const l of UI_LANGS) for (const route of ['home', 'play', 'daily', 'archive', 'contribute', 'help', 'privacy', 'terms', 'credits']) urls.push(href(l, route));
+    if (UI_LANGS.includes('es')) {
+      const company = require('../services/company');
+      for (const doc of LEGAL.PUBLIC.filter((d) => d !== 'terms' && d !== 'privacy')) if (await company.publicLegal(db, doc)) urls.push(href('es', 'legal', '/' + doc));
+      urls.push(href('es', 'legal'));
+    }
     for (const l of UI_LANGS.filter((x) => GUIDE[x])) {
       urls.push(href(l, 'guide'));
       for (const m of Object.values(GUIDE[l].mechs)) urls.push(href(l, 'guide', '/' + m.slug));
@@ -475,12 +490,41 @@ ${rows.length ? `<section class="section" aria-labelledby="more-h"><h2 id="more-
       }
     }
 
+    // Términos y privacidad: si hay una versión aprobada y publicada en la base, se muestra esa.
     for (const key of ['privacy', 'terms', 'credits']) {
-      r.get(P(key), (req, res) => render(req, res, {
-        page: key, path: P(key), alternates: altFor(key), title: t(lang, key + '_title'),
-        body: `<article class="prose"><h1>${esc(t(lang, key + '_title'))}</h1>${CONTENT[lang][key]}</article>`,
+      r.get(P(key), a(async (req, res) => {
+        const v = key !== 'credits' && lang === 'es' ? await require('../services/company').publicLegal(req.app.locals.db, key) : null;
+        render(req, res, {
+          page: key, path: P(key), alternates: altFor(key), title: v ? legalTitle(v.body) : t(lang, key + '_title'),
+          body: v ? legalPage(lang, key, v) : `<article class="prose"><h1>${esc(t(lang, key + '_title'))}</h1>${CONTENT[lang][key]}</article>`,
+        });
       }));
     }
+
+    // ── Documentos legales publicados ──
+    if (lang === 'es') {
+      const pathOf = (doc) => (doc === 'terms' ? P('terms') : doc === 'privacy' ? P('privacy') : `${P('legal')}/${doc}`);
+      r.get(P('legal'), a(async (req, res) => {
+        const company = require('../services/company');
+        const docs = [];
+        for (const doc of LEGAL.PUBLIC) { const v = await company.publicLegal(req.app.locals.db, doc); if (v) docs.push([doc, legalTitle(v.body)]); }
+        render(req, res, {
+          page: 'legal', path: P('legal'), alternates: { es: P('legal') }, title: 'Información legal',
+          body: `<header class="page-head"><h1>Información legal</h1><p class="lead">Las reglas de Play Crípticos y cómo cuidamos tus datos, en todos los países.</p></header>
+<ul class="legal-index">${[['terms', t(lang, 'terms_title')], ['privacy', t(lang, 'privacy_title')], ...docs.filter(([d]) => d !== 'terms' && d !== 'privacy')].map(([d, name]) => `<li><a href="${pathOf(d)}">${esc(name)}</a></li>`).join('')}
+<li><a href="${P('credits')}">${esc(t(lang, 'credits_title'))}</a></li></ul>`,
+        });
+      }));
+      r.get(`${P('legal')}/:doc`, a(async (req, res, next) => {
+        const doc = req.params.doc;
+        if (!LEGAL.PUBLIC.includes(doc)) return next();
+        if (doc === 'terms' || doc === 'privacy') return res.redirect(301, pathOf(doc));
+        const v = await require('../services/company').publicLegal(req.app.locals.db, doc);
+        if (!v) return next();
+        render(req, res, { page: 'legal', path: pathOf(doc), alternates: { es: pathOf(doc) }, title: legalTitle(v.body), body: legalPage(lang, doc, v) });
+      }));
+    }
+
 
     const PT = PTEXT[lang];
     r.get(P('profile'), (req, res) => render(req, res, {

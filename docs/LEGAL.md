@@ -29,3 +29,13 @@ Esto es una guía operativa, no asesoramiento legal. Antes de lanzar con usuario
 - La cuenta es opcional; el correo también. El usuario puede eliminar su cuenta desde su perfil.
 - No hay publicidad ni rastreadores de terceros.
 - Los plazos de retención se configuran en el panel (`retention.*`).
+
+## Textos legales globales (todos los países, 22/10/2026)
+
+- `src/db/legal-global.js` tiene 15 documentos en español pensados para cualquier país: condiciones, privacidad (UE/Reino Unido/Suiza, EE. UU. por estado, Brasil, Argentina, México, Canadá, Asia), cookies, contenido de usuarios, comunidad, propiedad intelectual, moderación, eliminación de cuentas, promociones, consentimientos, contratos, privacidad de apps, matriz de obligaciones, proveedores e incidentes.
+- Edad mínima para crear cuenta: 16 años (18 en la India). Al registrarse, la casilla de aceptación es obligatoria y se guarda `users.terms_accepted_at` (migración 009).
+- **Datos del titular:** no se inventan. Mientras `OWNER` (nombre o razón social, domicilio, país y correo de contacto) tenga campos vacíos, los textos no se cargan. Con los datos completos, el siguiente despliegue los carga como borrador (versión nueva, `source_note = global-2026-10-22`).
+- **Aprobación:** en el panel, Legal → «Aprobar y publicar los textos globales». Solo un CEO (`approvals.decide`). Cada documento pasa por el circuito normal: pedido de aprobación atado al texto exacto, voto del CEO con su cuenta y publicación con evidencia. Ruta: `POST /api/admin/legal/global/approve`.
+- Publicación: las páginas `/es/condiciones`, `/es/privacidad` y `/es/legal/<documento>` leen la versión publicada de la base; el índice está en `/es/legal` y en el pie de página. Los documentos internos quedan vigentes en el panel.
+- La matriz por país suma los países hispanohablantes restantes, Brasil, Suiza, India, China, Japón, Corea, Singapur, Sudáfrica, Nigeria, Arabia Saudita, Emiratos, Turquía, Nueva Zelanda y «Resto del mundo». Una fila no significa cumplimiento verificado: los requisitos se cargan solo con fuente oficial.
+- Son borradores redactados con investigación de agentes, no asesoramiento jurídico. Conviene que un abogado los revise antes de cerrar la versión definitiva.

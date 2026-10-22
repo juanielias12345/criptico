@@ -1708,6 +1708,33 @@
   };
 
   // ── Legal ──
+  // Versión global de los textos (todos los países). Se aprueba con un botón, bajo la cuenta del CEO que lo aprieta.
+  const GLOBAL_NOTE = 'global-2026-10-22';
+  function globalLegal(items) {
+    const rows = items.flatMap((d) => d.versions.filter((v) => v.source_note === GLOBAL_NOTE).map((v) => ({ d, v })));
+    const box = el('div', { class: 'panel' }, el('h2', { text: 'Textos legales globales (todos los países)' }));
+    if (!rows.length) {
+      box.append(el('p', { class: 'muted', text: 'Todavía no se cargaron: faltan los datos del titular (nombre o razón social, domicilio y correo de contacto). Cuando estén, se cargan solos con el próximo despliegue.' }));
+      return box;
+    }
+    const pub = rows.filter((x) => x.v.status === 'published').length;
+    box.append(el('p', { class: 'small muted', text: pub + ' de ' + rows.length + ' publicados. Leé cada texto antes de aprobar: la aprobación queda registrada a tu nombre y vale solo para esta versión exacta.' }),
+      el('p', {}, ...rows.map(({ d, v }) => el('a', { href: '#legaldoc/' + d.id + '/' + v.version + '/' + v.language, class: 'pill ' + (v.status === 'published' ? 'verified' : 'pending'), text: d.name + ' · ' + (LSTATUS[v.status] || v.status) }))));
+    if (can('approvals.decide') && pub < rows.length) {
+      const out = el('div', { class: 'small' });
+      box.append(btn('Aprobar y publicar los textos globales', async () => {
+        if (!confirm('¿Aprobás y publicás las ' + (rows.length - pub) + ' versiones globales pendientes? Queda registrado a tu nombre.')) return;
+        try {
+          const r = await api('/api/admin/legal/global/approve', { method: 'POST', body: {} });
+          out.replaceChildren(el('p', { class: 'flash', text: 'Publicados: ' + r.published + ' de ' + r.items.length + '.' }),
+            ...r.items.filter((x) => x.status !== 'published').map((x) => el('p', { text: x.doc + ': ' + (x.status === 'incomplete' ? 'tiene datos sin completar' : (LSTATUS[x.status] || x.status)) })));
+          setTimeout(() => V.legal(), 1500);
+        } catch (e) { out.replaceChildren(el('p', { class: 'flash error', text: e.message })); }
+      }, 'primary'), out);
+    }
+    return box;
+  }
+
   V.legal = async () => {
     const [docs, ov] = await Promise.all([api('/api/admin/legal/documents'), api('/api/admin/company/overview')]);
     const jur = ov.legal.jurisdictions;
@@ -1720,6 +1747,7 @@
           el('td', { text: pub.length ? pub.map((v) => v.language + (v.source_note === 'baseline' ? ' (texto actual del sitio, sin revisión profesional)' : '')).join(', ') : '—' }),
           el('td', {}, can('legal.write') ? el('a', { href: '#legaldoc/' + d.id + '/new', text: 'Nuevo borrador' }) : ''));
       })),
+      globalLegal(docs.items),
       el('h2', { text: 'Matriz por país y región' }),
       el('p', { class: 'small muted', text: 'Un requisito se carga solo con fuente oficial y fecha de verificación. Que exista una fila no significa que se cumpla en ese país.' }),
       table(['País', 'Mercado', 'Estado', 'Requisitos', 'Fuente oficial', 'Verificado', 'Próxima revisión', 'Abogado', 'Pendiente', ''], jur.map((j) => el('tr', {},

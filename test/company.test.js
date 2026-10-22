@@ -412,3 +412,37 @@ test('tareas de posicionamiento: cargadas una vez, cada una con fecha límite y 
   assert.deepEqual({ ...t }, { status: 'in_progress', due_at: '2026-12-01' }, 'volver a sembrar no pisa lo que cambió un CEO');
   assert.equal((await env.db.get("SELECT COUNT(*) AS n FROM ops_tasks WHERE id LIKE 'SEO-%'")).n, 9);
 });
+
+test('textos legales globales: sin datos del titular no se cargan; con datos, un CEO los aprueba y quedan publicados en /es/legal', async () => {
+  const company = require('../src/services/company');
+  const G = require('../src/db/legal-global');
+  const a = await staff(env, 'owner');
+  const before = await a.c.post('/api/admin/legal/global/approve', {});
+  assert.equal(before.status, 409, 'sin titular no hay nada que aprobar');
+  assert.equal((await company.seedGlobalLegal(env.db)).missing, 'owner');
+  assert.ok(await env.db.get("SELECT 1 FROM legal_jurisdictions WHERE code = 'ROW'"), 'la matriz cubre el resto del mundo');
+  const saved = { ...G.OWNER };
+  Object.assign(G.OWNER, { name: 'Titular de Prueba', address: 'Calle Falsa 123, Ciudad', country: 'Argentina', email: 'legal@example.test' });
+  try {
+    const r = await company.seedGlobalLegal(env.db);
+    assert.equal(r.loaded, Object.keys(G.DOCS).length);
+    assert.equal((await company.seedGlobalLegal(env.db)).loaded, 0, 'se cargan una sola vez');
+    const nonOwner = await staff(env, 'analyst');
+    assert.equal((await nonOwner.c.post('/api/admin/legal/global/approve', {})).status, 403);
+    const res = await a.c.post('/api/admin/legal/global/approve', {});
+    assert.equal(res.status, 200);
+    assert.equal(res.json.published, Object.keys(G.DOCS).length);
+    const page = await client(env.base).get('/es/legal/cookies');
+    assert.equal(page.status, 200);
+    assert.match(page.text, /estrictamente necesarios/);
+    assert.match((await client(env.base).get('/es/legal/ip')).text, /Titular de Prueba/);
+    const terms = await client(env.base).get('/es/condiciones');
+    assert.match(terms.text, /Titular de Prueba/);
+    const idx = await client(env.base).get('/es/legal');
+    assert.match(idx.text, /\/es\/legal\/cookies/);
+    const votes = await env.db.get("SELECT COUNT(*) AS n FROM approval_votes v JOIN approval_items i ON i.id = v.item_id WHERE i.target_kind = 'legal_version' AND v.user_id = ?", [a.user.id]);
+    assert.ok(votes.n >= Object.keys(G.DOCS).length, 'cada documento tiene el voto del CEO');
+    const again = await a.c.post('/api/admin/legal/global/approve', {});
+    assert.equal(again.json.published, Object.keys(G.DOCS).length, 'repetir no duplica');
+  } finally { Object.assign(G.OWNER, saved); }
+});

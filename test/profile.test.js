@@ -20,7 +20,7 @@ async function newPlayer(c = client(env.base)) {
   const username = 'j' + Math.random().toString(36).slice(2, 9);
   // Este archivo crea muchas cuentas desde la misma IP: se vacía el límite de registros.
   await env.db.run("DELETE FROM rate_limits WHERE bucket LIKE 'register:%'");
-  const r = await c.post('/api/auth/register', { username, password: 'Una-clave-de-prueba-9' });
+  const r = await c.post('/api/auth/register', { accept: true, username, password: 'Una-clave-de-prueba-9' });
   assert.equal(r.status, 201, r.text);
   return { c, username, id: r.json.user.id, link_offer: r.json.link_offer };
 }

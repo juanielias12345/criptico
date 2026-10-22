@@ -63,6 +63,7 @@ async function seedCompany(db) {
       VALUES (?,1,'es',?,?,'draft',?,?)`, [doc, body, legalHash(doc, 1, 'es', body), 'Borrador de agentes del 22/10/2026; requiere abogado', 'agente:' + (AUTHOR[doc] || 'legal-direccion')]);
     await audit(db, { actorKind: 'agent', actorLabel: AUTHOR[doc] || 'legal-direccion', action: 'legal.draft_created', targetKind: 'legal_version', targetId: doc + ':1:es' });
   }
+  await seedGlobalLegal(db);
   // Hallazgos iniciales por país: solo completan lo que nadie investigó todavía.
   for (const j of require('../db/company-drafts').JURISDICTION_FINDINGS) {
     const r = await db.run(`UPDATE legal_jurisdictions SET status = 'draft_findings', priority = ?, requirements = ?, official_sources = ?, verified_at = '2026-10-22',
@@ -298,6 +299,69 @@ async function markLegalPublished(db, docId, version, language, evidence, actor)
   return legalVersion(db, docId, v.version, language);
 }
 
+// ── Versión global de los legales (22/10/2026) ──
+// Entra como borrador, una sola vez y solo con los datos reales del titular.
+async function seedGlobalLegal(db) {
+  const G = require('../db/legal-global');
+  for (const id of G.PUBLIC) {
+    await db.run('UPDATE legal_documents SET public_route = ? WHERE id = ? AND public_route IS NULL', [`/es/legal/${id}`, id]);
+  }
+  for (const [id, name, route] of [['app-privacy', 'Privacidad de las aplicaciones', null], ['obligations', 'Matriz de obligaciones por país', null]]) {
+    await db.run('INSERT OR IGNORE INTO legal_documents(id, name, public_route) VALUES (?,?,?)', [id, name, route]);
+  }
+  if (!G.ownerReady()) return { loaded: 0, missing: 'owner' };
+  let loaded = 0;
+  for (const [doc, raw] of Object.entries(G.DOCS)) {
+    if (await db.get('SELECT 1 FROM legal_document_versions WHERE doc_id = ? AND source_note = ?', [doc, G.NOTE])) continue;
+    const body = G.fill(raw).trim();
+    const v = ((await db.get("SELECT MAX(version) AS v FROM legal_document_versions WHERE doc_id = ? AND language = 'es'", [doc])).v || 0) + 1;
+    await db.run(`INSERT INTO legal_document_versions(doc_id, version, language, body, content_hash, status, source_note, created_by)
+      VALUES (?,?,'es',?,?,'draft',?,'agente:legal-direccion')`, [doc, v, body, legalHash(doc, v, 'es', body), G.NOTE]);
+    await audit(db, { actorKind: 'agent', actorLabel: 'legal-direccion', action: 'legal.draft_created', targetKind: 'legal_version', targetId: `${doc}:${v}:es`, details: { scope: 'global' } });
+    loaded++;
+  }
+  return { loaded };
+}
+
+// Un CEO aprueba y publica de una vez todos los borradores de la versión global.
+// Cada documento pasa por el circuito normal: pedido de aprobación atado al texto
+// exacto, voto del CEO y, si queda aprobado, publicación con su evidencia.
+async function approveGlobalLegal(db, actor, siteUrl) {
+  const G = require('../db/legal-global');
+  const rows = await db.all("SELECT * FROM legal_document_versions WHERE source_note = ? AND language = 'es' ORDER BY doc_id", [G.NOTE]);
+  if (!rows.length) throw new HttpError(409, 'no_global_drafts', 'Todavía no hay borradores globales: faltan los datos del titular.');
+  const out = [];
+  for (const v of rows) {
+    if (v.status === 'published') { out.push({ doc: v.doc_id, status: 'published' }); continue; }
+    if (/\[COMPLETAR|\{\{/.test(v.body)) { out.push({ doc: v.doc_id, status: 'incomplete' }); continue; }
+    let approvalId = v.approval_id;
+    if (v.status === 'draft') approvalId = (await submitLegal(db, v.doc_id, v.version, 'es', actor)).id;
+    if (!approvalId) {
+      const pending = await db.get("SELECT id FROM approval_items WHERE target_kind = 'legal_version' AND target_id = ? AND status IN ('pending','approved') ORDER BY created_at DESC", [`${v.doc_id}:${v.version}:es`]);
+      approvalId = pending && pending.id;
+    }
+    const item = approvalId ? await db.get('SELECT * FROM approval_items WHERE id = ?', [approvalId]) : null;
+    if (item && item.status === 'pending' && !(await db.get('SELECT 1 FROM approval_votes WHERE item_id = ? AND version = ? AND user_id = ?', [item.id, item.version, actor.id]))) {
+      await gov.vote(db, item.id, { decision: 'approve', version: item.version, content_hash: item.content_hash, comment: 'Aprobación de la versión global desde el panel' }, actor);
+    }
+    const now2 = await legalVersion(db, v.doc_id, v.version, 'es');
+    if (now2.status === 'approved') {
+      const doc = await db.get('SELECT public_route FROM legal_documents WHERE id = ?', [v.doc_id]);
+      const evidence = doc && doc.public_route
+        ? `Publicado en ${siteUrl}${doc.public_route}: la página lee la versión aprobada de la base`
+        : 'Documento interno: vigente desde la aprobación, visible en el panel';
+      await markLegalPublished(db, v.doc_id, v.version, 'es', evidence, actor);
+      out.push({ doc: v.doc_id, status: 'published' });
+    } else out.push({ doc: v.doc_id, status: now2.status });
+  }
+  return { items: out, published: out.filter((x) => x.status === 'published').length };
+}
+
+// Texto público vigente de un documento: la última versión publicada que no sea el registro inicial.
+async function publicLegal(db, docId) {
+  return db.get("SELECT doc_id, version, body, effective_at FROM legal_document_versions WHERE doc_id = ? AND language = 'es' AND status = 'published' AND source_note IS NOT 'baseline' ORDER BY version DESC LIMIT 1", [docId]);
+}
+
 // ── Piezas de contenido ──
 const PIECE_MATERIAL = ['title', 'campaign', 'objective', 'audience', 'country', 'language', 'platform', 'format', 'idea', 'script', 'body', 'cta', 'hashtags',
   'link', 'alt_text', 'assets', 'rights', 'metric'];
@@ -442,5 +506,5 @@ async function overview(db, { config } = {}) {
   };
 }
 
-module.exports = { seedCompany, agents, recordAgentRun, listTasks, saveTask, requestTaskApproval, saveRisk, addCost, saveIntegration, saveJurisdiction,
+module.exports = { seedCompany, seedGlobalLegal, approveGlobalLegal, publicLegal, agents, recordAgentRun, listTasks, saveTask, requestTaskApproval, saveRisk, addCost, saveIntegration, saveJurisdiction,
   legalDocs, legalVersion, newLegalDraft, submitLegal, markLegalPublished, listPieces, savePiece, getPiece, setPieceStatus, pieceHash, pieceMaterial, overview };

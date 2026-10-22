@@ -27,7 +27,7 @@ const events = async (id) => (await env.db.all('SELECT kind FROM game_events WHE
 async function newPlayer(prefix = 'p') {
   const c = client(env.base);
   const username = prefix + Math.random().toString(36).slice(2, 8);
-  const r = await c.post('/api/auth/register', { username, password: 'Una-clave-de-prueba-9', email: username + '@example.com' });
+  const r = await c.post('/api/auth/register', { accept: true, username, password: 'Una-clave-de-prueba-9', email: username + '@example.com' });
   assert.equal(r.status, 201, r.text);
   return { c, username, id: r.json.user.id };
 }

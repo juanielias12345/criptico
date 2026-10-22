@@ -182,7 +182,9 @@ module.exports = function api() {
     const db = req.app.locals.db;
     if (!(await hit(db, 'register:' + req.ipHash, 10, 'day')).allowed) throw new HttpError(429, 'rate_limited');
     const b = req.body || {};
-    await auth.createUser(db, { username: b.username, password: b.password, email: b.email || null, role: 'player' });
+    // Edad mínima y aceptación de Términos y Privacidad: casilla obligatoria.
+    if (b.accept !== true) throw new HttpError(400, 'accept_required', 'Para crear una cuenta tenés que confirmar tu edad y aceptar los Términos y la Política de privacidad.');
+    await auth.createUser(db, { username: b.username, password: b.password, email: b.email || null, role: 'player', termsAcceptedAt: new Date().toISOString() });
     const s = await auth.login(db, { username: b.username, password: b.password, ipHash: req.ipHash, userAgent: req.headers['user-agent'] });
     cookie(res, req.app.locals.config, 'sid', s.token, { maxAge: 30 * 86400 });
     res.status(201).json({ user: s.user, csrf: s.csrf, link_offer: await linkOffer(db, req.playerId) });

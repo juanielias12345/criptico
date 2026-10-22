@@ -781,13 +781,17 @@
       const p = el('input', { name: 'password', type: 'password', autocomplete: kind === 'login' ? 'current-password' : 'new-password', required: true, minlength: kind === 'login' ? null : '10' });
       const e = el('input', { name: 'email', type: 'email', autocomplete: 'email' });
       const err = el('p', { class: 'field-error', role: 'alert' });
+      // Crear cuenta exige confirmar la edad y aceptar Términos y Privacidad.
+      const ok = el('input', { type: 'checkbox', name: 'accept', required: true });
+      const accept = kind === 'register' ? el('label', { class: 'check' }, ok, el('span', {}, t('accept_terms_a'), el('a', { href: route('terms'), target: '_blank', text: t('terms_title') }),
+        t('accept_terms_b'), el('a', { href: route('privacy'), target: '_blank', text: t('privacy_title') }), '.')) : null;
       const btn = el('button', { class: 'btn ' + (kind === 'login' ? 'ink' : 'primary'), type: 'submit', text: t(kind) });
       const f = el('form', { class: 'form auth-card', id: kind + '-form' }, el('h2', { text: t(kind) }),
         el('label', { class: 'field' }, el('span', { text: t('username') }), u), el('label', { class: 'field' }, el('span', {}, t('password'), kind === 'register' ? el('span', { class: 'hint', text: ' — ' + t('pw_rules') }) : null), p),
-        kind === 'register' ? el('label', { class: 'field' }, el('span', { text: t('email_optional') }), e) : null, err, el('div', {}, btn));
+        kind === 'register' ? el('label', { class: 'field' }, el('span', { text: t('email_optional') }), e) : null, accept, err, el('div', {}, btn));
       f.addEventListener('submit', async (ev) => {
         ev.preventDefault(); err.textContent = ''; btn.setAttribute('aria-busy', 'true');
-        try { await api('/api/auth/' + kind, { method: 'POST', body: { username: u.value, password: p.value, email: e.value || null } }); location.href = route('profile'); } catch (x) { err.textContent = (x.data && x.data.message) || t('error_generic'); btn.removeAttribute('aria-busy'); }
+        try { await api('/api/auth/' + kind, { method: 'POST', body: { username: u.value, password: p.value, email: e.value || null, ...(kind === 'register' ? { accept: ok.checked } : {}) } }); location.href = route('profile'); } catch (x) { err.textContent = (x.data && x.data.message) || t('error_generic'); btn.removeAttribute('aria-busy'); }
       });
       return f;
     };

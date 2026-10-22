@@ -42,7 +42,7 @@ function passwordProblems(password, username) {
   return problems;
 }
 
-async function createUser(db, { username, password, email, role = 'player', displayName }) {
+async function createUser(db, { username, password, email, role = 'player', displayName, termsAcceptedAt }) {
   const u = String(username || '').trim();
   if (!/^[\p{L}\p{N}_.-]{3,30}$/u.test(u)) throw new HttpError(400, 'invalid_username', 'El usuario debe tener entre 3 y 30 letras, números, puntos o guiones.');
   const problems = passwordProblems(password, u);
@@ -54,8 +54,8 @@ async function createUser(db, { username, password, email, role = 'player', disp
     throw new HttpError(409, 'user_exists', 'Ese usuario o correo ya está registrado.');
   }
   const id = uuid();
-  await db.run('INSERT INTO users(id, username, email, password_hash, role, display_name) VALUES (?,?,?,?,?,?)',
-    [id, u, mail, hashPassword(password), role, displayName || null]);
+  await db.run('INSERT INTO users(id, username, email, password_hash, role, display_name, terms_accepted_at) VALUES (?,?,?,?,?,?,?)',
+    [id, u, mail, hashPassword(password), role, displayName || null, termsAcceptedAt || null]);
   return { id, username: u, role };
 }
 

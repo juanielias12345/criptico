@@ -103,6 +103,7 @@ module.exports = function companyRoutes({ need }) {
   r.post('/legal/documents/:doc/drafts', need('legal.write'), a(async (req, res) => res.status(201).json(await company.newLegalDraft(db(req), req.params.doc, req.body || {}, actor(req)))));
   r.post('/legal/documents/:doc/:version/:lang/submit', need('legal.write'), a(async (req, res) => res.status(201).json(await company.submitLegal(db(req), req.params.doc, req.params.version, req.params.lang, actor(req)))));
   r.post('/legal/documents/:doc/:version/:lang/published', need('approvals.decide'), a(async (req, res) => res.json(await company.markLegalPublished(db(req), req.params.doc, req.params.version, req.params.lang, (req.body || {}).evidence, actor(req)))));
+  r.post('/legal/global/approve', need('approvals.decide'), a(async (req, res) => res.json(await company.approveGlobalLegal(db(req), actor(req), req.app.locals.config.siteUrl))));
   r.put('/legal/jurisdictions/:code', need('legal.write'), a(async (req, res) => res.json(await company.saveJurisdiction(db(req), String(req.params.code).toUpperCase(), req.body || {}, actor(req)))));
 
   // Contenido

@@ -22,7 +22,7 @@ test('seguridad del panel (#18): sin sesión 401, jugador 403, permisos por rol'
   const anon = client(env.base);
   assert.equal((await anon.get('/api/admin/dashboard')).status, 401);
   const player = client(env.base);
-  await player.post('/api/auth/register', { username: 'jugador1', password: 'clave-de-jugador-1' });
+  await player.post('/api/auth/register', { accept: true, username: 'jugador1', password: 'clave-de-jugador-1' });
   assert.equal((await player.get('/api/admin/dashboard')).status, 403);
   assert.equal((await player.post('/api/auth/login', { username: 'jugador1', password: 'clave-de-jugador-1', admin: true })).status, 403);
   assert.equal((await owner.c.get('/api/admin/dashboard')).status, 200);
@@ -64,7 +64,7 @@ test('bloqueo tras intentos fallidos, cookies seguras y sin contraseñas en clar
   const login = await client(env.base).post('/api/auth/login', { username: owner.username, password: owner.password });
   const sc = login.headers.get('set-cookie');
   assert.match(sc, /HttpOnly/); assert.match(sc, /SameSite=Lax/);
-  assert.equal((await client(env.base).post('/api/auth/register', { username: 'debil', password: '123' })).status, 400, 'contraseñas débiles rechazadas');
+  assert.equal((await client(env.base).post('/api/auth/register', { accept: true, username: 'debil', password: '123' })).status, 400, 'contraseñas débiles rechazadas');
 });
 
 test('auditoría de acciones administrativas', async () => {

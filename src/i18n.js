@@ -5,9 +5,9 @@
 
 const ROUTES = {
   es: { home: '', play: 'jugar', daily: 'diario', archive: 'archivo', clue: 'c', contribute: 'contribuir', submission: 'propuesta',
-    help: 'ayuda', guide: 'mecanismos', privacy: 'privacidad', terms: 'condiciones', credits: 'creditos', profile: 'perfil', account: 'cuenta' },
+    help: 'ayuda', guide: 'mecanismos', legal: 'legal', privacy: 'privacidad', terms: 'condiciones', credits: 'creditos', profile: 'perfil', account: 'cuenta' },
   en: { home: '', play: 'play', daily: 'daily', archive: 'archive', clue: 'c', contribute: 'contribute', submission: 'submission',
-    help: 'help', guide: 'devices', privacy: 'privacy', terms: 'terms', credits: 'credits', profile: 'profile', account: 'account' },
+    help: 'help', guide: 'devices', legal: 'legal', privacy: 'privacy', terms: 'terms', credits: 'credits', profile: 'profile', account: 'account' },
 };
 
 const T = {
@@ -66,7 +66,7 @@ const T = {
     profile_title: 'Tus estadísticas', played: 'Jugados', solved: 'Resueltos', solve_rate: 'Tasa de acierto', best_streak: 'Mejor racha',
     daily_streak: 'Racha diaria', achievements: 'Logros', favorites: 'Favoritos', my_submissions: 'Mis propuestas', notifications: 'Avisos',
     account_title: 'Cuenta opcional', account_lead: 'No hace falta registrarse para jugar. Una cuenta guarda tu historial en varios dispositivos.',
-    login: 'Entrar', register: 'Crear cuenta', logout: 'Salir', username: 'Usuario', password: 'Contraseña', email_optional: 'Correo (opcional)',
+    login: 'Entrar', register: 'Crear cuenta', logout: 'Salir', username: 'Usuario', password: 'Contraseña', email_optional: 'Correo (opcional)', accept_terms_a: 'Tengo 16 años o más (18 en la India) y acepto los ', accept_terms_b: ' y la ',
     pw_rules: 'Mínimo 10 caracteres.',
     report_title: 'Informar un error', report_reason: 'Motivo', rr_wrong_answer: 'La respuesta es incorrecta', rr_bad_explanation: 'La explicación no convence',
     rr_typo: 'Errata', rr_offensive: 'Contenido ofensivo', rr_rights: 'Problema de derechos', rr_other: 'Otro', report_send: 'Enviar', report_thanks: 'Gracias, lo vamos a revisar.',
@@ -139,7 +139,7 @@ const T = {
     profile_title: 'Your statistics', played: 'Played', solved: 'Solved', solve_rate: 'Solve rate', best_streak: 'Best streak',
     daily_streak: 'Daily streak', achievements: 'Achievements', favorites: 'Favourites', my_submissions: 'My submissions', notifications: 'Notifications',
     account_title: 'Optional account', account_lead: "You don't need an account to play. An account keeps your history across devices.",
-    login: 'Sign in', register: 'Create account', logout: 'Sign out', username: 'Username', password: 'Password', email_optional: 'Email (optional)',
+    login: 'Sign in', register: 'Create account', logout: 'Sign out', username: 'Username', password: 'Password', email_optional: 'Email (optional)', accept_terms_a: 'I am 16 or older (18 in India) and accept the ', accept_terms_b: ' and the ',
     pw_rules: 'At least 10 characters.',
     report_title: 'Report a problem', report_reason: 'Reason', rr_wrong_answer: 'The answer is wrong', rr_bad_explanation: "The explanation doesn't work",
     rr_typo: 'Typo', rr_offensive: 'Offensive content', rr_rights: 'Rights issue', rr_other: 'Other', report_send: 'Send', report_thanks: "Thanks, we'll look into it.",
