@@ -7,7 +7,9 @@
 // Ver docs/REDES.md.
 
 const CAMPAIGN = 'lanzamiento-60';
-const START = '2026-10-26';            // día 0, lunes
+const START = '2026-10-23';            // día 0, viernes (Juan adelantó el lanzamiento el 22/10)
+// Cada cambio que mueve fechas o diseños sube la revisión: el panel vuelve a pedir aprobación.
+const REVISION = 2;
 const DAYS = 60;
 const SITE = 'https://playcripticos.com';
 const TZ = 'America/Argentina/Buenos_Aires';   // UTC−3 todo el año
@@ -60,7 +62,9 @@ function dateOf(n) {
   return d;
 }
 const iso = (d) => d.toISOString().slice(0, 10);
-const human = (d, n) => `${WD[n % 7]} ${d.getUTCDate()} de ${MONTHS[d.getUTCMonth()]}`;
+// Día de la semana real (0 = lunes).
+const dow = (n) => (dateOf(n).getUTCDay() + 6) % 7;
+const human = (d, n) => `${WD[dow(n)]} ${d.getUTCDate()} de ${MONTHS[d.getUTCMonth()]}`;
 // Hora de Argentina (UTC−3) a instante UTC.
 function utc(date, time) {
   const [h, m] = time.split(':').map(Number);
@@ -143,7 +147,7 @@ function assign(clues) {
   const used = new Set(Object.values(lessonExample));
   const pool = older.filter((c) => !used.has(c));
   const stepByStep = pool.splice(0, 13);
-  const weekend = pool.splice(0, 16);
+  const weekend = pool.splice(0, 18);
   return { daily: daily.slice(0, DAYS), spare: newer.filter((c) => !daily.slice(0, DAYS).includes(c)), lessonExample, stepByStep, weekend };
 }
 
@@ -157,7 +161,7 @@ function carouselSchedule() {
     { deck: 'c03-desafio-rioplatense', title: 'Desafío rioplatense', slides: 5 },
   ];
   const order = [];
-  for (let n = 0; n < DAYS; n++) if ([0, 2, 4].includes(n % 7)) order.push(n);
+  for (let n = 0; n < DAYS; n++) if ([0, 2, 4].includes(dow(n))) order.push(n);
   // 26 lugares: 4 ya diseñados, 9 lecciones y 13 «así se resuelve», alternados.
   const kinds = [];
   existing.forEach((e) => kinds.push({ kind: 'existing', ...e }));
@@ -230,10 +234,12 @@ function buildPlan(clues) {
       add('instagram_carousel', 'carrusel', `Día ${n} · Instagram · carrusel: ${title}`, text, files, { alt });
       add('facebook_carousel', 'carrusel', `Día ${n} · Facebook · carrusel: ${title}`, text.replace(' (enlace en la biografía)', ''), files, { alt, link: SITE });
     }
-    if (n % 7 === 5 || n % 7 === 6) {
-      const w = Math.floor(n / 7); const pair = A.weekend.slice(w * 2, w * 2 + 2);
+    if (dow(n) === 5 || (dow(n) === 6 && n > 0)) {
+      // Número de fin de semana: cuántos sábados hubo hasta este día.
+      let w = -1; for (let k = 0; k <= n; k++) if (dow(k) === 5) w++;
+      const pair = A.weekend.slice(w * 2, w * 2 + 2);
       if (pair.length === 2) {
-        const sat = n % 7 === 5;
+        const sat = dow(n) === 5;
         const file = `${dir}/${sat ? 'finde' : 'finde-soluciones'}.png`;
         renders.push({ kind: sat ? 'weekend' : 'weekend_solutions', path: file, pair, label: sat ? 'Dos para el finde' : 'Soluciones del finde' });
         const text = sat
@@ -252,9 +258,9 @@ function buildPlan(clues) {
     add('x_solution', 'post', `Día ${n} · X · solución`, cap.x_solution, [], {});
     add('threads_solution', 'post', `Día ${n} · Threads · solución`, cap.threads_solution, [], {});
     add('facebook_reel', 'reel', `Día ${n} · Facebook · reel`, `${cap.video_title}\n\n${cap.video_desc}`, [`${dir}/video.mp4`], { alt: valt });
-    days.push({ n, date, weekday: WD[n % 7], label: human(d, n), clue: { slug: c.slug, clue: c.clue_text, answer: c.answer, mechanism: c.mechanism }, pieces });
+    days.push({ n, date, weekday: WD[dow(n)], label: human(d, n), clue: { slug: c.slug, clue: c.clue_text, answer: c.answer, mechanism: c.mechanism }, pieces });
   }
-  return { campaign: CAMPAIGN, start: START, timezone: TZ, site: SITE, networks: NETWORKS, slots: Object.fromEntries(Object.entries(SLOTS).filter(([, v]) => NETWORKS.includes(v.platform))), days, renders, spare: A.spare.map((c) => c.slug) };
+  return { campaign: CAMPAIGN, revision: REVISION, start: START, timezone: TZ, site: SITE, networks: NETWORKS, slots: Object.fromEntries(Object.entries(SLOTS).filter(([, v]) => NETWORKS.includes(v.platform))), days, renders, spare: A.spare.map((c) => c.slug) };
 }
 
 module.exports = { buildPlan, CAMPAIGN, START, DAYS, NETWORKS, SLOTS, MECH, steps };

@@ -42,11 +42,13 @@
   const btn = (text, onclick, cls) => el('button', { class: 'btn ' + (cls || ''), type: 'button', onclick, text });
   // El aviso se muestra después de volver a dibujar la vista (si no, el redibujo lo borra).
   // `fn` puede devolver { flash, ok } para avisar con un texto propio.
-  const act = (fn, okMsg) => async () => {
+  const act = (fn, okMsg) => async (e) => {
+    const b = e && e.currentTarget && e.currentTarget.tagName === 'BUTTON' ? e.currentTarget : null;
+    if (b) { if (b.disabled) return; b.disabled = true; b.dataset.label = b.textContent; b.textContent = 'Procesando…'; }
     try {
-      const res = await fn(); await route();
+      const res = await fn(b); await route();
       if (res && res.flash) flash(res.flash, res.ok !== false); else if (okMsg) flash(okMsg, true);
-    } catch (e) { flash(e.message, false); }
+    } catch (err) { flash(err.message, false); if (b) { b.disabled = false; b.textContent = b.dataset.label; } }
   };
 
   // ── Acceso ──
@@ -1611,9 +1613,10 @@
     const weeks = [];
     for (const day of d.days) { const w = Math.floor(day.n / 7); (weeks[w] = weeks[w] || []).push(day); }
     const tot = d.days.reduce((s, x) => { for (const k of Object.keys(x.counts)) s[k] = (s[k] || 0) + x.counts[k]; return s; }, {});
-    const approveDays = (days) => act(async () => {
+    const approveDays = (days) => act(async (b) => {
       let ok = 0; let skipped = 0; let sch = 0;
-      for (const day of days) {
+      for (const [i, day] of days.entries()) {
+        if (b) b.textContent = `Aprobando día ${i + 1} de ${days.length}… (${ok} aprobadas)`;
         const full = await api('/api/admin/social/days/' + day.n);
         const items = full.pieces.filter((p) => sgroup(p.status) === 'pending').map((p) => ({ id: p.id, hash: p.current_hash }));
         if (!items.length) continue;
@@ -1633,7 +1636,7 @@
         return el('div', { class: 'toolbar' }, btn(`Aprobar toda la semana ${w + 1} (${days[0].label} – ${days[days.length - 1].label}, ${n} publicaciones)`, approveDays(days), 'primary'));
       })(),
       el('div', { class: 'kpis' }, kpi('Publicaciones', tot.total || 0), kpi('Para aprobar', tot.pending || 0, { warn: !!tot.pending }), kpi('Aprobadas', tot.approved || 0), kpi('Programadas', tot.scheduled || 0), kpi('Publicadas', tot.published || 0)),
-      weeks.map((days, w) => el('section', { class: 'panel' }, el('div', { class: 'toolbar' }, el('h3', { text: `Semana ${w + 1}` }), el('span', { class: 'muted small', text: `${days[0].label} – ${days[days.length - 1].label}` }),
+      ...weeks.map((days, w) => el('section', { class: 'panel' }, el('div', { class: 'toolbar' }, el('h3', { text: `Semana ${w + 1}` }), el('span', { class: 'muted small', text: `${days[0].label} – ${days[days.length - 1].label}` }),
         can('approvals.decide') && days.some((x) => x.counts.pending) ? btn('Aprobar toda la semana', approveDays(days), 'primary') : ''),
       el('div', { class: 'day-grid' }, days.map((x) => el('a', { class: 'day-folder', href: '#socialday/' + x.n },
         el('span', { class: 'day-n', text: 'Día ' + x.n }), el('strong', { text: x.label }), el('span', { class: 'small muted', text: `${x.counts.total} publicaciones · «${x.clue.clue}»` }), counts(x.counts)))))));
@@ -1648,9 +1651,10 @@
     });
     // Aprobar la semana de este día sin volver al calendario.
     const weekStart = Math.floor(Number(n) / 7) * 7;
-    const approveWeek = act(async () => {
+    const approveWeek = act(async (b) => {
       let ok = 0; let skipped = 0; let sch = 0;
       for (let k = weekStart; k < weekStart + 7 && k < 60; k++) {
+        if (b) b.textContent = `Aprobando día ${k - weekStart + 1} de 7… (${ok} aprobadas)`;
         const full = await api('/api/admin/social/days/' + k);
         const items = full.pieces.filter((p) => sgroup(p.status) === 'pending').map((p) => ({ id: p.id, hash: p.current_hash }));
         if (!items.length) continue;
@@ -1692,7 +1696,7 @@
       el('p', { class: 'muted' }, 'Críptico del día: «', d.clue.clue, '» · respuesta ', el('strong', { text: d.clue.answer }), ' · ', el('a', { href: 'https://playcripticos.com/es/c/' + d.clue.slug, target: '_blank', rel: 'noopener', text: 'ver en el sitio' })),
       el('div', { class: 'toolbar' }, can('approvals.decide') && pend.length ? btn(`Aprobar todo el día (${pend.length})`, approve(pend.map((p) => ({ id: p.id, hash: p.current_hash }))), 'primary') : '', can('approvals.decide') ? btn('Aprobar toda la semana ' + (weekStart / 7 + 1), approveWeek) : '',
         btn('Descargar el día (.zip)', async (e) => { const b = e.currentTarget; b.disabled = true; b.textContent = 'Preparando…'; try { await downloadDay(d); } catch (x) { flash(x.message); } b.disabled = false; b.textContent = 'Descargar el día (.zip)'; })),
-      Object.entries(byNet).map(([net, ps]) => el('section', { class: 'panel' }, el('h3', { text: NETS[net] || net }), el('div', { class: 'social-list' }, ps.map(card)))));
+      ...Object.entries(byNet).map(([net, ps]) => el('section', { class: 'panel' }, el('h3', { text: NETS[net] || net }), el('div', { class: 'social-list' }, ps.map(card)))));
   };
 
   // ── Legal ──

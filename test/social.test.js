@@ -17,17 +17,17 @@ let env; let owner;
 test.before(async () => { env = await makeEnv(); owner = await staff(env, 'owner'); });
 test.after(async () => { await env.close(); });
 
-test('el plan: 60 días desde el lunes 26/10, solo Instagram, Facebook, TikTok y YouTube, con horario', () => {
+test('el plan: 60 días desde el viernes 23/10, solo Instagram, Facebook, TikTok y YouTube, con horario', () => {
   assert.equal(PLAN.days.length, 60);
-  assert.equal(PLAN.days[0].date, '2026-10-26');
-  assert.equal(PLAN.days[59].date, '2026-12-24');
+  assert.equal(PLAN.days[0].date, '2026-10-23');
+  assert.equal(PLAN.days[59].date, '2026-12-21');
   assert.deepEqual([...new Set(ALL.map((p) => p.platform))].sort(), ['facebook', 'instagram', 'tiktok', 'youtube']);
   for (const d of PLAN.days) {
     assert.ok(d.pieces.length >= 7, 'día ' + d.n);
     assert.ok(d.pieces.every((p) => p.date === d.date && p.schedule_note && /T\d\d:\d\d:00Z$/.test(p.scheduled_at)));
   }
   // 9 h en Argentina = 12 h UTC
-  assert.equal(PLAN.days[0].pieces.find((p) => p.slot === 'instagram_clue').scheduled_at, '2026-10-26T12:00:00Z');
+  assert.equal(PLAN.days[0].pieces.find((p) => p.slot === 'instagram_clue').scheduled_at, '2026-10-23T12:00:00Z');
   // Un críptico distinto cada día, y todos existen en el catálogo del sitio.
   const answers = PLAN.days.map((d) => d.clue.answer);
   assert.equal(new Set(answers).size, 60);
@@ -105,7 +105,7 @@ test('Metricool: arma el pedido de cada red y guarda el identificador como evide
   assert.deepEqual(reel.providers, [{ network: 'instagram' }]);
   assert.equal(reel.instagramData.type, 'REEL');
   assert.equal(reel.media[0], 'https://playcripticos.com/social/d01/video.mp4');
-  assert.deepEqual(reel.publicationDate, { dateTime: '2026-10-27T21:00:00', timezone: 'America/Argentina/Buenos_Aires' });
+  assert.deepEqual(reel.publicationDate, { dateTime: '2026-10-24T21:00:00', timezone: 'America/Argentina/Buenos_Aires' });
   const story = social.metricoolBody(await get('instagram_story'), 'https://playcripticos.com');
   assert.equal(story.instagramData.type, 'STORY');
   assert.equal(story.text, '');
@@ -140,6 +140,30 @@ test('Metricool: arma el pedido de cada red y guarda el identificador como evide
   // Nada sin aprobar se programa.
   const pend = await env.db.get("SELECT * FROM content_pieces WHERE campaign = ? AND day = 5 LIMIT 1", [social.CAMPAIGN]);
   assert.deepEqual(await social.scheduleOne(env.db, pend), { skipped: true });
+});
+
+test('nueva revisión del calendario: lo no publicado toma fecha y archivos nuevos y vuelve a pedir aprobación', async () => {
+  await env.db.run("UPDATE settings SET value = '1' WHERE key = 'social.plan_revision'");
+  const ig = PLAN.days[1].pieces.find((p) => p.slot === 'instagram_reel');
+  await env.db.run("UPDATE content_pieces SET scheduled_at = '2026-10-27T00:00:00Z', body = 'viejo' WHERE id = ?", [ig.id]);
+  const before = await env.db.get('SELECT status, approval_id FROM content_pieces WHERE id = ?', [ig.id]);
+  assert.equal(before.status, 'approved');
+  await env.db.run(`INSERT INTO content_pieces(id, title, campaign, platform, format, body, assets, status, day, slot, scheduled_at)
+    VALUES ('l60-d05-instagram_weekend', 'viejo finde', ?, 'instagram', 'imagen', 'x', '[]', 'editing', 5, 'instagram_weekend', '2026-10-31T15:00:00Z')`, [social.CAMPAIGN]);
+  await social.seedPlan(env.db);
+  const after = await env.db.get('SELECT * FROM content_pieces WHERE id = ?', [ig.id]);
+  assert.equal(after.status, 'editing');
+  assert.equal(after.scheduled_at, ig.scheduled_at);
+  assert.equal(after.body, ig.body);
+  assert.equal(after.approved_hash, null);
+  assert.equal((await env.db.get('SELECT status FROM approval_items WHERE id = ?', [before.approval_id])).status, 'withdrawn');
+  assert.equal((await env.db.get("SELECT status FROM content_pieces WHERE id = 'l60-d05-instagram_weekend'")).status, 'paused');
+  // Lo ya programado en Metricool no se toca.
+  assert.equal((await env.db.get("SELECT status FROM content_pieces WHERE campaign = ? AND day = 1 AND slot = 'facebook_reel'", [social.CAMPAIGN])).status, 'scheduled');
+  assert.equal(JSON.parse((await env.db.get("SELECT value FROM settings WHERE key = 'social.plan_revision'")).value), PLAN.revision);
+  // Correr de nuevo no cambia nada.
+  await social.seedPlan(env.db);
+  assert.equal((await env.db.get('SELECT status FROM content_pieces WHERE id = ?', [ig.id])).status, 'editing');
 });
 
 test('las piezas de redes que ya no se usan quedan pausadas y fuera de las carpetas', async () => {

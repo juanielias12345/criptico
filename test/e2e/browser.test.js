@@ -552,6 +552,9 @@ test('redes: un botón arriba aprueba toda la semana; desde un día también se 
     await page.goto(env.base + '/admin#social');
     const top = page.locator('#admin-main > .toolbar button', { hasText: 'Aprobar toda la semana 1' });
     await top.waitFor();
+    // Las carpetas de los 60 días se dibujan (no texto «[object HTMLElement]»).
+    assert.equal(await page.locator('#admin-main .day-folder').count(), 60);
+    assert.ok(!(await page.textContent('#admin-main')).includes('[object'));
     await top.click();
     await page.locator('#admin-main .flash', { hasText: 'Aprobadas:' }).waitFor({ timeout: 60000 });
     const w1 = await env.db.get("SELECT COUNT(*) AS n FROM content_pieces WHERE campaign = 'lanzamiento-60' AND day BETWEEN 0 AND 6 AND status = 'approved'");
@@ -560,6 +563,8 @@ test('redes: un botón arriba aprueba toda la semana; desde un día también se 
     await page.locator('#admin-main > .toolbar button', { hasText: 'Aprobar toda la semana 2' }).waitFor();
     // Desde la carpeta de un día de la semana 3.
     await page.goto(env.base + '/admin#socialday/15');
+    await page.locator('#admin-main .social-card').first().waitFor();
+    assert.ok(!(await page.textContent('#admin-main')).includes('[object'));
     await page.locator('button', { hasText: 'Aprobar toda la semana 3' }).click();
     await page.locator('#admin-main .flash', { hasText: 'Semana 3: aprobadas' }).waitFor({ timeout: 60000 });
     const w3 = await env.db.get("SELECT COUNT(*) AS n FROM content_pieces WHERE campaign = 'lanzamiento-60' AND day BETWEEN 14 AND 20 AND status = 'approved'");

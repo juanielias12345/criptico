@@ -5,7 +5,7 @@ npm test          # unidad e integración (servidor real + base temporal)
 npm run test:e2e  # navegador Chromium sin interfaz
 ```
 
-Último resultado (22/10/2026, Node 22, Linux): **119/119** en `npm test` y **18/18** en `npm run test:e2e`. También corren en GitHub Actions (flujo «Pruebas») en cada cambio de `main`.
+Último resultado (22/10/2026, Node 22, Linux): **120/120** en `npm test` y **18/18** en `npm run test:e2e`. También corren en GitHub Actions (flujo «Pruebas») en cada cambio de `main`.
 
 ## Cobertura de las 25 pruebas obligatorias
 
@@ -137,8 +137,9 @@ Problemas que encontró la revisión y se corrigieron:
 
 | Qué se prueba | Prueba |
 |---|---|
-| 60 días del 26/10 al 24/12, solo Instagram, Facebook, TikTok y YouTube, horario en hora argentina, un críptico distinto por día |
-| Las piezas de redes que ya no se usan quedan pausadas y fuera de las carpetas | «las piezas de redes que ya no se usan…» | «el plan…» |
+| 60 días del 23/10 al 21/12, solo Instagram, Facebook, TikTok y YouTube, horario en hora argentina, un críptico distinto por día |
+| Las piezas de redes que ya no se usan quedan pausadas y fuera de las carpetas | «las piezas de redes que ya no se usan…» |
+| Nueva revisión del calendario: lo no publicado toma fecha y archivos nuevos y vuelve a pedir aprobación; lo programado no se toca | «nueva revisión del calendario…» | «el plan…» |
 | Cada imagen y video del plan existe de verdad | «cada archivo…» |
 | Los crípticos del día están publicados en el catálogo | «los crípticos del día…» |
 | El calendario se carga una sola vez, en edición, sin aprobación | «el calendario se carga…» |

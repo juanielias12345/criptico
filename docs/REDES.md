@@ -1,6 +1,6 @@
 # Redes: calendario de lanzamiento de 60 días
 
-El calendario empieza el **lunes 26/10/2026 (día 0)** y termina el **jueves 24/12/2026 (día 59)**. Son 506 publicaciones en Instagram, Facebook, TikTok y YouTube Shorts. El 22/10/2026 Juan decidió usar solo esas cuatro redes: las piezas de X, Threads y WhatsApp que ya estaban cargadas quedaron pausadas (no se borraron) y no aparecen en las carpetas. Para sumar una red de nuevo, agregarla en `NETWORKS` de `scripts/social/plan.js` y regenerar. Todas siguen el manual de marca ([MARCA.md](MARCA.md)).
+El calendario empieza el **viernes 23/10/2026 (día 0)** y termina el **lunes 21/12/2026 (día 59)**: Juan adelantó el lanzamiento el 22/10 (revisión 2 del plan; al desplegar, lo no publicado toma las fechas y archivos nuevos y vuelve a pedir aprobación). Son 510 publicaciones en Instagram, Facebook, TikTok y YouTube Shorts. El 22/10/2026 Juan decidió usar solo esas cuatro redes: las piezas de X, Threads y WhatsApp que ya estaban cargadas quedaron pausadas (no se borraron) y no aparecen en las carpetas. Para sumar una red de nuevo, agregarla en `NETWORKS` de `scripts/social/plan.js` y regenerar. Todas siguen el manual de marca ([MARCA.md](MARCA.md)).
 
 ## Qué hay cada día
 

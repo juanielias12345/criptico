@@ -45,21 +45,64 @@ async function seedPlan(db) {
   if (!p) return { loaded: 0 };
   const all = p.days.flatMap((d) => d.pieces);
   await retireOffPlan(db);
+  await revisePlan(db, p, all);
   const have = (await db.get('SELECT COUNT(*) AS n FROM content_pieces WHERE campaign = ? AND platform IN (' + nets(p).map(() => '?').join(',') + ')', [CAMPAIGN, ...nets(p)])).n;
   if (have >= all.length) return { loaded: 0 };
-  const stmts = all.map((x) => ({
+  const stmts = insertStmts(all);
+  for (let i = 0; i < stmts.length; i += 100) await runBatch(db, stmts.slice(i, i + 100));
+  await audit(db, { actorKind: 'agent', actorLabel: 'produccion-contenido', action: 'content.calendar_loaded', targetKind: 'campaign', targetId: CAMPAIGN,
+    details: { days: p.days.length, pieces: all.length, start: p.start } });
+  await settingSet(db, 'social.plan_revision', p.revision || 1);
+  await supersedeOldCarousels(db);
+  return { loaded: all.length - have };
+}
+
+const insertStmts = (all) => all.map((x) => ({
     sql: `INSERT OR IGNORE INTO content_pieces(id, title, campaign, objective, audience, language, platform, format, body, hashtags, link, alt_text, assets,
       rights, metric, scheduled_at, status, created_by, day, slot, schedule_note, manual) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     args: [x.id, x.title, CAMPAIGN, 'Lanzamiento: que la gente juegue en playcripticos.com', 'Personas que juegan juegos de palabras en español',
       'es', x.platform, x.format, x.body, x.hashtags, x.link, x.alt_text, JSON.stringify(x.assets), RIGHTS,
       'Partidas completadas que llegan desde esta red', x.scheduled_at, 'editing', 'agente:produccion-contenido', x.day, x.slot, x.schedule_note, x.manual ? 1 : 0],
   }));
-  for (let i = 0; i < stmts.length; i += 100) {
-    if (db.client && db.client.batch) await db.client.batch(stmts.slice(i, i + 100), 'write');
-    else for (const s of stmts.slice(i, i + 100)) await db.run(s.sql, s.args);
-  }
-  await audit(db, { actorKind: 'agent', actorLabel: 'produccion-contenido', action: 'content.calendar_loaded', targetKind: 'campaign', targetId: CAMPAIGN,
-    details: { days: p.days.length, pieces: all.length, start: p.start } });
+
+async function runBatch(db, stmts) {
+  if (db.client && db.client.batch) await db.client.batch(stmts, 'write');
+  else for (const s of stmts) await db.run(s.sql, s.args);
+}
+async function settingSet(db, key, value) {
+  await db.run(`INSERT INTO settings(key, value, updated_at) VALUES (?,?,?)
+    ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`, [key, JSON.stringify(value), now()]);
+}
+
+// Nueva revisión del calendario (por ejemplo, otra fecha de inicio): las piezas que
+// todavía no salieron toman el texto, los archivos y el horario nuevos y vuelven a
+// «en edición»; su aprobación anterior se retira porque las imágenes cambiaron.
+// Lo programado o publicado no se toca. Las que ya no están en el plan se pausan.
+async function revisePlan(db, p, all) {
+  const rev = p.revision || 1;
+  const row = await db.get("SELECT value FROM settings WHERE key = 'social.plan_revision'");
+  const stored = row ? JSON.parse(row.value) : 1;
+  const any = (await db.get('SELECT COUNT(*) AS n FROM content_pieces WHERE campaign = ?', [CAMPAIGN])).n;
+  if (!any || stored >= rev) return 0;
+  const T = now();
+  const open = "status NOT IN ('scheduled','published')";
+  await db.run(`UPDATE approval_items SET status = 'withdrawn', updated_at = ? WHERE status IN ('pending','approved') AND target_kind = 'content_piece'
+    AND target_id IN (SELECT id FROM content_pieces WHERE campaign = ? AND ${open})`, [T, CAMPAIGN]);
+  const stmts = [...insertStmts(all), ...all.map((x) => ({
+    sql: `UPDATE content_pieces SET title = ?, platform = ?, format = ?, body = ?, hashtags = ?, link = ?, alt_text = ?, assets = ?, scheduled_at = ?, day = ?, slot = ?,
+      schedule_note = ?, manual = ?, status = 'editing', approval_id = NULL, approved_hash = NULL, external_id = NULL, external_error = NULL, schedule_attempts = 0, updated_at = ?
+      WHERE id = ? AND ${open}`,
+    args: [x.title, x.platform, x.format, x.body, x.hashtags, x.link, x.alt_text, JSON.stringify(x.assets), x.scheduled_at, x.day, x.slot, x.schedule_note, x.manual ? 1 : 0, T, x.id],
+  }))];
+  for (let i = 0; i < stmts.length; i += 100) await runBatch(db, stmts.slice(i, i + 100));
+  const r = await db.run(`UPDATE content_pieces SET status = 'paused', updated_at = ? WHERE campaign = ? AND ${open} AND status <> 'paused' AND updated_at <> ?`, [T, CAMPAIGN, T]);
+  await settingSet(db, 'social.plan_revision', rev);
+  await audit(db, { actorKind: 'agent', actorLabel: 'produccion-contenido', action: 'content.calendar_revised', targetKind: 'campaign', targetId: CAMPAIGN,
+    details: { revision: rev, start: p.start, pieces: all.length, paused: r.changes } });
+  return all.length;
+}
+
+async function supersedeOldCarousels(db) {
   // Las piezas sueltas de carruseles que ahora están en el calendario se pausan si nadie las decidió todavía.
   for (const id of ['mk-c01', 'mk-c02', 'mk-c03', 'mk-c04']) {
     const old = await db.get("SELECT * FROM content_pieces WHERE id = ? AND status = 'pending_approval'", [id]);
@@ -71,7 +114,6 @@ async function seedPlan(db) {
     await audit(db, { actorKind: 'agent', actorLabel: 'produccion-contenido', action: 'content.superseded', targetKind: 'content_piece', targetId: id,
       details: { reason: 'Incluida en el calendario de 60 días' } });
   }
-  return { loaded: all.length - have };
 }
 
 const STATUS_GROUPS = { pending: ['idea', 'research', 'production', 'editing', 'rights_review', 'pending_approval'], approved: ['approved'],
