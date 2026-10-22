@@ -81,3 +81,12 @@ test('origen por jugador y cuenta: apagado hasta publicar la privacidad; despué
   assert.equal((await analyst.c.get('/api/admin/analytics/origins')).status, 200);
   assert.equal((await client(env.base).get('/api/admin/analytics/origins')).status, 401);
 });
+
+test('enlaces cortos de las bios: /ig, /fb, /tt y /yt llevan al sitio con la etiqueta de origen', async () => {
+  for (const [k, v] of [['ig', 'instagram'], ['fb', 'facebook'], ['tt', 'tiktok'], ['yt', 'youtube']]) {
+    const r = await fetch(env.base + '/' + k, { redirect: 'manual' });
+    assert.equal(r.status, 302);
+    assert.equal(r.headers.get('location'), `/es?utm_source=${v}&utm_medium=social&utm_campaign=bio`);
+  }
+  assert.equal(classify({ ref: '', us: 'tiktok', um: 'social', uc: 'bio' }, 'playcripticos.com').source, 'TikTok');
+});
