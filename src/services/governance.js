@@ -223,6 +223,7 @@ async function onApproved(db, item, actor) {
       if (content.setting === 'governance.dual_approval') await relaxPending(db);
     }
   }
+  if (item.target_kind === 'growth_proposal') await require('./growth').onApproved(db, item, actor);
   if (item.target_kind === 'ops_task') {
     await db.run("UPDATE ops_tasks SET status = CASE WHEN status IN ('in_review','pending','blocked') THEN 'approved' ELSE status END, approval_id = ?, updated_at = ? WHERE id = ?", [item.id, now(), item.target_id]);
   }

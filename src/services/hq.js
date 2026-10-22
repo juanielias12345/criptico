@@ -33,6 +33,7 @@ const ZONES = [
   ['ceo-juan', 'p1', 'Despacho de Juan Ignacio Elías', 'ceo', ['Centro de mando', 'Aprobaciones', 'Informes']],
   ['ceo-ines', 'p1', 'Despacho de Inés de Gregorio', 'ceo', ['Centro de mando', 'Aprobaciones', 'Informes']],
   ['direction', 'p1', 'Operaciones y planificación', 'team', ['Coordinación', 'Planificación', 'Proyectos', 'Finanzas', 'Conocimiento']],
+  ['commercial', 'p1', 'Estrategia comercial', 'team', ['Líneas de ingreso', 'Requisitos con métricas reales', 'Estudio de mercado', 'Propuestas para los CEO', 'Ejecución de lo aprobado']],
   ['arch', 'p2', 'Arquitectura de software', 'team', ['Arquitectura', 'Auditoría de código']],
   ['backend', 'p2', 'Programación backend', 'team', ['APIs', 'Permisos', 'Lógica de negocio']],
   ['frontend', 'p2', 'Desarrollo frontend', 'team', ['Interfaz web', 'Funcionalidades', 'Rendimiento']],
@@ -67,6 +68,7 @@ const ZONES = [
   ['youtube', 'p5', 'YouTube', 'social', ['Publicaciones', 'Comentarios']],
   ['facebook', 'p5', 'Facebook', 'social', ['Publicaciones', 'Comentarios', 'Mensajes']],
   ['linkedin', 'p5', 'LinkedIn', 'social', ['Publicaciones']],
+  ['social-mgmt', 'p5', 'Gerencia de redes sociales', 'team', ['Comparación de las cuatro redes', 'Propuestas por red', 'Informe a la Dirección de marketing y publicidad']],
   ['community', 'p5', 'Comunidad y moderación', 'team', ['Respuestas preparadas', 'Incidencias', 'Moderación']],
   ['product', 'p6', 'Estrategia de producto', 'team', ['Hoja de ruta', 'Mejoras de juego']],
   ['editorial', 'p6', 'Banco de acertijos', 'team', ['Creación', 'Validación', 'Explicaciones', 'Idiomas', 'Dificultades', 'Duplicados', 'Pendientes de aprobación', 'Reportes de errores']],
@@ -83,6 +85,8 @@ const AGENT_ZONE = {
   contratos: 'contracts', regulatorio: 'reg-alerts', 'cumplimiento-editorial': 'human-review',
   editorial: 'editorial', 'marketing-direccion': 'brand', crecimiento: 'seo-aso', 'produccion-contenido': 'production', localizacion: 'localization',
   analitica: 'growth-analytics', publicidad: 'ads', alianzas: 'pr', comunidad: 'community', moderacion: 'community',
+  'redes-instagram': 'instagram', 'redes-facebook': 'facebook', 'redes-tiktok': 'tiktok', 'redes-youtube': 'youtube', 'gerente-redes': 'social-mgmt',
+  'estrategia-comercial': 'commercial',
 };
 // Dependencias y código relacionado (se cargan solo si el agente no tiene datos propios).
 const AGENT_LINKS = {
@@ -100,6 +104,15 @@ const AGENT_LINKS = {
   'produccion-contenido': [['marketing-direccion'], ['scripts/social/', 'data/social/plan.json']],
   'marketing-direccion': [['integration:metricool'], ['src/services/social.js']],
   automatizacion: [['integration:vercel', 'integration:github-actions'], ['.github/workflows/', 'vercel.json']],
+  ...Object.fromEntries(['instagram', 'facebook', 'tiktok', 'youtube'].map((n) => ['redes-' + n, [['integration:metricool', 'analitica'], ['src/services/growth.js', '.github/workflows/hq.yml']]])),
+  'gerente-redes': [['redes-instagram', 'redes-facebook', 'redes-tiktok', 'redes-youtube'], ['src/services/growth.js']],
+  'estrategia-comercial': [['analitica', 'mercado', 'finanzas'], ['src/services/growth.js', 'src/services/commercial-market.js']],
+};
+// Cadena de mando de crecimiento: cada red informa a su gerente, y el gerente a la dirección.
+const SUPERVISORS = {
+  'redes-instagram': 'Gerencia de redes sociales', 'redes-facebook': 'Gerencia de redes sociales', 'redes-tiktok': 'Gerencia de redes sociales', 'redes-youtube': 'Gerencia de redes sociales',
+  'gerente-redes': 'Dirección de marketing y publicidad', publicidad: 'Dirección de marketing y publicidad', comunidad: 'Dirección de marketing y publicidad',
+  'produccion-contenido': 'Dirección de marketing y publicidad', crecimiento: 'Dirección de marketing y publicidad', alianzas: 'Dirección de marketing y publicidad',
 };
 
 const PLATFORMS = { instagram: 'Instagram', tiktok: 'TikTok', youtube: 'YouTube', facebook: 'Facebook', linkedin: 'LinkedIn' };
@@ -117,6 +130,9 @@ async function seedHq(db) {
   }
   // El informe ejecutivo lo genera una tarea programada real: es el proceso de «Operaciones ejecutivas».
   await db.run("UPDATE agents SET runtime = 'job:exec_report' WHERE id = 'operaciones' AND runtime = 'on_demand'");
+  // La dirección de marketing también conduce la publicidad (22/10/2026).
+  await db.run("UPDATE agents SET name = 'Dirección de marketing y publicidad', mission = 'Marca, propuesta de valor, publicidad y estrategia por plataforma; recibe el informe de la Gerencia de redes.' WHERE id = 'marketing-direccion' AND name = 'Dirección de marketing y marca'");
+  for (const [id, sup] of Object.entries(SUPERVISORS)) await db.run("UPDATE agents SET supervisor = ? WHERE id = ? AND supervisor = 'Los dos CEO'", [sup, id]);
 }
 
 // ── Registro de ejecuciones y eventos ──
@@ -675,7 +691,7 @@ async function socialRoom(db, platform) {
     scheduled: c.scheduled || 0, approved: c.approved || 0, pending_approval: c.pending_approval || 0, published: c.published || 0, incidents: c.publish_error || 0,
     next, published_items: published, errors: errors.map((e) => ({ ...e, external_error: scrub(e.external_error) })), integrations: integ,
     comments: { available: false, note: 'No disponible: no hay acceso a comentarios ni mensajes (el plan de Metricool no tiene API de bandeja).' },
-    results: { available: false, note: 'No disponible: las métricas de las publicaciones no se importan todavía.' },
+    results: { available: true, note: 'Las métricas de la cuenta y las propuestas del agente de la red están en «Métricas y estrategia».' },
   };
 }
 

@@ -592,6 +592,14 @@ test('AI Company HQ: oficina en escritorio y móvil, ficha del agente, lista e i
       await page.locator('#hq-list .acard', { hasText: 'Editorial' }).first().click();
       await page.locator('#drawer-body', { hasText: 'Calidad' }).waitFor();
       await page.click('#drawer-close');
+      // Salas de crecimiento: métricas de la red (con carga de CSV) y estrategia comercial.
+      await page.evaluate(() => document.querySelector('[data-zone="instagram"]').dispatchEvent(new MouseEvent('click', { bubbles: true })));
+      await page.locator('#drawer-body', { hasText: 'Métricas y estrategia' }).waitFor();
+      assert.equal(await page.locator('#drawer-body textarea').count(), 1);
+      await page.click('#drawer-close');
+      await page.evaluate(() => document.querySelector('[data-zone="commercial"]').dispatchEvent(new MouseEvent('click', { bubbles: true })));
+      await page.locator('#drawer-body', { hasText: 'Métricas reales que usa' }).waitFor();
+      await page.click('#drawer-close');
       if (viewport.width > 900) {
         // Informe manual: se genera y se abre con las secciones A–J.
         await page.click('#b-reports');

@@ -2,7 +2,8 @@
 # alertas inmediatas. Cada hora revisa en la base qué tareas de HQ están vencidas y
 # las ejecuta (el turno y los reintentos se guardan en la base: no se pierden con un
 # reinicio y no se duplican). Complementa al cron diario de Vercel. Ver docs/HQ.md.
-# También permite registrar a mano una ejecución de un agente con su evidencia.
+# También permite registrar a mano una ejecución de un agente con su evidencia e importar
+# las métricas diarias de redes que trae la rutina de Metricool (docs/CRECIMIENTO.md).
 name: AI Company HQ
 
 on:
@@ -11,7 +12,7 @@ on:
   workflow_dispatch:
     inputs:
       action:
-        description: tick (tareas vencidas) o record (registrar una ejecución)
+        description: tick (tareas vencidas), record (registrar una ejecución) o metrics (importar métricas de redes)
         required: false
         default: tick
       agent:
@@ -28,6 +29,10 @@ on:
         default: ''
       evidence:
         description: 'record: enlace verificable (commit, PR, archivo)'
+        required: false
+        default: ''
+      metrics:
+        description: 'metrics: JSON con las métricas diarias por red (lo envía la rutina de Metricool)'
         required: false
         default: ''
 
@@ -56,6 +61,7 @@ jobs:
           HQ_STATUS: ${{ inputs.status }}
           HQ_SUMMARY: ${{ inputs.summary }}
           HQ_EVIDENCE: ${{ inputs.evidence }}
+          HQ_METRICS: ${{ inputs.metrics }}
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           DATABASE_AUTH_TOKEN: ${{ secrets.DATABASE_AUTH_TOKEN }}
           SITE_URL: https://playcripticos.com

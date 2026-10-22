@@ -17,6 +17,8 @@
 - **Actividad en tiempo real**: el panel «Actividad» muestra los eventos registrados (inicio, etapa, archivo, prueba, resultado, error, pedido de aprobación, bloqueo, fin, costo). Se consulta cada 8 segundos y avisa con un mensaje ante errores, bloqueos y pedidos de aprobación.
 - **Funciona en celular**: en pantallas chicas la ficha y la actividad ocupan la pantalla completa.
 
+Las salas de cada red, la «Gerencia de redes sociales» y la «Estrategia comercial» muestran métricas, informes y propuestas de los agentes de crecimiento ([CRECIMIENTO.md](CRECIMIENTO.md)).
+
 ## 3. Estados de un agente
 
 El estado se calcula en `deriveState` (`src/services/hq.js`), en este orden de prioridad:

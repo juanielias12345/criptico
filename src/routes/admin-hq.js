@@ -6,6 +6,7 @@
 const express = require('express');
 const hq = require('../services/hq');
 const reports = require('../services/hq-reports');
+const growth = require('../services/growth');
 const { HttpError } = require('../services/util');
 
 const a = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
@@ -37,6 +38,22 @@ module.exports = function hqRoutes({ need }) {
   r.get('/hq/rooms/product', read, a(async (req, res) => res.json(await hq.productRoom(db(req)))));
   r.get('/hq/rooms/legal', read, a(async (req, res) => res.json(await hq.legalRoom(db(req)))));
   r.get('/hq/rooms/marketing', read, a(async (req, res) => res.json(await hq.marketingRoom(db(req)))));
+  // Crecimiento: métricas por red, gerencia de redes y estrategia comercial (docs/CRECIMIENTO.md).
+  r.get('/hq/growth/social/:network', read, a(async (req, res) => res.json(await growth.networkView(db(req), req.params.network))));
+  r.get('/hq/growth/manager', read, a(async (req, res) => res.json(await growth.managerView(db(req)))));
+  r.get('/hq/growth/commercial', read, a(async (req, res) => res.json(await growth.commercialView(db(req)))));
+  r.post('/hq/growth/metrics', act, a(async (req, res) => {
+    const b = req.body || {};
+    res.status(201).json(await growth.importMetrics(db(req), { network: b.network, rows: b.rows, csv: b.csv, source: b.csv ? 'csv' : 'manual' }, req.user));
+  }));
+  r.post('/hq/growth/run/:what', act, a(async (req, res) => {
+    const job = { social: 'social_insights', commercial: 'commercial_review' }[req.params.what];
+    if (!job) throw new HttpError(404, 'not_found');
+    const out = await require('../services/jobs').runJob(db(req), job);
+    if (out.skipped) throw new HttpError(409, 'job_running', 'El análisis ya se está ejecutando.');
+    if (out.status === 'failed') throw new HttpError(500, 'job_failed', 'El análisis falló: ' + out.error);
+    res.json(out);
+  }));
 
   r.get('/hq/reports', read, a(async (req, res) => res.json({ items: await reports.list(db(req), req.user.id), next: await reports.nextRun(db(req)) })));
   r.post('/hq/reports', act, a(async (req, res) => {

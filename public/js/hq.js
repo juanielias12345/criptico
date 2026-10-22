@@ -501,7 +501,11 @@
       if (id === 'servers') extra = serversView(await api('/api/admin/hq/rooms/servers'));
       else if (id === 'meeting') extra = await meetingView();
       else if (z.kind === 'ceo') extra = ceoView(z);
-      else if (z.kind === 'social') extra = socialView(await api('/api/admin/hq/rooms/social/' + id));
+      else if (z.kind === 'social') {
+        extra = socialView(await api('/api/admin/hq/rooms/social/' + id));
+        if (GROWTH_NETS.includes(id)) extra.unshift(...networkView(await api('/api/admin/hq/growth/social/' + id), id));
+      } else if (id === 'social-mgmt') extra = managerView(await api('/api/admin/hq/growth/manager'));
+      else if (id === 'commercial') extra = commercialView(await api('/api/admin/hq/growth/commercial'));
       else if (z.floor === 'p3') extra = legalView(await api('/api/admin/hq/rooms/legal'));
       else if (z.floor === 'p4') extra = marketingView(await api('/api/admin/hq/rooms/marketing'));
       else if (z.floor === 'p6') extra = productView(await api('/api/admin/hq/rooms/product'));
@@ -534,6 +538,93 @@
       sec('Comentarios y mensajes', [el('p', { class: 'notice', text: d.comments.note }), el('p', { class: 'notice', text: d.results.note })], true),
       sec('Incidencias', [listOr(d.errors, (e) => [e.title, el('span', { class: 'meta', text: e.external_error || '' })], 'Sin errores de publicación.')]),
       el('a', { href: '/admin#social', text: 'Abrir el calendario de redes' })];
+  }
+  // ── Crecimiento: métricas por red, gerencia de redes y estrategia comercial ──
+  const GROWTH_NETS = ['instagram', 'facebook', 'tiktok', 'youtube'];
+  const PROP_ST = { proposed: ['Esperando a un CEO', 'st-review'], approved: ['Aprobada', 'st-working'], executing: ['En ejecución', 'st-working'], measured: ['Medida', 'st-idle'],
+    rejected: ['Rechazada', 'st-error'], withdrawn: ['Retirada', 'st-idle'] };
+  const pct = (x) => (x == null ? null : Math.round(x * 1000) / 10 + ' %');
+  const delta = (cur, prev) => (cur == null ? '—' : prev == null ? String(cur) : `${cur} (antes ${prev})`);
+  function proposalList(items, zoneId) {
+    return listOr(items, (p) => {
+      const [label, cls] = PROP_ST[p.status] || [p.status, 'st-idle'];
+      const res = p.result;
+      const vote = (decision, input) => async (e) => {
+        const b = e.currentTarget; b.disabled = true;
+        try {
+          await api('/api/admin/approvals/' + p.approval_id + '/vote', { method: 'POST', body: { decision, comment: input.value, version: p.approval_version, content_hash: p.approval_hash } });
+          flash(decision === 'approve' ? 'Aprobada: el plan pasa a tareas.' : 'Decisión registrada.'); await refresh(); openZone(zoneId);
+        } catch (err) { flash(err.message, false); b.disabled = false; }
+      };
+      const c = el('input', { placeholder: 'Comentario (obligatorio para rechazar o pedir cambios)', 'aria-label': 'Comentario' });
+      return [el('b', { text: p.title }), ' ', el('span', { class: 'chip ' + cls, text: label }),
+        el('span', { class: 'meta', text: p.rationale }),
+        el('span', { class: 'meta', text: 'Plan: ' + p.plan.map((s) => (s.ceo ? 'CEO' : s.agent) + ': ' + s.title).join(' · ') }),
+        p.tasks.length ? el('span', { class: 'meta', text: 'Tareas: ' + p.tasks.join(', ') }) : null,
+        res ? el('span', { class: 'meta', text: res.measured === false ? res.note : res.metric ? `Resultado: ${res.metric} ${res.before} → ${res.after}${res.improved ? ' (mejoró)' : res.improved === false ? ' (no mejoró)' : ''}` : `Avance: ${res.tasks_done} de ${res.tasks_total} tareas` }) : null,
+        p.status === 'proposed' && p.approval_status === 'pending' ? el('div', { class: 'form' }, c, el('div', { class: 'actions' },
+          el('button', { class: 'hq-btn small primary', type: 'button', onclick: vote('approve', c), text: 'Aprobar y ejecutar' }),
+          el('button', { class: 'hq-btn small', type: 'button', onclick: vote('changes', c), text: 'Pedir cambios' }),
+          el('button', { class: 'hq-btn small danger', type: 'button', onclick: vote('reject', c), text: 'Rechazar' }))) : null];
+    }, 'Sin propuestas todavía.');
+  }
+  const runBtn = (what, zoneId, text) => el('button', { class: 'hq-btn small', type: 'button', text, onclick: async (e) => {
+    const b = e.currentTarget; b.disabled = true;
+    try { await api('/api/admin/hq/growth/run/' + what, { method: 'POST', body: {} }); flash('Análisis terminado.'); await refresh(); openZone(zoneId); } catch (err) { flash(err.message, false); b.disabled = false; }
+  } });
+  function networkView(d, zoneId) {
+    const l = d.live; const m = l.metrics; const p = l.previous_metrics;
+    const csv = el('textarea', { rows: 5, placeholder: 'fecha;seguidores;alcance;interacciones;publicaciones;reels;interacciones_reels\n2026-10-21;1200;3400;210;2;1;150', 'aria-label': 'Métricas en CSV' });
+    const imp = el('form', { class: 'form', onsubmit: async (e) => {
+      e.preventDefault(); const b = e.submitter; if (b) b.disabled = true;
+      try { const r = await api('/api/admin/hq/growth/metrics', { method: 'POST', body: { network: zoneId, csv: csv.value } }); flash(`Importadas ${r.imported.map((x) => x.values).join(' + ')} cifras.`); openZone(zoneId); }
+      catch (err) { flash(err.message, false); if (b) b.disabled = false; }
+    } }, el('label', {}, 'Pegá un CSV (una fila por día; separador coma o punto y coma)', csv), el('button', { class: 'hq-btn small primary', type: 'submit', text: 'Importar métricas' }));
+    const rep = d.report && d.report.content;
+    return [
+      sec('Métricas y estrategia', [
+        l.data.note ? el('p', { class: 'notice bad', text: l.data.note }) : el('p', { class: 'sub', text: `${l.period.label}: ${l.period.from} al ${l.period.last} · datos hasta el ${l.data.last_day}` }),
+        el('div', { class: 'kpis' }, kpi(m.followers, 'seguidores'), kpi(m.net_followers, 'saldo de seguidores'), kpi(m.reach, 'alcance'), kpi(pct(m.engagement_rate), 'tasa de interacción'),
+          kpi(m.interactions_per_post, 'interacciones por publicación'), kpi(l.site.entries, 'visitas al sitio desde la red'), kpi(l.site.players, 'jugadores nuevos'), kpi(l.site.entries_per_1k_reach, 'visitas por 1.000 de alcance')),
+        kv([['Alcance', delta(m.reach, p.reach)], ['Interacciones', delta(m.interactions, p.interactions)], ['Publicaciones', delta(m.posts, p.posts)],
+          ['Videos / reels', m.videos == null ? '—' : `${m.videos} · ${m.video_ipp ?? '—'} interacciones c/u`], ['Imágenes / carruseles', m.feed_posts == null ? '—' : `${m.feed_posts} · ${m.feed_ipp ?? '—'} interacciones c/u`],
+          ['Calendario', `${l.pipeline.published} publicadas en el período · ${l.pipeline.next7} aprobadas para 7 días · ${l.pipeline.pending} por aprobar`]]),
+        rep ? el('p', { class: 'meta', text: `Último informe del agente: ${fmt(d.report.created_at)} · ${rep.findings.length} hallazgos · entregado a la Gerencia de redes` }) : el('p', { class: 'na', text: 'El agente todavía no entregó informes.' }),
+        el('div', { class: 'actions' }, runBtn('social', zoneId, 'Analizar ahora'))], true),
+      sec('Propuestas del agente', [proposalList(d.proposals, zoneId), el('p', { class: 'notice', text: 'Cadena: agente de la red → Gerencia de redes → Dirección de marketing y publicidad → decisión final de un CEO. Al aprobarse, el plan se convierte en tareas y a los 14 días se mide la métrica.' })], true),
+      sec('Cargar métricas', [imp, listOr(d.imports, (x) => `${fmt(x.created_at)} · ${x.source} · ${x.rows} cifras · ${x.first_day} → ${x.last_day}${x.actor ? ' · ' + x.actor : ''}`, 'Sin importaciones.'),
+        el('p', { class: 'notice', text: 'Fuente: Metricool (rutina diaria) o un CSV. Una nueva importación del mismo día reemplaza la anterior. Nunca se estiman cifras.' })]),
+    ];
+  }
+  function managerView(d) {
+    const c = d.report && d.report.content;
+    return [
+      c ? sec('Informe para la Dirección de marketing y publicidad', [
+        el('p', { class: 'sub', text: `${c.period.from} → ${c.period.to} · ${c.networks_with_data} de 4 redes con datos · generado ${fmt(d.report.created_at)}` }),
+        el('ul', { class: 'plain' }, c.recommendations.map((r) => el('li', { text: r }))),
+        listOr(c.ranking, (r) => [el('b', { text: r.name }), ' ', r.stale ? el('span', { class: 'chip st-blocked', text: 'sin datos recientes' }) : null,
+          el('span', { class: 'meta', text: `${r.new_players} jugadores nuevos · ${r.site_entries} visitas · alcance ${r.reach ?? '—'} · interacción ${pct(r.engagement_rate) ?? '—'} · saldo de seguidores ${r.net_followers ?? '—'} · ${r.next7} piezas aprobadas para 7 días` })]),
+        el('p', { class: 'notice', text: c.note })], true) : el('p', { class: 'na', text: 'Todavía no hay un informe consolidado.' }),
+      el('div', { class: 'actions' }, runBtn('social', 'social-mgmt', 'Analizar las cuatro redes ahora')),
+      sec('Propuestas de las redes', [proposalList(d.proposals, 'social-mgmt')], true),
+    ];
+  }
+  function commercialView(d) {
+    const c = d.report && d.report.content; const v = d.live.values; const L = d.metric_labels;
+    const val = (k) => (v[k] == null ? 'sin dato' : v[k] + (L[k][1] || ''));
+    return [
+      sec('Métricas reales que usa', [kv(Object.keys(L).map((k) => [L[k][0], val(k)])), el('p', { class: 'meta', text: `${d.live.notes.d7} ${d.live.notes.followers}` })], true),
+      c ? sec('Líneas de ingreso', [el('p', { class: 'sub', text: `Último análisis: ${fmt(d.report.created_at)}` }),
+        listOr(c.options, (o) => [el('b', { text: o.name }), ' ', el('span', { class: 'chip ' + (o.ready ? 'st-working' : 'st-waiting'), text: o.ready ? 'Lista para proponer' : 'Faltan requisitos' }),
+          el('span', { class: 'meta', text: o.summary }),
+          el('span', { class: 'meta', text: 'Requisitos: ' + o.requirements.map((r) => `${r.label} ${r.value == null ? 'sin dato' : r.value + r.unit} / ${r.min}${r.unit} ${r.met ? '✓' : '✗'}`).join(' · ') }),
+          o.scenario ? el('span', { class: 'meta', text: `Estimación (no es promesa): ~${o.scenario.subscribers} suscriptores, ~US$ ${o.scenario.monthly_usd} por mes. Supuestos: ${o.scenario.assumptions}.` }) : el('span', { class: 'meta', text: o.revenue }),
+          el('span', { class: 'meta', text: 'Riesgos: ' + o.risks.join(' ') }),
+          o.sources.length ? el('span', { class: 'meta' }, 'Fuentes: ', ...o.sources.flatMap((s, i) => [i ? ' · ' : '', el('a', { href: s.url, target: '_blank', rel: 'noopener', text: `${s.title} (consultado ${s.checked})` })])) : null]),
+        el('p', { class: 'notice', text: c.note })], true) : el('p', { class: 'na', text: 'Todavía no hay un análisis comercial.' }),
+      el('div', { class: 'actions' }, runBtn('commercial', 'commercial', 'Analizar ahora')),
+      sec('Propuestas para los CEO', [proposalList(d.proposals, 'commercial'), el('p', { class: 'notice', text: 'La última palabra es de un CEO. Al aprobar, el plan se convierte en tareas con responsable; lo que requiere a un CEO (cuentas de cobro, firmas, precios) queda asignado a ustedes.' })], true),
+    ];
   }
   function legalView(d) {
     return [sec('Documentos', [listOr(d.docs, (x) => `${x.title}: v${x.version || '—'} (${x.status || 'sin versión'})`)], true),

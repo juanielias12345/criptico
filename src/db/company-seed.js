@@ -117,6 +117,19 @@ const AGENTS = [
     ['Clasificar mensajes', 'Borradores para revisión humana', 'Escalar casos sensibles'], ['Panel (reportes y propuestas)'], ['Respuestas automáticas solo con política aprobada', 'No simula usuarios'], ['Tiempo de respuesta'], 1, 'none'],
   [51, 'moderacion', 'Comunidad', 'Moderación', 'Aplicar las normas de comunidad a propuestas y reportes.',
     ['Moderar spam y abuso según reglas'], ['Panel (propuestas y reportes)'], ['Decisiones de publicación siempre humanas'], ['Pendientes de moderación'], 1, 'none'],
+  // Crecimiento (22/10/2026): un agente de métricas por red, su gerente y estrategia comercial.
+  ...[['instagram', 'Instagram'], ['facebook', 'Facebook'], ['tiktok', 'TikTok'], ['youtube', 'YouTube']].map(([k, n], i) => [52 + i, 'redes-' + k, 'Redes sociales', `Métricas y estrategia de ${n}`,
+    `Medir ${n} todos los días con cifras importadas, detectar qué funciona y proponer cambios de estrategia y publicaciones basados en los números.`,
+    ['Seguidores, alcance, interacciones y formatos', 'Visitas y jugadores que llegan desde la red', 'Propuestas con evidencia y métrica a medir', 'Medir el resultado de lo aprobado'],
+    ['Métricas importadas (Metricool, CSV)', 'Origen del tráfico del sitio', 'Calendario de redes'], ['No publica ni cambia el calendario sin aprobación de un CEO', 'Sin datos no propone: informa que faltan'],
+    ['Tasa de interacción', 'Visitas al sitio por cada 1.000 de alcance', 'Jugadores nuevos desde la red'], 1, 'job:social_insights']),
+  [56, 'gerente-redes', 'Redes sociales', 'Gerencia de redes sociales', 'Consolidar los informes de las cuatro redes, comparar resultados y elevar recomendaciones a la Dirección de marketing y publicidad.',
+    ['Comparar redes por resultado real', 'Priorizar propuestas', 'Informar a la dirección de marketing y publicidad'], ['Informes de los agentes por red', 'Origen del tráfico'],
+    ['No aprueba: eleva a la dirección y la decisión final es de los CEO'], ['Jugadores nuevos desde redes', 'Propuestas aprobadas que mejoraron su métrica'], 1, 'job:social_insights'],
+  [57, 'estrategia-comercial', 'Dirección y operaciones', 'Estrategia comercial y monetización', 'Proponer cómo generar ingresos con el juego según las métricas reales y el mercado; ejecutar solo lo que aprueben los CEO.',
+    ['Evaluar líneas de ingreso con requisitos medibles', 'Casos de negocio con supuestos explícitos', 'Plan de ejecución con tareas y responsables', 'Medir el avance de lo aprobado'],
+    ['Métricas del panel', 'Estudio de mercado con fuentes fechadas', 'Centro de operaciones (tareas)'], ['No cobra, no contrata ni firma: todo compromiso económico pasa por los CEO', 'Las cifras estimadas se marcan como estimación'],
+    ['Líneas de ingreso listas para lanzar', 'Ingresos registrados'], 1, 'job:commercial_review'],
 ];
 
 // Backlog inicial que sale de la auditoría del 22/10/2026 (docs/AUDITORIA.md).
