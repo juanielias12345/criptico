@@ -118,7 +118,7 @@ const DEFAULT_SETTINGS = {
   // Decisión del dueño (22/10/2026): sin tope diario, producir hasta la meta de biblioteca.
   // 0 = sin tope diario; un número > 0 limita los aprobados por día y por variante.
   'agent.daily_target_per_variant': 0,
-  'agent.library_target_per_variant': 100000,
+  'agent.library_target_per_variant': 34000,
   // Mecanismos en producción (cada uno tiene su agente en src/lib/agent/mechanisms).
   'agent.mechanisms': ['anagram', 'hidden', 'reversal', 'container', 'deletion', 'charade', 'homophone', 'double_definition', 'initials', 'combination'],
   // Peso de cada mecanismo en la meta (la cuota es proporcional al peso). Pedido del dueño: partes iguales.
