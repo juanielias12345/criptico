@@ -1,6 +1,6 @@
 # Agente Autónomo de Biblioteca
 
-Pedido del dueño (22/10/2026): completar **100.000 crípticos aprobados, únicos y válidos por cada variante del español**, repartidos entre los mecanismos, sin intervención manual y sin bajar la calidad.
+Pedido del dueño (22/10/2026): completar **100.000 crípticos aprobados, únicos y válidos por cada variante del español**; el 23/10/2026 bajó la meta a **34.000 por variante**, el techo real del léxico (migración `013_library_target_34k.sql`), repartidos entre los mecanismos, sin intervención manual y sin bajar la calidad.
 
 - La meta de cada variante se reparte entre los mecanismos según su **peso**. Por pedido del dueño, los pesos son iguales: con 10 mecanismos, 10.000 por mecanismo y variante.
 - Decisión del dueño (22/10/2026): **sin tope diario**. El agente produce hasta la meta y lo frenan solo el presupuesto y la calidad.
@@ -94,7 +94,7 @@ La explicación pública sale del árbol que el validador resolvió, nunca de un
 
 ## Variantes
 
-Salen de `language_variants` (español activo). Hoy son 22: es-AR, es-BO, es-CL, es-CO, es-CR, es-CU, es-DO, es-EC, es-ES, es-GQ, es-GT, es-HN, es-MX, es-NI, es-PA, es-PE, es-PR, es-PY, es-SV, es-US, es-UY y es-VE. El agente no crea variantes: si se activa o desactiva una, la toma o la deja en la siguiente ejecución. Meta total: 22 × 100.000 = **2.200.000 aprobados**.
+Salen de `language_variants` (español activo). Hoy son 22: es-AR, es-BO, es-CL, es-CO, es-CR, es-CU, es-DO, es-EC, es-ES, es-GQ, es-GT, es-HN, es-MX, es-NI, es-PA, es-PE, es-PR, es-PY, es-SV, es-US, es-UY y es-VE. El agente no crea variantes: si se activa o desactiva una, la toma o la deja en la siguiente ejecución. Meta total: 22 × 34.000 = **748.000 aprobados**.
 
 ## Cómo trabaja un lote
 
@@ -142,13 +142,13 @@ Ninguna puntuación compensa un control obligatorio: basta un error lógico, un 
   - La revisión cuesta unos US$ 0,002 por candidato.
   - Con 30 % a 50 % de aprobación, sale de US$ 0,02 a 0,07 por aprobado. Para 66.000 aprobados por día serían de **US$ 1.300 a 4.600 por día**. Con Sonnet 5.5 como generador, el costo baja más o menos a la mitad.
 
-- **Para la meta completa** (2.200.000 aprobados) serían de **US$ 44.000 a 154.000**, estimado sin medir. Desde el primer lote real, el panel muestra el costo medido por aprobado y la proyección con ese dato.
+- **Para la meta completa** (748.000 aprobados) serían de **US$ 15.000 a 52.000**, estimado sin medir. Desde el primer lote real, el panel muestra el costo medido por aprobado y la proyección con ese dato.
 
 ## Límite de capacidad (importante)
 
 El agente aprueba solo lo que puede verificar.
 
-- El léxico tiene unas **5.700 respuestas con definiciones respaldadas**. Con el tope de 6 pistas por respuesta, el techo es de unas **34.000 pistas por variante**: no alcanza para las 100.000.
+- El léxico tiene unas **5.700 respuestas con definiciones respaldadas**. Con el tope de 6 pistas por respuesta, el techo es de unas **34.000 pistas por variante**: por eso la meta quedó en 34.000.
 - La meta diaria de un mecanismo como el homófono no se va a cumplir en español: casi no hay pares de homófonos verificables.
 - El agente lo informa como déficit en vez de forzarlo.
 
@@ -171,7 +171,7 @@ Para acercarse a la meta hace falta:
 - **Estado:** activo, pausado, detenido, bloqueado (falta la clave o el presupuesto) o con errores.
 - Última y próxima ejecución, con enlace a la ejecución de GitHub.
 - **Ciclo de hoy:** inicio, última actividad, fin, meta, candidatos, aprobados, en revisión, rechazados, duplicados, porcentaje de aprobación, costo medido y costo por aprobado.
-- **Tabla por variante:** cumplimiento, avance hacia las 100.000 y detalle por mecanismo, con el motivo del déficit y las acciones correctivas.
+- **Tabla por variante:** cumplimiento, avance hacia la meta (34.000) y detalle por mecanismo, con el motivo del déficit y las acciones correctivas.
 - Últimos candidatos con los controles A–F (✓, ✗ o · si no llegó), alertas, historial de ciclos con su informe e historial de lotes.
 - **Controles:**
   - Pausar: termina el lote en curso y no empieza otro.
@@ -192,7 +192,7 @@ Se guarda en `agent_cycles.report` y se ve en el panel, en «Historial de ciclos
 - costo y tiempo medio por lote;
 - errores, problemas de calidad (motivos de rechazo) y acciones correctivas;
 - avance por mecanismo;
-- biblioteca acumulada y lo que falta para 100.000;
+- biblioteca acumulada y lo que falta para la meta;
 - el **motivo del déficit**, si no llegó a 3.000.
 
 Al cambiar el día, el ciclo anterior se cierra como «cumplido», «incumplido», «bloqueado» o «detenido», y un incumplimiento genera una alerta.
