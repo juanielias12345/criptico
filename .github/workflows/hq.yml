@@ -1,5 +1,5 @@
 # AI Company HQ: planificador persistente del informe ejecutivo de 48 horas y de las
-# alertas inmediatas. Cada hora revisa en la base qué tareas de HQ están vencidas y
+# alertas inmediatas. Cada 6 horas revisa en la base qué tareas de HQ están vencidas y
 # las ejecuta (el turno y los reintentos se guardan en la base: no se pierden con un
 # reinicio y no se duplican). Complementa al cron diario de Vercel. Ver docs/HQ.md.
 # También permite registrar a mano una ejecución de un agente con su evidencia e importar
@@ -8,7 +8,7 @@ name: AI Company HQ
 
 on:
   schedule:
-    - cron: '7 * * * *'
+    - cron: '7 */6 * * *'
   workflow_dispatch:
     inputs:
       action:

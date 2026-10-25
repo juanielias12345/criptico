@@ -217,7 +217,7 @@ La sección está en **Catálogo → Banco por idioma y dificultad**. Cada celda
 
 ## Cómo se ejecuta
 
-- **GitHub Actions → «Banco de crípticos»** (`.github/workflows/bank.yml`). Corre cada 6 horas y también a mano, con idioma, dificultades, cantidad de lotes y tamaño. Usa los secretos `DATABASE_URL` y `DATABASE_AUTH_TOKEN`. Cada ejecución continúa desde el último lote confirmado de cada celda y deja la tabla de avance en el resumen de la ejecución.
+- **GitHub Actions → «Banco de crípticos»** (`.github/workflows/bank.yml`). Corre una vez por día (06:17 UTC, para cuidar la cuota de lecturas de Turso) y también a mano, con idioma, dificultades, cantidad de lotes y tamaño. Usa los secretos `DATABASE_URL` y `DATABASE_AUTH_TOKEN`. Cada ejecución continúa desde el último lote confirmado de cada celda y deja la tabla de avance en el resumen de la ejecución.
 - **Línea de comandos:**
   - `node scripts/bank.js status` muestra la matriz.
   - `node scripts/bank.js run --lang es --difficulty 1,2 --batches 5 --size 400 --concurrency 2 --minutes 50` corre lotes.

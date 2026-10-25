@@ -1,13 +1,13 @@
 # Banco de crípticos: genera, valida, deduplica y publica lotes en la base de
 # producción, celda por celda (idioma × dificultad), retomando siempre desde
 # el último lote confirmado. Ver docs/BANCO.md.
-# Corre cada 6 horas y también a mano: Actions → "Banco de crípticos" → Run workflow.
+# Corre una vez por día (para cuidar la cuota de lecturas de Turso) y también a mano: Actions → "Banco de crípticos" → Run workflow.
 # Necesita los secretos DATABASE_URL y DATABASE_AUTH_TOKEN.
 name: Banco de crípticos
 
 on:
   schedule:
-    - cron: '17 */6 * * *'
+    - cron: '17 6 * * *'
   workflow_dispatch:
     inputs:
       lang:
