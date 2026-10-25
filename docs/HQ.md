@@ -59,7 +59,7 @@ Asignar una tarea (con prioridad, criterio de aceptación, nivel de aprobación 
 - Lo genera `src/services/hq-reports.js`. Tiene las secciones A–J, la comparación con el período anterior, las limitaciones de visibilidad y las fuentes consultadas. Incluye una **revisión ejecutiva automática**, que aclara que no fue una reunión entre agentes.
 - **Programación persistente**: la tarea `exec_report` (cada 2880 minutos) vive en la base. La disparan dos planificadores:
   - el cron diario de Vercel (`/api/cron/tick`);
-  - el workflow de GitHub «AI Company HQ», que corre **cada hora** (`scripts/hq.js tick`) usando los secretos `DATABASE_URL` y `DATABASE_AUTH_TOKEN`.
+  - el workflow de GitHub «AI Company HQ», que corre **cada 6 horas** (antes cada hora; se espació para cuidar la cuota de lecturas de Turso) (`scripts/hq.js tick`) usando los secretos `DATABASE_URL` y `DATABASE_AUTH_TOKEN`.
 - **Sin duplicados**: cada período tiene una clave única. Un disparo programado antes de tiempo se saltea (`not_due`). Uno manual repetido en el mismo minuto responde 409.
 - **Reintentos y recuperación**: un informe fallido o colgado se reintenta y suma intentos. Al reiniciar, `recover_stuck` libera los que quedaron a medias. Si falla, se crea una alerta crítica con causa, impacto, responsable y acción.
 - **Zona horaria**: el ajuste `hq.report_timezone` (por defecto `America/Argentina/Buenos_Aires`) se valida al guardarlo.
