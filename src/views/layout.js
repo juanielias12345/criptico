@@ -128,7 +128,7 @@ ${ads && config.adsenseSlot ? `<aside class="ad-slot" aria-label="Publicidad"><p
     </div>
     <nav aria-label="${lang === 'es' ? 'Jugar' : 'Play'}">
       <h2>${esc(t(lang, 'footer_play'))}</h2>
-      <ul>${[...nav, ...(GUIDE[lang] ? [['guide', 'nav_guide']] : [])].map(([r, k]) => `<li><a href="${href(lang, r)}">${esc(t(lang, k))}</a></li>`).join('')}</ul>
+      <ul>${[...nav, ...(GUIDE[lang] ? [['guide', 'nav_guide']] : []), ...(lang === 'es' ? [['faq', 'nav_faq']] : [])].map(([r, k]) => `<li><a href="${href(lang, r)}">${esc(t(lang, k))}</a></li>`).join('')}</ul>
     </nav>
     <nav aria-label="${lang === 'es' ? 'Comunidad' : 'Community'}">
       <h2>${esc(t(lang, 'footer_community'))}</h2>
