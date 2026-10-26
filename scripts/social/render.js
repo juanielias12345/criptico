@@ -204,4 +204,7 @@ async function main() {
   console.log('Archivos listos en public/social/.');
 }
 
-main().catch((e) => { console.error(e); process.exit(1); });
+// La campaña de 21 días (scripts/social/campana/) reutiliza las plantillas de marca.
+module.exports = { page, tiles, top, foot, esc, MARK, C };
+
+if (require.main === module) main().catch((e) => { console.error(e); process.exit(1); });
