@@ -1,0 +1,30 @@
+# Aprueba y publica los borradores legales globales pendientes en nombre de un CEO.
+# Se ejecuta a mano: Actions → "Aprobar textos legales" → Run workflow. Hace lo mismo que el
+# botón de /admin → Legal; usarlo solo con el consentimiento del CEO que figura como aprobador.
+name: Aprobar textos legales
+
+on:
+  workflow_dispatch:
+    inputs:
+      username:
+        description: Usuario del CEO que aprueba
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  approve:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci --omit=dev
+      - run: node scripts/approve-legal.js
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DATABASE_AUTH_TOKEN: ${{ secrets.DATABASE_AUTH_TOKEN }}
+          APPROVER_USERNAME: ${{ inputs.username }}
+          SITE_URL: https://playcripticos.com
