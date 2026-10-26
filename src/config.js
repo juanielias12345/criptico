@@ -29,6 +29,7 @@ function loadConfig(env = process.env) {
     lemonsqueezy: {
       apiKey: env.LEMONSQUEEZY_API_KEY || '',
       storeId: /^\d{1,12}$/.test(env.LEMONSQUEEZY_STORE_ID || '') ? env.LEMONSQUEEZY_STORE_ID : '',
+      productId: /^\d{1,12}$/.test(env.LEMONSQUEEZY_PRODUCT_ID || '') ? env.LEMONSQUEEZY_PRODUCT_ID : '',
       variantMonthly: /^\d{1,12}$/.test(env.LEMONSQUEEZY_VARIANT_MONTHLY || '') ? env.LEMONSQUEEZY_VARIANT_MONTHLY : '',
       variantYearly: /^\d{1,12}$/.test(env.LEMONSQUEEZY_VARIANT_YEARLY || '') ? env.LEMONSQUEEZY_VARIANT_YEARLY : '',
       webhookSecret: env.LEMONSQUEEZY_WEBHOOK_SECRET || '',

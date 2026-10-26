@@ -28,14 +28,35 @@ const API = 'https://api.lemonsqueezy.com/v1';
 const cfgOf = (config) => config.lemonsqueezy || {};
 function configured(config) {
   const c = cfgOf(config);
-  return !!(c.apiKey && c.storeId && c.webhookSecret && (c.variantMonthly || c.variantYearly));
+  return !!(c.apiKey && c.storeId && c.webhookSecret && (c.variantMonthly || c.variantYearly || c.productId));
 }
-// Qué planes se pueden contratar (los que tienen variante en Lemon Squeezy).
-function variantIds(config) {
+// Qué planes se pueden contratar (los que tienen variante en Lemon Squeezy). Con LEMONSQUEEZY_PRODUCT_ID
+// las variantes se buscan una vez en la API (la mensual y la anual publicadas) y se recuerdan.
+let variantCache = { key: '', ids: null, exp: 0 };
+async function variantIds(config, fetchImpl = fetch) {
   const c = cfgOf(config);
-  return Object.fromEntries([['monthly', c.variantMonthly], ['yearly', c.variantYearly]].filter(([, id]) => id));
+  const fixed = Object.fromEntries([['monthly', c.variantMonthly], ['yearly', c.variantYearly]].filter(([, id]) => id));
+  if (Object.keys(fixed).length || !c.productId || !c.apiKey) return fixed;
+  const key = `${c.productId}:${c.apiKey.slice(-6)}`;
+  if (variantCache.key === key && variantCache.exp > Date.now()) return variantCache.ids;
+  const ids = {};
+  try {
+    const res = await fetchImpl(`${API}/variants?filter[product_id]=${encodeURIComponent(c.productId)}`, {
+      headers: { Accept: 'application/vnd.api+json', Authorization: `Bearer ${c.apiKey}` } });
+    const body = res.ok ? await res.json() : {};
+    for (const v of body.data || []) {
+      const a = v.attributes || {};
+      if (!a.is_subscription || a.status !== 'published' || Number(a.interval_count || 1) !== 1) continue;
+      const plan = a.interval === 'month' ? 'monthly' : a.interval === 'year' ? 'yearly' : null;
+      if (plan && !ids[plan]) ids[plan] = String(v.id);
+    }
+  } catch { /* sin conexión: se reintenta en la próxima consulta */ }
+  // Si no encontró nada se vuelve a intentar en un minuto; si encontró, se recuerda una hora.
+  variantCache = { key, ids, exp: Date.now() + (Object.keys(ids).length ? 3600000 : 60000) };
+  return ids;
 }
-const planOf = (config, variantId) => Object.entries(variantIds(config)).find(([, id]) => String(id) === String(variantId))?.[0] || null;
+const clearVariantCache = () => { variantCache = { key: '', ids: null, exp: 0 }; };
+const planOf = async (config, variantId) => Object.entries(await variantIds(config)).find(([, id]) => String(id) === String(variantId))?.[0] || null;
 
 // El pago se habilita con las claves y los términos del plan (con Lemon Squeezy) publicados.
 async function available(db, config) {
@@ -50,7 +71,7 @@ function isPlus(user) {
 async function status(db, config, user) {
   const sub = user ? await db.get('SELECT plan, status, renews_at, ends_at, portal_url FROM subscriptions WHERE user_id = ? ORDER BY updated_at DESC LIMIT 1', [user.id]) : null;
   const ok = await available(db, config);
-  const ids = variantIds(config);
+  const ids = ok ? await variantIds(config) : {};
   return {
     available: ok, plans: Object.fromEntries(Object.entries(PLANS).map(([k, p]) => [k, { ...p, available: ok && !!ids[k] }])),
     active: isPlus(user), until: user ? user.plus_until || null : null,
@@ -63,7 +84,7 @@ async function status(db, config, user) {
 async function checkout(db, config, user, plan = 'monthly', fetchImpl = fetch) {
   if (!user) throw new HttpError(401, 'login_required', 'Entrá o creá una cuenta gratis para hacerte Plus.');
   if (!(await available(db, config))) throw new HttpError(503, 'not_configured', 'El pago todavía no está disponible.');
-  const variant = variantIds(config)[plan];
+  const variant = (await variantIds(config, fetchImpl))[plan];
   if (!variant) throw new HttpError(400, 'invalid_plan');
   if (isPlus(user)) throw new HttpError(409, 'already_active', 'Ya sos Plus.');
   const c = cfgOf(config);
@@ -117,7 +138,7 @@ async function handleWebhook(db, config, raw, headers) {
   if (!/^subscription_/.test(kind) || data.type !== 'subscriptions' || !data.id) return { ok: true, ignored: kind || null };
   const attrs = data.attributes || {};
   if (c.storeId && attrs.store_id != null && String(attrs.store_id) !== String(c.storeId)) return { ok: true, ignored: 'other_store' };
-  const plan = planOf(config, attrs.variant_id);
+  const plan = await planOf(config, attrs.variant_id);
   if (!plan) return { ok: true, ignored: 'other_variant' };
   // Un mismo aviso (mismo evento, misma suscripción, misma fecha de actualización) se aplica una vez.
   const eventId = `lemonsqueezy:${kind}:${data.id}:${attrs.updated_at || ''}`;
@@ -196,4 +217,4 @@ async function comparison(db, user, lang = 'es') {
   return { days: BENCH_DAYS, computed_at: community.length ? community[0].computed_at : null, rows };
 }
 
-module.exports = { benchmarks, comparison, PLANS, configured, available, isPlus, status, checkout, handleWebhook, untilFor };
+module.exports = { benchmarks, comparison, PLANS, configured, available, isPlus, status, checkout, handleWebhook, untilFor, clearVariantCache };

@@ -21,6 +21,14 @@ function fakeLemon(url, init = {}) {
     ls.checkouts.push(b.data);
     return json(201, { data: { type: 'checkouts', id: 'co-1', attributes: { url: 'https://playcripticos.lemonsqueezy.com/checkout/custom/abc' } } });
   }
+  if (u.pathname === '/v1/variants' && u.searchParams.get('filter[product_id]') === '777') {
+    ls.variantLookups = (ls.variantLookups || 0) + 1;
+    return json(200, { data: [
+      { id: '300', attributes: { is_subscription: false, status: 'pending', interval: null } },
+      { id: '301', attributes: { is_subscription: true, status: 'published', interval: 'month', interval_count: 1 } },
+      { id: '312', attributes: { is_subscription: true, status: 'published', interval: 'year', interval_count: 1 } },
+    ] });
+  }
   return json(404, {});
 }
 
@@ -174,6 +182,24 @@ test('beneficios: Críptico Plus del día, comparación con la comunidad y avata
   const pub = (await client(env.base).get('/es/plus')).text;
   assert.match(pub, /USD 12/);
   assert.doesNotMatch(pub, /PayPal Business|cuenta de PayPal/);
+});
+
+test('con solo el número del producto, las variantes mensual y anual se buscan una vez', async () => {
+  env.config.lemonsqueezy = { apiKey: 'key', storeId: '111', productId: '777', webhookSecret: 'secreto' };
+  PLUS.clearVariantCache();
+  await setSetting(env.db, 'billing.lemonsqueezy', true, null);
+  const eva = await player('eva_plus');
+  const st = await eva.c.get('/api/billing/plus');
+  assert.equal(st.json.plans.monthly.available, true);
+  assert.equal(st.json.plans.yearly.available, true);
+  const co = await eva.c.post('/api/billing/plus/checkout', { plan: 'monthly' });
+  assert.equal(co.status, 200, co.text);
+  assert.equal(ls.checkouts.pop().relationships.variant.data.id, '301');
+  const r = await hook(event('subscription_created', eva.user.id, { variant_id: 312, renews_at: days(365) }, '9400'));
+  assert.equal(r.json.user, true, JSON.stringify(r.json));
+  assert.equal((await eva.c.get('/api/billing/plus')).json.subscription.plan, 'yearly');
+  assert.equal(ls.variantLookups, 1, 'las variantes se buscan una sola vez');
+  configure();
 });
 
 test('cuenta: untilFor según el estado de Lemon Squeezy', () => {

@@ -27,15 +27,16 @@ El beneficio vive en `users.plus_until`, que viaja con la sesión: no suma lectu
 1. Crear la cuenta en https://app.lemonsqueezy.com, la tienda «Play Crípticos» y completar la
    verificación de identidad y los datos de cobro (PayPal o banco).
 2. Products → New product «Play Crípticos Plus», tipo suscripción, con dos variantes:
-   mensual USD 1,50 y anual USD 12. Anotar el número de cada variante y el de la tienda
-   (Settings → Stores).
+   mensual USD 1,50 y anual USD 12. Anotar el número del producto («…» → Copy ID) y el de la tienda
+   (Settings → Stores). Las variantes mensual y anual se buscan solas por la API.
 3. Settings → API → crear una API key.
 4. Settings → Webhooks → `https://playcripticos.com/api/billing/webhook`, un secreto de firma
    largo y los eventos `subscription_created`, `subscription_updated`, `subscription_cancelled`,
    `subscription_resumed`, `subscription_expired`, `subscription_paused`, `subscription_unpaused`,
    `subscription_payment_success`, `subscription_payment_failed`.
-5. En Vercel: `LEMONSQUEEZY_API_KEY`, `LEMONSQUEEZY_STORE_ID`, `LEMONSQUEEZY_VARIANT_MONTHLY`,
-   `LEMONSQUEEZY_VARIANT_YEARLY`, `LEMONSQUEEZY_WEBHOOK_SECRET`, y Redeploy.
+5. En Vercel: `LEMONSQUEEZY_API_KEY`, `LEMONSQUEEZY_STORE_ID`, `LEMONSQUEEZY_PRODUCT_ID`,
+   `LEMONSQUEEZY_WEBHOOK_SECRET`, y Redeploy (opcional: `LEMONSQUEEZY_VARIANT_MONTHLY` y
+   `LEMONSQUEEZY_VARIANT_YEARLY` para fijarlas a mano).
 6. En /admin → Legal, aprobar la revisión `plus-ls-2026-10-26` (términos, privacidad y
    encargados). Al publicarse los términos se enciende `billing.lemonsqueezy` y aparece el botón.
 
