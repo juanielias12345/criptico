@@ -992,3 +992,11 @@ dialog::backdrop { background: var(--scrim); }
 .plus-faq summary { cursor: pointer; font-weight: 600; }
 .av-plus { align-items: center; }
 .av-opt.locked { opacity: .45; position: relative; }
+
+/* Siguiente paso al terminar un críptico (docs/CRECIMIENTO-PRODUCTO.md): una sola tarjeta, sin ventanas emergentes. */
+.next-step { margin-top: var(--s-5); padding: var(--s-4); border: var(--b-1); border-left: 3px solid var(--accent); background: var(--paper-2); border-radius: 0 var(--r-1) var(--r-1) 0; animation: fade var(--d-3) var(--ease-out) both; }
+.next-step h2 { font: 500 var(--t-lg)/1.25 var(--font-display); margin: 0 0 var(--s-2); }
+.next-step p { margin: 0 0 var(--s-2); }
+.next-step .form-actions { display: flex; gap: var(--s-3); flex-wrap: wrap; margin-top: var(--s-3); }
+.next-step .form-actions:empty { display: none; }
+#account-via { margin: 0 0 var(--s-4); }

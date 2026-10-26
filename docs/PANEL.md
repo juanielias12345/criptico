@@ -31,7 +31,7 @@ Todas las fechas se calculan en UTC. Los períodos disponibles son: hoy, última
 | Jugadores activos | Identificadores de jugador distintos con al menos una partida iniciada en el período. Un identificador corresponde a un navegador, no a una persona. |
 | Registrados que jugaron | Cuentas distintas que jugaron en el período. |
 | DAU / WAU / MAU | Identificadores distintos con partidas en las últimas 24 h, 7 o 30 días hasta el fin del período (o hasta ahora, si el período no terminó). |
-| Visitas / navegadores nuevos | Contadores agregados por día, idioma de interfaz y país elegido, sin ningún identificador. No se cuentan los navegadores con «Do Not Track» o «Global Privacy Control». |
+| Visitas / visitantes nuevos | Contadores agregados por día, idioma de interfaz y país elegido, sin ningún identificador. No se cuentan los navegadores con «Do Not Track» o «Global Privacy Control». «Visitantes nuevos» suma una vez por **página de entrada** (llegada desde afuera del sitio o escribiendo la dirección) de un navegador sin preferencias guardadas. Hasta el 26/10/2026 sumaba en **cada página vista** sin preferencias, por eso los datos anteriores están inflados. |
 | Iniciadas | Partidas en las que se mostró un críptico. |
 | Completadas | Resueltas más reveladas. |
 | Resueltas correctamente | Terminadas con la respuesta correcta y sin revelar. |
@@ -72,11 +72,11 @@ Repetir la misma respuesta incorrecta se registra como `guess_repeat` y no suma 
 
 ### Embudo
 
-Cuenta los identificadores de jugador creados en el período y, para cada paso, cuántos lo alcanzaron alguna vez: iniciaron, respondieron, pidieron pista, completaron, jugaron otro, volvieron otro día y crearon cuenta. Cada paso se mide sobre quienes iniciaron, porque los pasos no ocurren necesariamente en orden. El primer paso, «navegadores nuevos», sale del contador agregado de visitas y no está ligado a identificadores.
+Cuenta los identificadores de jugador creados en el período (sin los de cuentas del equipo, desde el 26/10/2026) y, para cada paso, cuántos lo alcanzaron alguna vez: iniciaron, respondieron, pidieron pista, completaron, jugaron otro, volvieron otro día y crearon cuenta. Cada paso se mide sobre quienes iniciaron, porque los pasos no ocurren necesariamente en orden. El primer paso, «navegadores nuevos», sale del contador agregado de visitas y no está ligado a identificadores.
 
 ### Retención
 
-Una cohorte es la semana (empezando el lunes) del primer día con partidas. D1 es la proporción que volvió a jugar al día siguiente, D7 la que volvió dentro de los 7 días y D30 dentro de los 30. Cada valor considera solo a quienes ya cumplieron esa ventana; las ventanas que aún no se cumplieron se muestran con «—». Con la unidad «identificadores de jugador», una persona sin cuenta en dos dispositivos cuenta dos veces. La unidad «cuentas registradas» representa personas identificadas.
+Una cohorte es la semana (empezando el lunes) del primer día con partidas. Los días son los **de la hora local de cada jugador**, aproximada por el país que eligió (sin país: Argentina). Hasta el 26/10/2026 eran días UTC, y en América la medianoche UTC cae a la tarde o la noche. Las cuentas del equipo no cuentan (desde el 26/10/2026). D1 es la proporción que volvió a jugar al día siguiente, D7 la que volvió dentro de los 7 días y D30 dentro de los 30. Cada valor considera solo a quienes ya cumplieron esa ventana; las ventanas que aún no se cumplieron se muestran con «—». Con la unidad «identificadores de jugador», una persona sin cuenta en dos dispositivos cuenta dos veces. La unidad «cuentas registradas» representa personas identificadas.
 
 Una **sesión** agrupa las partidas de la misma unidad separadas por menos de 30 minutos.
 

@@ -43,46 +43,64 @@ async function choose(dialog, pickerIndex, search, value) {
   assert.equal(await picker.locator('.picker-toggle').getAttribute('aria-expanded'), 'false');
 }
 
-test('primera visita: diálogo con detección; país e idioma son independientes y se recuerdan', async () => {
+const setSetting = (key, value) => require('../../src/services/settings').setSetting(env.db, key, value);
+
+test('primera visita: se juega enseguida con la sugerencia del navegador, sin diálogo, y se puede cambiar', async () => {
   const { ctx, page, errors } = await newPage();
+  const started = page.waitForResponse((r) => r.url().endsWith('/api/game/start'));
   await page.goto(env.base + '/es/jugar');
+  const body = JSON.parse((await started).request().postData());
+  assert.equal(body.choice, 'es-AR', 'usa la variante sugerida por el navegador');
+  assert.equal(body.country, 'AR');
+  await page.locator('#clue-text').waitFor();
+  assert.equal(await page.locator('dialog[open]').count(), 0, 'no hay diálogo antes del primer críptico');
+  assert.match(await page.textContent('#prefs-auto'), /Jugás con crípticos en/);
+  // La sugerencia no se recuerda sin que la persona lo elija: dura la sesión.
+  assert.equal(await page.evaluate(() => localStorage.getItem('cripta.prefs')), null);
+  assert.ok(await page.evaluate(() => sessionStorage.getItem('cripta.prefs')));
+
+  // Desde el aviso se abre el diálogo de siempre: país e idioma independientes.
+  await page.click('#prefs-auto button');
   const dialog = page.locator('dialog[open]');
   await dialog.waitFor();
-  assert.match(await dialog.textContent(), /Argentina/, 'sugiere el país del navegador');
-  assert.equal(await dialog.locator('.picker').nth(1).locator('[aria-selected="true"]').getAttribute('data-value'), 'es-AR');
-
-  // Cambiar el país no cambia el idioma.
   await choose(dialog, 0, 'japon', 'JP');
   assert.equal(await dialog.locator('.picker').nth(1).locator('[aria-selected="true"]').getAttribute('data-value'), 'es-AR');
-  // Cambiar el idioma no cambia el país.
   await choose(dialog, 1, 'españa', 'es-ES');
   assert.equal(await dialog.locator('.picker').nth(0).locator('[aria-selected="true"]').getAttribute('data-value'), 'JP');
   await page.click('#prefs-save');
   await page.locator('#clue-text').waitFor();
-
   const prefs = await page.evaluate(() => JSON.parse(localStorage.getItem('cripta.prefs')));
   assert.equal(prefs.country, 'JP');
   assert.equal(prefs.choice, 'es-ES');
   assert.match(await page.textContent('#prefs-label'), /JP/);
 
-  // Al volver no se pregunta de nuevo.
+  // Al volver no se pregunta ni se avisa de nuevo.
   await page.reload();
   await page.locator('#clue-text').waitFor();
   assert.equal(await page.locator('dialog[open]').count(), 0);
+  assert.equal(await page.locator('#prefs-auto').count(), 0);
   assert.deepEqual(errors, []);
+  const n = await env.db.get("SELECT SUM(n) AS n FROM ui_events_daily WHERE kind = 'prefs_auto'");
+  assert.ok(n.n >= 1, 'cuenta el inicio directo');
   await ctx.close();
 });
 
-test('sin consentimiento para recordar, la preferencia dura solo la sesión', async () => {
-  const { ctx, page } = await newPage();
-  await page.goto(env.base + '/es/jugar');
-  await page.locator('dialog[open]').waitFor();
-  await page.uncheck('#pref-remember');
-  await page.click('#prefs-save');
-  await page.locator('#clue-text').waitFor();
-  assert.equal(await page.evaluate(() => localStorage.getItem('cripta.prefs')), null);
-  assert.ok(await page.evaluate(() => sessionStorage.getItem('cripta.prefs')));
-  await ctx.close();
+test('con growth.direct_start apagado vuelve el diálogo de primera visita; sin «recordar» dura la sesión', async () => {
+  await setSetting('growth.direct_start', false);
+  try {
+    const { ctx, page } = await newPage();
+    await page.goto(env.base + '/es/jugar');
+    const dialog = page.locator('dialog[open]');
+    await dialog.waitFor();
+    assert.match(await dialog.textContent(), /Argentina/, 'sugiere el país del navegador');
+    assert.equal(await page.locator('#clue-text').count(), 0, 'no empieza hasta elegir');
+    await page.uncheck('#pref-remember');
+    await page.click('#prefs-save');
+    await page.locator('#clue-text').waitFor();
+    assert.equal(await page.evaluate(() => localStorage.getItem('cripta.prefs')), null);
+    assert.ok(await page.evaluate(() => sessionStorage.getItem('cripta.prefs')));
+    await ctx.close();
+  } finally { await setSetting('growth.direct_start', true); }
 });
 
 async function playReady(page, choice = 'es') {
@@ -116,6 +134,72 @@ test('jugar: respuesta incorrecta, pista, respuesta correcta, explicación y sig
   const second = await (await next).json();
   assert.notEqual(second.clue.id, data.clue.id, 'el siguiente es otro críptico');
   await page.locator('#answer').waitFor();
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('al resolver: aviso del diario pendiente y, tras varios resueltos sin cuenta, invitación a crear cuenta (una vez)', async () => {
+  const { ctx, page, errors } = await newPage();
+  await playReady(page);
+  const solveOne = async () => {
+    const started = page.waitForResponse((r) => r.url().endsWith('/api/game/start'));
+    if (await page.locator('#next-btn').count()) await page.click('#next-btn'); else await page.goto(env.base + '/es/jugar');
+    const data = await (await started).json();
+    const row = await env.db.get('SELECT answer FROM clues WHERE id = ?', [data.clue.id]);
+    await page.locator('#answer').waitFor();
+    await page.fill('#answer', row.answer);
+    await page.click('#check-btn');
+    await page.locator('#solution-answer').waitFor();
+  };
+  await solveOne();
+  // Todavía no jugó el diario de hoy: se sugiere, una sola tarjeta.
+  await page.locator('#daily-nudge').waitFor();
+  assert.equal(await page.locator('.next-step').count(), 1);
+  assert.match(await page.getAttribute('#daily-nudge-cta', 'href'), /\/es\/diario$/);
+  await solveOne();
+  assert.equal(await page.locator('#daily-nudge').count(), 0, 'el aviso del diario no se repite en la sesión');
+  await solveOne();
+  await page.locator('#signup-prompt').waitFor();
+  assert.match(await page.textContent('#signup-prompt'), /correo es opcional/);
+  assert.equal(await page.getAttribute('#signup-cta', 'href'), '/es/cuenta?via=post_solve');
+  await page.click('#signup-later');
+  assert.equal(await page.locator('#signup-prompt').count(), 0);
+  await solveOne();
+  assert.equal(await page.locator('#signup-prompt').count(), 0, 'después de «Ahora no» no vuelve');
+  const ev = Object.fromEntries((await env.db.all('SELECT kind, SUM(n) AS n FROM ui_events_daily GROUP BY kind')).map((r) => [r.kind, r.n]));
+  assert.ok(ev.signup_prompt_shown >= 1 && ev.signup_prompt_dismiss >= 1 && ev.daily_nudge_shown >= 1 && ev.next_after_solve >= 1);
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('la invitación lleva al registro primero y la cuenta queda marcada con su origen', async () => {
+  const { ctx, page, errors } = await newPage();
+  await page.goto(env.base + '/es/cuenta?via=post_solve');
+  await page.locator('#account-via').waitFor();
+  const forms = await page.locator('#account-root form').evaluateAll((fs) => fs.map((f) => f.id));
+  assert.deepEqual(forms, ['register-form', 'login-form']);
+  const name = 'inv_' + Math.random().toString(36).slice(2, 8);
+  await page.fill('#register-form input[name=username]', name);
+  await page.fill('#register-form input[name=password]', 'Una-clave-bien-larga-42');
+  await page.check('#register-form input[name=accept]');
+  await page.click('#register-form button[type=submit]');
+  await page.waitForURL(/\/es\/perfil/);
+  const u = await env.db.get('SELECT signup_via FROM users WHERE username = ?', [name]);
+  assert.equal(u.signup_via, 'post_solve');
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('al terminar el diario se avisa cuándo llega el próximo', async () => {
+  const { ctx, page, errors } = await newPage();
+  await playReady(page);
+  const started = page.waitForResponse((r) => r.url().endsWith('/api/daily/start'));
+  await page.goto(env.base + '/es/diario');
+  const data = await (await started).json();
+  await page.locator('#reveal-btn').click();
+  await page.locator('#daily-next').waitFor();
+  assert.match(await page.textContent('#daily-next'), /El próximo desafío llega a las \d\d:\d\d de tu hora/);
+  assert.ok(data.clue);
   assert.deepEqual(errors, []);
   await ctx.close();
 });

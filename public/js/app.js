@@ -83,6 +83,9 @@
   }
   let metaPromise = null;
   const meta = () => (metaPromise = metaPromise || api('/api/meta'));
+  // Contador agregado de la interfaz (sin identificadores); respeta «No rastrear». Nunca rompe el juego.
+  const uiEvent = (kind) => { if (navigator.doNotTrack === '1' || navigator.globalPrivacyControl) return; api('/api/ui-event', { method: 'POST', body: { kind }, keepalive: true }).catch(() => {}); };
+  const growth = () => meta().then((m) => m.growth || {}).catch(() => ({}));
 
   // Origen de la visita: de qué sitio llegó (solo el dominio), la campaña del enlace y la primera página.
   // Se guarda en el almacenamiento de sesión, y solo si la política de privacidad publicada lo prevé.
@@ -230,7 +233,7 @@
     const existing = getPrefs();
     const sug = browserSuggestion(m.variants);
     const state = { country: (existing && existing.country) || sug.country, choice: (existing && existing.choice) || sug.choice,
-      remember: existing ? !!existing.remember : true, theme: existing && existing.theme };
+      remember: existing && !existing.auto ? !!existing.remember : true, theme: existing && existing.theme };
     const countryItems = COUNTRIES.map((c) => ({ value: c, label: countryName(c) })).sort((a, b) => a.label.localeCompare(b.label, L));
     const total = (code) => (m.totals.find((x) => x.code === code) || { n: 0 }).n;
     const langItems = [];
@@ -249,7 +252,7 @@
         el('div', { class: 'dialog-head' },
           el('div', {}, el('h2', { id: 'prefs-title', text: t('prefs_title') }), el('p', { id: 'prefs-note', text: t('prefs_note') })),
           first ? null : el('button', { type: 'button', class: 'icon-btn dialog-close', 'aria-label': t('close'), onclick: () => dlg.close() }, svg(IC.close))),
-        (!existing && sug.country) ? el('p', { class: 'detected', text: t('prefs_detected') + ': ' + countryName(sug.country) + ' · ' + choiceLabel(sug.choice, m) }) : null,
+        ((!existing || existing.auto) && sug.country) ? el('p', { class: 'detected', text: t('prefs_detected') + ': ' + countryName(sug.country) + ' · ' + choiceLabel(sug.choice, m) }) : null,
         el('div', { class: 'pickers' },
           picker({ label: t('prefs_country'), why: t('prefs_country_why'), placeholder: t('prefs_search_country'), items: countryItems, selected: state.country, onSelect: (v) => { state.country = v; } }),
           picker({ label: t('prefs_language'), why: t('prefs_language_why'), placeholder: t('prefs_search_language'), items: langItems, selected: state.choice, onSelect: (v) => { state.choice = v; } })),
@@ -278,12 +281,23 @@
   updatePrefsLabel();
   // Visita agregada (sin identificadores): «first» es verdadero si este navegador todavía no eligió idioma y país.
   // «entry» es el origen cuando la visita llega desde afuera del sitio (red, buscador, enlace o campaña).
+  // «first» solo en la página de entrada (llega desde afuera del sitio o escribiendo la dirección):
+  // así un mismo visitante sin preferencias no suma un «navegador nuevo» por cada página que ve.
+  const isEntry = (() => {
+    try {
+      const nav = performance.getEntriesByType ? performance.getEntriesByType('navigation')[0] : null;
+      if (nav && nav.type !== 'navigate') return false;
+      return !document.referrer || new URL(document.referrer).hostname !== location.hostname;
+    } catch (e) { return false; }
+  })();
   if (!noTrack) {
     const p0 = getPrefs();
-    api('/api/visit', { method: 'POST', body: { ui: L, country: p0 && p0.country, first: !p0, entry: entryOrigin || undefined }, keepalive: true }).catch(() => {});
+    api('/api/visit', { method: 'POST', body: { ui: L, country: p0 && p0.country, first: !p0 && isEntry, entry: entryOrigin || undefined }, keepalive: true }).catch(() => {});
     visitOrigin();
   }
-  if (!getPrefs() && ['play', 'daily'].includes(BOOT.page)) openPrefs({ first: true });
+  // Primera visita a «Jugar» o al diario: con growth.direct_start se juega enseguida con la sugerencia
+  // del navegador (ver Game); si está apagado, se pregunta país e idioma antes de empezar, como antes.
+  if (!getPrefs() && ['play', 'daily'].includes(BOOT.page)) growth().then((g) => { if (!g.direct_start && !getPrefs()) openPrefs({ first: true }); });
 
   // ── Utilidades de texto ──
   const stripAccents = (s) => s.normalize('NFD').replace(/[̀-ͯ]/g, '');
@@ -399,7 +413,7 @@
         if (kind === 'clue') body.slug = BOOT.slug;
         const data = await api(kind === 'daily' ? '/api/daily/start' : kind === 'plus' ? '/api/plus/daily/start' : '/api/game/start', { method: 'POST', body });
         Object.assign(st, { game: data.game_id, clue: data.clue, notice: data.notice, recycled: data.recycled, hints: [], solved: false, finished: false,
-          solution: null, plus: data.plus || null, maxHints: data.max_hints, timed: data.timed_seconds, dailyDone: data.finished, attempts: 0, hintsUsed: 0, feedback: null, daily: null, tried: [] });
+          solution: null, next: null, autoPrefs: st.autoPrefs && !st.game, plus: data.plus || null, maxHints: data.max_hints, timed: data.timed_seconds, dailyDone: data.finished, attempts: 0, hintsUsed: 0, feedback: null, daily: null, tried: [] });
         if (data.finished) { st.finished = true; st.solved = data.finished.result === 'solved'; st.solution = data.finished.solution; st.attempts = data.finished.attempts; st.hintsUsed = data.finished.hints_used; }
         if (st.clue && !data.finished) session.bump('seen');
         if (st.mode === 'guided' && st.game && !st.finished) await hint(true);
@@ -451,7 +465,7 @@
         const r = await api('/api/game/' + st.game + '/guess', { method: 'POST', body: { answer: value } });
         st.attempts = r.attempts || st.attempts;
         if (r.correct) {
-          stopTimer(); st.solved = true; st.finished = true; st.solution = r.solution; st.daily = r.daily; st.streak++;
+          stopTimer(); st.solved = true; st.finished = true; st.solution = r.solution; st.daily = r.daily; st.next = r.next; st.streak++;
           st.feedback = null; session.bump('solved'); announceAchievements(r.achievements);
         } else if (!r.empty) {
           st.tried.push(key);
@@ -477,13 +491,14 @@
     async function reveal() {
       try {
         const r = await api('/api/game/' + st.game + '/reveal', { method: 'POST', body: {} });
-        stopTimer(); st.solution = r.solution; st.daily = r.daily; st.finished = true; st.streak = 0;
+        stopTimer(); st.solution = r.solution; st.daily = r.daily; st.next = r.next; st.finished = true; st.streak = 0;
         st.feedback = null; announceAchievements(r.achievements);
       } catch (e) { st.feedback = { cls: 'error', text: t('error_generic') }; }
       render();
     }
 
     async function next() {
+      if (st.finished && kind === 'play') uiEvent('next_after_solve');
       if (st.game && !st.finished) { try { const r = await api('/api/game/' + st.game + '/skip', { method: 'POST', body: {} }); announceAchievements(r.achievements); } catch (e) { /* ignorar */ } if (st.mode === 'streak') st.streak = 0; }
       // Plus: sigue con el próximo de la tanda del día mientras queden.
       if (kind === 'plus' && st.plus && st.plus.number < st.plus.total) { start(); return; }
@@ -533,9 +548,14 @@
       try { await api('/api/me/favorites/' + st.clue.id, { method: 'POST', body: {} }); toast('★ ' + t('favorite')); } catch (e) { location.href = route('account'); }
     }
 
-    function noticeBox() {
+    function noticeBox(m) {
       const n = st.notice;
       if (st.recycled) return el('div', { class: 'notice' }, el('p', { text: t('recycled') }));
+      if (st.autoPrefs && !st.finished) {
+        const p = getPrefs() || {};
+        return el('div', { class: 'notice info', id: 'prefs-auto' }, el('p', { text: t('prefs_auto', { choice: choiceLabel(p.choice, m) }) }),
+          el('button', { class: 'link-btn', type: 'button', onclick: () => { st.autoPrefs = false; openPrefs(); }, text: t('change_prefs') }));
+      }
       if (!n) return null;
       if (n.kind === 'few_regional') return el('div', { class: 'notice' }, el('p', { text: t('notice_few_regional', { n: n.regional }) }), el('button', { class: 'link-btn', type: 'button', onclick: () => openPrefs(), text: t('change_prefs') }));
       return null;
@@ -550,6 +570,50 @@
         if (h.kind === 'pattern') return el('li', {}, el('b', { text: t('pattern') }), el('code', { text: h.pattern.split('').join(' ') }));
         return null;
       });
+    }
+
+    // Un solo paso sugerido al terminar, sin saturar la pantalla (docs/CRECIMIENTO-PRODUCTO.md):
+    // 1) al terminar el diario, cuándo llega el próximo; 2) sin cuenta y tras varios resueltos en la sesión,
+    // la invitación a crear cuenta (una vez por sesión; «Ahora no» la calla dos semanas en este navegador);
+    // 3) si todavía no jugó el desafío de hoy, el aviso para jugarlo.
+    const shownOnce = new Set();
+    const once = (kind) => { if (!shownOnce.has(kind + st.game)) { shownOnce.add(kind + st.game); uiEvent(kind); } };
+    const sget = (k) => { try { return sessionStorage.getItem(k); } catch (e) { return null; } };
+    const sset = (k, v) => { try { sessionStorage.setItem(k, v); } catch (e) { /* sin almacenamiento */ } };
+    async function nextStepCard() {
+      const g = await growth();
+      const card = (id, title, body, actions) => el('aside', { class: 'next-step', id, 'aria-label': title }, el('h2', { text: title }), body, el('div', { class: 'form-actions' }, actions));
+      if (kind === 'daily' && g.next_step) {
+        const nowD = new Date();
+        const nextAt = new Date(Date.UTC(nowD.getUTCFullYear(), nowD.getUTCMonth(), nowD.getUTCDate() + 1));
+        const mins = Math.max(1, Math.round((nextAt - nowD) / 60000));
+        const left = (mins >= 60 ? Math.floor(mins / 60) + ' h ' : '') + (mins % 60) + ' min';
+        const time = nextAt.toLocaleTimeString(L === 'es' ? 'es' : 'en-GB', { hour: '2-digit', minute: '2-digit' });
+        once('daily_next_shown');
+        return card('daily-next', t('daily_next_t'), el('p', { text: t('daily_next', { time, left }) }), []);
+      }
+      if (kind !== 'play') return null;
+      const solvedInSession = session.get().solved;
+      const snoozed = Number((store.get('pc_signup_snooze') || 0)) > Date.now();
+      if (g.signup_prompt && !me && st.solved && solvedInSession >= (g.signup_prompt_after || 3) && !snoozed && (!sget('pc_signup_seen') || sget('pc_signup_seen') === String(st.game))) {
+        sset('pc_signup_seen', String(st.game));
+        once('signup_prompt_shown');
+        const href = route('account') + '?via=post_solve';
+        return card('signup-prompt', t('signup_t'), [el('p', { text: t('signup_body') }), el('p', { class: 'small muted', text: t('signup_effort') })], [
+          el('a', { class: 'btn ink small', href, id: 'signup-cta', text: t('signup_cta'), onclick: () => uiEvent('signup_prompt_click') }),
+          el('button', { class: 'btn quiet small', type: 'button', id: 'signup-later', text: t('signup_later'), onclick: (e) => {
+            uiEvent('signup_prompt_dismiss');
+            store.set('pc_signup_snooze', Date.now() + 14 * 86400000, !!(getPrefs() || {}).remember);
+            e.target.closest('.next-step').remove();
+          } })]);
+      }
+      if (g.next_step && st.next && st.next.daily_pending && !sget('pc_daily_nudged')) {
+        sset('pc_daily_nudged', '1');
+        once('daily_nudge_shown');
+        return card('daily-nudge', t('daily_nudge_t'), el('p', { text: t('daily_nudge') }),
+          [el('a', { class: 'btn small', href: route('daily'), id: 'daily-nudge-cta', text: t('daily_nudge_cta'), onclick: () => uiEvent('daily_nudge_click') })]);
+      }
+      return null;
     }
 
     async function render(typed, { keepFocus } = {}) {
@@ -584,7 +648,7 @@
         el('div', { class: 'meta-line' },
           st.timed && !st.finished ? el('span', {}, t('time_left') + ' ', el('span', { class: 'timer', text: '' })) : null,
           (st.mode === 'streak' || st.streak > 1) && kind === 'play' ? el('span', { class: 'tag new', text: t('streak') + ' · ' + st.streak }) : null)));
-      const nb = noticeBox(); if (nb) sheet.append(nb);
+      const nb = noticeBox(m); if (nb) sheet.append(nb);
       sheet.append(clueNode(kind === 'clue' ? 'h1' : 'p', c.clue, c.language, st.solution ? st.solution.definition : defHint && defHint.text));
       const tilesWrap = el('div', { id: 'tiles' }, enumTiles(c.enumeration, st.solution ? st.solution.answer : typed, { ok: st.solved, shown: st.solution && !st.solved }));
       sheet.append(tilesWrap);
@@ -637,9 +701,11 @@
           c.origin === 'generated' ? el('p', { class: 'attribution' }, t('gen_by') + ' · ', el('a', { href: route('credits'), text: t('gen_sources') })) : null,
           c.author && c.origin === 'community' ? el('p', { class: 'attribution', text: t('by') + ' ' + c.author }) : null);
         sheet.append(sol);
+        const ns = await nextStepCard();
         sheet.append(el('div', { class: 'next-row' },
           el('button', { class: 'btn primary', type: 'button', id: 'next-btn', onclick: next }, t('next'), el('span', { class: 'arrow', 'aria-hidden': 'true', text: '→' })),
           !st.solved && kind !== 'daily' ? el('button', { class: 'btn', type: 'button', id: 'restart-btn', onclick: restart }, svg(IC.redo), t('restart')) : null));
+        if (ns) sheet.append(ns);
         sheet.append(el('div', { class: 'tools' },
           el('button', { class: 'link-btn', type: 'button', id: 'share-btn', onclick: share }, svg(IC.share), t('share')),
           me ? el('button', { class: 'link-btn', type: 'button', onclick: favorite }, svg(IC.star), t('favorite')) : null,
@@ -660,8 +726,20 @@
       if (!before || before.choice !== after.choice) start();   // el país solo no reinicia la partida
       else render($('#answer', root) ? $('#answer', root).value : undefined);
     });
-    // Sin preferencias, el diálogo de primera visita dispara el inicio al guardar.
+    // Sin preferencias: con growth.direct_start se empieza con la sugerencia del navegador, guardada
+    // solo para esta sesión (no se recuerda sin que la persona lo elija); si no, el diálogo dispara el inicio.
     if (getPrefs() || kind === 'clue') start();
+    else {
+      growth().then(async (g) => {
+        if (!g.direct_start || getPrefs()) return;
+        const m = await meta();
+        const sug = browserSuggestion(m.variants);
+        setPrefs({ country: sug.country, choice: sug.choice, remember: false, auto: true });
+        updatePrefsLabel();
+        st.autoPrefs = true; uiEvent('prefs_auto');
+        start();
+      });
+    }
   }
 
   // ── Ejemplos resolubles (inicio y lecciones) ──
@@ -813,6 +891,7 @@
 
   async function Account(root) {
     await authReady;
+    const via = new URLSearchParams(location.search).get('via') === 'post_solve' ? 'post_solve' : null;
     if (me) {
       root.append(el('div', { class: 'auth-card' }, el('p', { class: 'serif', style: 'font-size:1.6rem', text: me.username }),
         el('div', { class: 'form-actions' }, el('a', { class: 'btn ink', href: route('profile'), text: t('nav_profile') }),
@@ -835,11 +914,13 @@
         kind === 'register' ? el('label', { class: 'field' }, el('span', { text: t('email_optional') }), e) : null, accept, err, el('div', {}, btn));
       f.addEventListener('submit', async (ev) => {
         ev.preventDefault(); err.textContent = ''; btn.setAttribute('aria-busy', 'true');
-        try { await api('/api/auth/' + kind, { method: 'POST', body: { username: u.value, password: p.value, email: e.value || null, ...(kind === 'register' ? { accept: ok.checked, origin: await visitOrigin() } : {}) } }); location.href = nextPath() || route('profile'); } catch (x) { err.textContent = (x.data && x.data.message) || t('error_generic'); btn.removeAttribute('aria-busy'); }
+        try { await api('/api/auth/' + kind, { method: 'POST', body: { username: u.value, password: p.value, email: e.value || null, ...(kind === 'register' ? { accept: ok.checked, origin: await visitOrigin(), via: via || undefined } : {}) } }); location.href = nextPath() || route('profile'); } catch (x) { err.textContent = (x.data && x.data.message) || t('error_generic'); btn.removeAttribute('aria-busy'); }
       });
       return f;
     };
-    root.append(el('div', { class: 'cols' }, mk('login'), mk('register')));
+    // Si llega desde la invitación al resolver, el registro va primero y se explica qué pasa con sus partidas.
+    if (via) root.append(el('p', { class: 'lead', id: 'account-via', text: t('account_via_lead') }), el('div', { class: 'cols' }, mk('register'), mk('login')));
+    else root.append(el('div', { class: 'cols' }, mk('login'), mk('register')));
   }
 
   // ── Arranque por página ──

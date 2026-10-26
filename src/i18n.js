@@ -286,4 +286,32 @@ Object.assign(T.en, {
   account_title: 'Account', not_found: "We couldn't find that page.", not_found_lead: 'The link may be mistyped, or the clue is no longer published.',
 });
 
+// Activación y retención (docs/CRECIMIENTO-PRODUCTO.md). Solo prometen lo que el producto hace hoy.
+Object.assign(T.es, {
+  prefs_auto: 'Jugás con crípticos en {choice}.',
+  signup_t: '¿Te está gustando? Guardá tu progreso',
+  signup_body: 'Con una cuenta gratis, tu historial, tus rachas y tus logros quedan guardados y los ves en cualquier dispositivo. Además podés jugar el torneo semanal y retar a amigos a duelos.',
+  signup_effort: 'Solo pide un usuario y una contraseña; el correo es opcional. Sin cuenta seguís jugando igual, sin límite.',
+  signup_cta: 'Crear cuenta gratis', signup_later: 'Ahora no',
+  daily_nudge_t: 'Te falta el desafío de hoy',
+  daily_nudge: 'Un mismo críptico para todos, cada día. ¿Lo probás?', daily_nudge_cta: 'Jugar el de hoy',
+  daily_next_t: 'Mañana hay otro',
+  daily_next: 'El próximo desafío llega a las {time} de tu hora (en {left}). Mientras tanto, los crípticos ilimitados siguen abiertos.',
+  daily_next_cta: 'Seguir jugando',
+  account_via_lead: 'Creá tu cuenta en un minuto. Después te preguntamos si querés sumar las partidas que jugaste en este navegador.',
+});
+Object.assign(T.en, {
+  prefs_auto: 'You are playing clues in {choice}.',
+  signup_t: 'Enjoying it? Save your progress',
+  signup_body: 'With a free account your history, streaks and achievements are saved and available on any device. You can also play the weekly tournament and challenge friends to duels.',
+  signup_effort: 'It only asks for a username and a password; email is optional. Without an account you can keep playing, no limits.',
+  signup_cta: 'Create a free account', signup_later: 'Not now',
+  daily_nudge_t: "You haven't played today's challenge",
+  daily_nudge: 'The same clue for everyone, every day. Give it a go?', daily_nudge_cta: "Play today's",
+  daily_next_t: "There's another one tomorrow",
+  daily_next: 'The next challenge arrives at {time} your time (in {left}). Meanwhile, unlimited clues stay open.',
+  daily_next_cta: 'Keep playing',
+  account_via_lead: "Create your account in a minute. Afterwards we'll ask whether to add the games you played in this browser.",
+});
+
 module.exports = { T, t, ROUTES, UI_LANGS, pickUiLang };
