@@ -1,4 +1,4 @@
-/* Play Crípticos Plus: planes, vuelta desde PayPal y comparación con la comunidad. Ver docs/PLUS.md. */
+/* Play Crípticos Plus: planes, vuelta desde el pago y comparación con la comunidad. Ver docs/PLUS.md. */
 (function () {
   'use strict';
   const C = window.__cripta;
@@ -11,18 +11,19 @@
   const dec = (v) => (v == null ? '—' : String(v).replace('.', ','));
   const errText = (x) => (x && x.data && x.data.message) || 'Algo salió mal. Probá de nuevo.';
 
-  async function returnFromPayPal() {
+  // Vuelta desde el checkout: el beneficio lo da el webhook, que puede tardar unos segundos.
+  async function returnFromCheckout() {
     const q = new URLSearchParams(location.search);
-    if (q.get('plus') === 'cancelado') { history.replaceState(null, '', location.pathname); toast('Cancelaste el pago en PayPal: no se te cobró nada.'); return; }
-    if (q.get('plus') !== 'ok' || !q.get('subscription_id')) return;
+    if (q.get('plus') !== 'ok') return;
     history.replaceState(null, '', location.pathname);
     await C.authReady;
-    if (!C.getMe()) { toast('Entrá con tu cuenta para terminar de activar Plus.'); return; }
-    try {
-      const r = await api('/api/billing/plus/confirm', { method: 'POST', body: { subscription_id: q.get('subscription_id') } });
-      if (r.active) { location.reload(); return; }
-      toast('PayPal todavía está procesando el pago. En unos minutos tu cuenta queda Plus.');
-    } catch (x) { toast(errText(x) + ' Si PayPal te cobró, escribinos.'); }
+    if (!C.getMe()) { toast('Entrá con tu cuenta para ver tu Plus.'); return; }
+    toast('¡Gracias! Estamos activando tu Plus…');
+    for (let i = 0; i < 6; i++) {
+      await new Promise((r) => setTimeout(r, 2500));
+      try { if ((await api('/api/billing/plus')).active) { location.reload(); return; } } catch (e) { /* reintenta */ }
+    }
+    toast('El pago se está procesando. En unos minutos tu cuenta queda Plus; si no, escribinos.');
   }
 
   async function plans() {
@@ -34,11 +35,11 @@
     const me = C.getMe();
     if (st.active) {
       const sub = st.subscription;
-      const renews = sub && sub.status === 'ACTIVE';
+      const renews = sub && ['active', 'on_trial', 'past_due'].includes(sub.status);
       box.replaceChildren(el('article', { class: 'plan mine' }, el('h3', { text: 'Tu suscripción' }),
         el('p', { text: renews ? `Plan ${sub.plan === 'yearly' ? 'anual' : 'mensual'}, activo hasta el ${fmtDate(st.until)}. Se renueva solo.`
-          : sub && sub.status === 'CANCELLED' ? `Cancelada: seguís con Plus hasta el ${fmtDate(st.until)}.` : `Sos Plus hasta el ${fmtDate(st.until)}.` }),
-        renews ? el('p', {}, el('a', { class: 'btn', href: st.manage_url, target: '_blank', rel: 'noopener', text: 'Administrar o cancelar en PayPal' })) : null));
+          : sub && sub.status === 'cancelled' ? `Cancelada: seguís con Plus hasta el ${fmtDate(st.until)}.` : `Sos Plus hasta el ${fmtDate(st.until)}.` }),
+        renews ? el('p', {}, el('a', { class: 'btn', href: st.manage_url, target: '_blank', rel: 'noopener', text: 'Administrar o cancelar' })) : null));
       return;
     }
     for (const card of box.querySelectorAll('.plan')) {
@@ -52,7 +53,7 @@
         err.textContent = ''; btn.setAttribute('aria-busy', 'true');
         try { const r = await api('/api/billing/plus/checkout', { method: 'POST', body: { plan } }); location.href = r.url; } catch (x) { err.textContent = errText(x); btn.removeAttribute('aria-busy'); }
       } });
-      slot.replaceChildren(btn, el('p', { class: 'small muted', text: 'Pagás con PayPal o con tarjeta.' }), err);
+      slot.replaceChildren(btn, el('p', { class: 'small muted', text: 'Pagás con tarjeta o PayPal. Impuestos incluidos.' }), err);
     }
   }
 
@@ -80,5 +81,5 @@
       el('p', { class: 'small muted', text: 'Tiempo: mediana de los crípticos resueltos. Pistas: promedio por partida.' }));
   }
 
-  returnFromPayPal().then(() => Promise.all([plans(), comparison()]));
+  returnFromCheckout().then(() => Promise.all([plans(), comparison()]));
 })();

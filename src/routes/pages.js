@@ -690,8 +690,8 @@ ${isPlus ? `<section class="plus-daily"><h2>Críptico Plus del día</h2><section
   <article class="plan best" data-plan="yearly"><p class="tag-best">Ahorrás 33%</p><h3>Anual</h3><p class="price"><b>${esc(y.price)}</b> / ${esc(y.per)}</p><p class="muted small">${esc(y.note)}: pagás 8 meses y tenés 12.</p><div class="plan-cta"></div></article>
 </section>
 <section class="plus-faq"><h2>Preguntas frecuentes</h2>
-<details><summary>¿Cómo pago?</summary><p>Con PayPal, con tu saldo o con tarjeta de crédito o débito a través de PayPal. Nosotros nunca vemos tus datos de pago.</p></details>
-<details><summary>¿Puedo cancelar?</summary><p>Sí, cuando quieras, desde los pagos automáticos de tu cuenta de PayPal. Seguís con Plus hasta el final del período que ya pagaste.</p></details>
+<details><summary>¿Cómo pago?</summary><p>Con tarjeta de crédito o débito, o con PayPal, a través de Lemon Squeezy, que procesa el pago e incluye los impuestos de tu país. Nosotros nunca vemos tus datos de pago.</p></details>
+<details><summary>¿Puedo cancelar?</summary><p>Sí, cuando quieras, desde el enlace «Administrar o cancelar» de esta página o del correo de Lemon Squeezy. Seguís con Plus hasta el final del período que ya pagaste.</p></details>
 <details><summary>¿Y si me arrepiento?</summary><p>Si nos escribís dentro de los 10 días del primer pago, te devolvemos ese pago completo.</p></details>
 <details><summary>¿Da ventajas en torneos o duelos?</summary><p>No. Los torneos y duelos son iguales para todos: Plus no da puntos, pistas ni tiempo extra.</p></details>
 </section>`,

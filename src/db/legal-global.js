@@ -491,8 +491,7 @@ const ADS_REVISIONS = {
   },
 };
 
-// Revisión del 26/10/2026: plan pago Plus (mensual o anual) cobrado con PayPal.
-// Al publicarse los términos de esta revisión se habilita el botón de pago.
+// Revisión del 26/10/2026: plan pago Plus (mensual o anual), primero con PayPal (ver la revisión siguiente).
 const PREMIUM_NOTE = 'plus-2026-10-26';
 const PREMIUM_REVISIONS = {
   terms: (t) => swap(t, '## 8. Servicio gratuito y sin garantías\n',
@@ -517,7 +516,27 @@ const PREMIUM_REVISIONS = {
     '| PayPal (PayPal Holdings, Inc. y filiales) | Cobro del plan Plus | Datos de pago y de la suscripción; nosotros solo recibimos el identificador, el plan y el estado de la suscripción | Estados Unidos y otros | Responsable independiente; política de privacidad de PayPal |\n| GitHub Inc. |'),
 };
 
-// Revisiones en orden: cada una se arma sobre la versión anterior del mismo documento.
-const REVISION_SETS = [[ORIGIN_NOTE, REVISIONS], [ADS_NOTE, ADS_REVISIONS], [PREMIUM_NOTE, PREMIUM_REVISIONS]];
+// Revisión del 26/10/2026 (b): el cobro de Plus pasa de PayPal a Lemon Squeezy (PayPal Business no
+// está disponible en Argentina). Al publicarse los términos de esta revisión se habilita el pago.
+const PLUS_LS_NOTE = 'plus-ls-2026-10-26';
+const LS = 'Lemon Squeezy (Lemon Squeezy, LLC)';
+const PLUS_LS_REVISIONS = {
+  terms: (t) => {
+    t = swap(t, '(el precio final lo muestra PayPal antes de pagar). Se cobra por adelantado a través de PayPal y se renueva solo al final de cada período.',
+      `(el precio final, con los impuestos de tu país, lo muestra el checkout antes de pagar). El cobro lo hace ${LS}, que actúa como vendedor registrado («merchant of record»): procesa el pago, emite el comprobante y liquida los impuestos. Se cobra por adelantado y se renueva solo al final de cada período.`);
+    return swap(t, 'desde los pagos automáticos de tu cuenta de PayPal.', 'desde el enlace «Administrar o cancelar» de la página de Plus o del correo de Lemon Squeezy.');
+  },
+  privacy: (t) => {
+    t = swap(t, 'guardamos el identificador de la suscripción de PayPal, el plan (mensual o anual), su estado y hasta cuándo está pagada. El pago lo procesa PayPal: nunca vemos ni guardamos tu tarjeta ni tu cuenta de PayPal.',
+      'guardamos el identificador de la suscripción, el plan (mensual o anual), su estado, hasta cuándo está pagada y el enlace para administrarla. El pago lo procesa Lemon Squeezy: nunca vemos ni guardamos tu tarjeta ni tu cuenta de pago.');
+    return swap(t, 'el pago lo procesa PayPal (PayPal Holdings, Inc. y sus filiales), que actúa como responsable independiente de los datos de pago según su propia política de privacidad: https://www.paypal.com/legalhub/privacy-full.',
+      `el pago lo procesa ${LS}, que actúa como vendedor registrado y responsable independiente de los datos de pago y de facturación según su propia política de privacidad: https://www.lemonsqueezy.com/privacy.`);
+  },
+  processors: (t) => swap(t, '| PayPal (PayPal Holdings, Inc. y filiales) | Cobro del plan Plus | Datos de pago y de la suscripción; nosotros solo recibimos el identificador, el plan y el estado de la suscripción | Estados Unidos y otros | Responsable independiente; política de privacidad de PayPal |',
+    `| ${LS} | Cobro del plan Plus como vendedor registrado (impuestos y comprobantes) | Datos de pago, facturación y de la suscripción; nosotros solo recibimos el identificador, el plan y el estado de la suscripción | Estados Unidos y otros | Responsable independiente; política de privacidad de Lemon Squeezy |`),
+};
 
-module.exports = { NOTE, ORIGIN_NOTE, ADS_NOTE, PREMIUM_NOTE, REVISIONS, ADS_REVISIONS, PREMIUM_REVISIONS, REVISION_SETS, OWNER, PUBLIC, DOCS, ownerReady, fill };
+// Revisiones en orden: cada una se arma sobre la versión anterior del mismo documento.
+const REVISION_SETS = [[ORIGIN_NOTE, REVISIONS], [ADS_NOTE, ADS_REVISIONS], [PREMIUM_NOTE, PREMIUM_REVISIONS], [PLUS_LS_NOTE, PLUS_LS_REVISIONS]];
+
+module.exports = { NOTE, ORIGIN_NOTE, ADS_NOTE, PREMIUM_NOTE, PLUS_LS_NOTE, REVISIONS, ADS_REVISIONS, PREMIUM_REVISIONS, PLUS_LS_REVISIONS, REVISION_SETS, OWNER, PUBLIC, DOCS, ownerReady, fill };

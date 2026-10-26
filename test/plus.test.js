@@ -2,6 +2,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const crypto = require('node:crypto');
 const { makeEnv, client } = require('./helpers');
 const PLUS = require('../src/services/plus');
 const ADS = require('../src/services/ads');
@@ -9,28 +10,23 @@ const { setSetting } = require('../src/services/settings');
 
 let env;
 const realFetch = globalThis.fetch;
-// PayPal falso: guarda las suscripciones creadas y responde como la API real.
-const pp = { subs: new Map(), verify: 'SUCCESS', calls: [] };
-function fakePayPal(url, init = {}) {
+// Lemon Squeezy falso: guarda los checkouts creados y responde como la API real.
+const ls = { checkouts: [] };
+function fakeLemon(url, init = {}) {
   const u = new URL(url);
-  pp.calls.push(`${init.method || 'GET'} ${u.pathname}`);
-  const json = (status, body) => Promise.resolve(new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } }));
-  if (u.pathname === '/v1/oauth2/token') return json(200, { access_token: 'tok', expires_in: 32400 });
-  if (u.pathname === '/v1/billing/subscriptions' && init.method === 'POST') {
+  const json = (status, body) => Promise.resolve(new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/vnd.api+json' } }));
+  if (u.pathname === '/v1/checkouts' && init.method === 'POST') {
+    if (init.headers.Authorization !== 'Bearer key') return json(401, {});
     const b = JSON.parse(init.body);
-    const id = 'I-' + Math.random().toString(36).slice(2, 12).toUpperCase();
-    pp.subs.set(id, { id, plan_id: b.plan_id, custom_id: b.custom_id, status: 'APPROVAL_PENDING' });
-    return json(201, { id, status: 'APPROVAL_PENDING', links: [{ rel: 'approve', href: `https://www.sandbox.paypal.com/webapps/billing/subscriptions?ba_token=${id}` }] });
+    ls.checkouts.push(b.data);
+    return json(201, { data: { type: 'checkouts', id: 'co-1', attributes: { url: 'https://playcripticos.lemonsqueezy.com/checkout/custom/abc' } } });
   }
-  const m = /^\/v1\/billing\/subscriptions\/(I-[A-Z0-9]+)$/.exec(u.pathname);
-  if (m) return pp.subs.has(m[1]) ? json(200, pp.subs.get(m[1])) : json(404, { name: 'RESOURCE_NOT_FOUND' });
-  if (u.pathname === '/v1/notifications/verify-webhook-signature') return json(200, { verification_status: pp.verify });
   return json(404, {});
 }
 
 test.before(async () => {
   env = await makeEnv({ spanishOnly: true });
-  globalThis.fetch = (url, init) => (/paypal\.com/.test(String(url)) ? fakePayPal(String(url), init) : realFetch(url, init));
+  globalThis.fetch = (url, init) => (/lemonsqueezy\.com/.test(String(url)) ? fakeLemon(String(url), init) : realFetch(url, init));
 });
 test.after(async () => { globalThis.fetch = realFetch; await env.close(); });
 
@@ -41,13 +37,23 @@ async function player(name) {
   return { c, user: r.json.user };
 }
 const configure = () => {
-  env.config.paypal = { env: 'sandbox', clientId: 'id', clientSecret: 'secret', planMonthly: 'P-MONTHLY1', planYearly: 'P-YEARLY12', webhookId: 'WH-1' };
-  PLUS.clearTokenCache();
+  env.config.lemonsqueezy = { apiKey: 'key', storeId: '111', variantMonthly: '201', variantYearly: '212', webhookSecret: 'secreto' };
 };
-const activate = (id, extra = {}) => Object.assign(pp.subs.get(id), {
-  status: 'ACTIVE', billing_info: { next_billing_time: new Date(Date.now() + 30 * 86400000).toISOString(), last_payment: { time: new Date().toISOString() } }, ...extra });
+const days = (n) => new Date(Date.now() + n * 86400000).toISOString();
+let seq = 0;
+function event(name, userId, attrs = {}, subId = '9001') {
+  return { meta: { event_name: name, custom_data: userId ? { user_id: userId } : undefined },
+    data: { type: 'subscriptions', id: subId, attributes: { store_id: 111, variant_id: 201, status: 'active', renews_at: days(30), ends_at: null,
+      updated_at: `2026-10-26T00:00:${String(seq++).padStart(2, '0')}Z`, urls: { customer_portal: 'https://playcripticos.lemonsqueezy.com/billing?x=1' }, ...attrs } } };
+}
+function hook(ev, secret = 'secreto') {
+  const raw = JSON.stringify(ev);
+  const sig = crypto.createHmac('sha256', secret).update(raw).digest('hex');
+  return realFetch(`${env.base}/api/billing/webhook`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-signature': sig }, body: raw })
+    .then(async (r) => ({ status: r.status, json: await r.json().catch(() => ({})) }));
+}
 
-test('sin claves de PayPal o sin términos publicados, el pago no está disponible', async () => {
+test('sin claves de Lemon Squeezy o sin términos publicados, el pago no está disponible', async () => {
   const ana = await player('ana_plus');
   let st = await ana.c.get('/api/billing/plus');
   assert.equal(st.status, 200);
@@ -59,39 +65,36 @@ test('sin claves de PayPal o sin términos publicados, el pago no está disponib
   st = await ana.c.get('/api/billing/plus');
   assert.equal(st.json.available, false, 'faltan los términos del plan publicados');
   await setSetting(env.db, 'billing.enabled', true, null);
+  assert.equal((await ana.c.get('/api/billing/plus')).json.available, false, 'los términos con PayPal no alcanzan');
+  await setSetting(env.db, 'billing.lemonsqueezy', true, null);
   st = await ana.c.get('/api/billing/plus');
   assert.equal(st.json.available, true);
   assert.equal(st.json.plans.yearly.available, true);
 });
 
-test('suscripción: PayPal aprueba, la cuenta queda Plus y deja de ver anuncios', async () => {
+test('suscripción: checkout con la cuenta, webhook da Plus y deja de ver anuncios', async () => {
   configure();
-  await setSetting(env.db, 'billing.enabled', true, null);
+  await setSetting(env.db, 'billing.lemonsqueezy', true, null);
   assert.equal((await client(env.base).post('/api/billing/plus/checkout', { plan: 'monthly' })).status, 401, 'sin cuenta no se suscribe');
   const beto = await player('beto_plus');
   const co = await beto.c.post('/api/billing/plus/checkout', { plan: 'yearly' });
   assert.equal(co.status, 200, co.text);
-  assert.match(co.json.url, /paypal\.com/);
-  const id = [...pp.subs.keys()].pop();
-  assert.equal(pp.subs.get(id).plan_id, 'P-YEARLY12');
-  assert.equal(pp.subs.get(id).custom_id, beto.user.id, 'la cuenta viaja en custom_id');
+  assert.match(co.json.url, /lemonsqueezy\.com/);
+  const sent = ls.checkouts.pop();
+  assert.equal(sent.relationships.variant.data.id, '212');
+  assert.equal(sent.relationships.store.data.id, '111');
+  assert.equal(sent.attributes.checkout_data.custom.user_id, beto.user.id, 'la cuenta viaja en custom.user_id');
+  assert.match(sent.attributes.product_options.redirect_url, /\/es\/plus\?plus=ok$/);
 
-  // Todavía sin aprobar: no da Plus.
-  let cf = await beto.c.post('/api/billing/plus/confirm', { subscription_id: id });
-  assert.equal(cf.status, 200);
-  assert.equal(cf.json.active, false);
-
-  activate(id);
-  const otro = await player('otro_plus');
-  assert.equal((await otro.c.post('/api/billing/plus/confirm', { subscription_id: id })).status, 403, 'otra cuenta no puede confirmar una suscripción ajena');
-  cf = await beto.c.post('/api/billing/plus/confirm', { subscription_id: id });
-  assert.equal(cf.json.active, true, cf.text);
+  const r = await hook(event('subscription_created', beto.user.id, { variant_id: 212, renews_at: days(365) }, '9100'));
+  assert.equal(r.status, 200, JSON.stringify(r.json));
+  assert.equal(r.json.user, true);
   const st = await beto.c.get('/api/billing/plus');
   assert.equal(st.json.active, true);
   assert.equal(st.json.subscription.plan, 'yearly');
+  assert.match(st.json.manage_url, /lemonsqueezy\.com\/billing/);
   assert.equal((await beto.c.post('/api/billing/plus/checkout', { plan: 'monthly' })).status, 409, 'no se suscribe dos veces');
 
-  // Anuncios: encendidos para todos menos para la cuenta Plus.
   env.config.adsenseClient = 'ca-pub-1234567890123456';
   await setSetting(env.db, 'ads.enabled', true, null);
   ADS.clearCache();
@@ -104,43 +107,37 @@ test('suscripción: PayPal aprueba, la cuenta queda Plus y deja de ver anuncios'
   ADS.clearCache();
 });
 
-test('webhook: firma verificada con PayPal, cancelación respeta lo pagado y avisos repetidos se ignoran', async () => {
+test('webhook: firma HMAC, cancelación respeta lo pagado, la cuenta no se cambia y avisos repetidos se ignoran', async () => {
   configure();
-  await setSetting(env.db, 'billing.enabled', true, null);
   const caro = await player('caro_plus');
-  await caro.c.post('/api/billing/plus/checkout', { plan: 'monthly' });
-  const id = [...pp.subs.keys()].pop();
-  activate(id);
-  const hook = (ev) => client(env.base).post('/api/billing/webhook', ev, { 'paypal-transmission-id': 't1', 'paypal-transmission-sig': 'sig' });
-
-  pp.verify = 'FAILURE';
-  assert.equal((await hook({ id: 'WH-EV-0', event_type: 'BILLING.SUBSCRIPTION.ACTIVATED', resource: { id } })).status, 401, 'firma inválida');
-  pp.verify = 'SUCCESS';
-  let r = await hook({ id: 'WH-EV-1', event_type: 'BILLING.SUBSCRIPTION.ACTIVATED', resource: { id, status: 'ACTIVE' } });
-  assert.equal(r.status, 200, r.text);
-  assert.equal(r.json.user, true);
+  const otro = await player('otro_plus');
+  assert.equal((await hook(event('subscription_created', caro.user.id, {}, '9200'), 'otro-secreto')).status, 401, 'firma inválida');
+  const created = event('subscription_created', caro.user.id, {}, '9200');
+  let r = await hook(created);
+  assert.equal(r.status, 200, JSON.stringify(r.json));
   let u = await env.db.get('SELECT plus_until FROM users WHERE id = ?', [caro.user.id]);
   assert.ok(Date.parse(u.plus_until) > Date.now() + 29 * 86400000, 'activa hasta el próximo cobro (más el margen)');
+  assert.equal((await hook(created)).json.duplicate, true, 'el mismo aviso no se aplica dos veces');
 
-  // Cancelación: sigue Plus hasta la fecha ya pagada.
-  pp.subs.get(id).status = 'CANCELLED';
-  r = await hook({ id: 'WH-EV-2', event_type: 'BILLING.SUBSCRIPTION.CANCELLED', resource: { id } });
+  // Un aviso con otra cuenta en custom_data no le pasa la suscripción a otra persona.
+  await hook(event('subscription_updated', otro.user.id, {}, '9200'));
+  assert.equal((await env.db.get('SELECT plus_until FROM users WHERE id = ?', [otro.user.id])).plus_until, null);
+
+  r = await hook(event('subscription_cancelled', caro.user.id, { status: 'cancelled', ends_at: days(20) }, '9200'));
   assert.equal(r.status, 200);
   u = await env.db.get('SELECT plus_until FROM users WHERE id = ?', [caro.user.id]);
-  assert.ok(Date.parse(u.plus_until) > Date.now() + 25 * 86400000, 'conserva el período pagado');
+  assert.ok(Date.parse(u.plus_until) > Date.now() + 19 * 86400000, 'conserva el período pagado');
   const st = await caro.c.get('/api/billing/plus');
   assert.equal(st.json.active, true);
-  assert.equal(st.json.subscription.status, 'CANCELLED');
+  assert.equal(st.json.subscription.status, 'cancelled');
 
-  // Vencida: se termina.
-  pp.subs.get(id).status = 'EXPIRED';
-  await hook({ id: 'WH-EV-3', event_type: 'BILLING.SUBSCRIPTION.EXPIRED', resource: { id } });
+  await hook(event('subscription_expired', caro.user.id, { status: 'expired', ends_at: days(-1) }, '9200'));
   u = await env.db.get('SELECT plus_until FROM users WHERE id = ?', [caro.user.id]);
   assert.equal(u.plus_until, null);
-  r = await hook({ id: 'WH-EV-3', event_type: 'BILLING.SUBSCRIPTION.EXPIRED', resource: { id } });
-  assert.equal(r.json.duplicate, true, 'el mismo aviso no se aplica dos veces');
-  r = await hook({ id: 'WH-EV-4', event_type: 'CHECKOUT.ORDER.APPROVED', resource: {} });
+  r = await hook({ meta: { event_name: 'order_created' }, data: { type: 'orders', id: '1', attributes: {} } });
   assert.ok(r.json.ignored, 'otros avisos se ignoran');
+  r = await hook(event('subscription_created', caro.user.id, { variant_id: 999 }, '9300'));
+  assert.equal(r.json.ignored, 'other_variant', 'productos ajenos se ignoran');
 });
 
 test('beneficios: Críptico Plus del día, comparación con la comunidad y avatares exclusivos', async () => {
@@ -174,13 +171,17 @@ test('beneficios: Críptico Plus del día, comparación con la comunidad y avata
   const page = await dani.c.get('/es/plus');
   assert.equal(page.status, 200);
   assert.match(page.text, /Tu Plus/);
-  assert.match((await client(env.base).get('/es/plus')).text, /USD 12/);
+  const pub = (await client(env.base).get('/es/plus')).text;
+  assert.match(pub, /USD 12/);
+  assert.doesNotMatch(pub, /PayPal Business|cuenta de PayPal/);
 });
 
-test('cuenta: untilFor según el estado de PayPal', () => {
-  const next = new Date(Date.now() + 10 * 86400000).toISOString();
-  assert.ok(Date.parse(PLUS.untilFor({ status: 'ACTIVE', billing_info: { next_billing_time: next } })) > Date.parse(next), 'activa: próximo cobro + margen');
-  assert.equal(PLUS.untilFor({ status: 'CANCELLED', billing_info: { next_billing_time: next } }), new Date(next).toISOString());
-  assert.equal(PLUS.untilFor({ status: 'SUSPENDED' }), null);
-  assert.equal(PLUS.untilFor({ status: 'APPROVAL_PENDING' }), null);
+test('cuenta: untilFor según el estado de Lemon Squeezy', () => {
+  const next = days(10);
+  assert.ok(Date.parse(PLUS.untilFor({ status: 'active', renews_at: next })) > Date.parse(next), 'activa: próximo cobro + margen');
+  assert.ok(PLUS.untilFor({ status: 'past_due', renews_at: next }), 'cobro demorado: se mantiene mientras reintenta');
+  assert.equal(PLUS.untilFor({ status: 'cancelled', ends_at: next }), new Date(next).toISOString());
+  assert.equal(PLUS.untilFor({ status: 'expired', ends_at: next }), null);
+  assert.equal(PLUS.untilFor({ status: 'unpaid' }), null);
+  assert.equal(PLUS.untilFor({ status: 'paused' }), null);
 });
