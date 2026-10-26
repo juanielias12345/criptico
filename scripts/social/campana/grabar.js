@@ -2,7 +2,7 @@
 
 // Graba el producto real (servidor local con la base de demostración) en pantalla de
 // teléfono para los videos de la campaña de 21 días. Cada recorrido deja un .webm en OUT.
-//   BASE=http://localhost:3077 DB=file:/tmp/pc-demo.db node scripts/social/campana/grabar.js jugar diario ...
+//   BASE=http://localhost:3077 DB=file:/tmp/pc-demo.db DEMO_PASSWORD=… node scripts/social/campana/grabar.js jugar diario ...
 
 const fs = require('fs');
 const path = require('path');
@@ -14,6 +14,8 @@ const BASE = process.env.BASE || 'http://localhost:3077';
 const OUT = process.env.OUT || '/tmp/campana-grabaciones';
 const db = createClient({ url: process.env.DB || 'file:/tmp/pc-demo.db' });
 const VW = 390; const VH = 780;
+// Contraseña de las cuentas de demostración de la base local; no se guarda en el código.
+const DEMO_PASSWORD = process.env.DEMO_PASSWORD;
 
 // Un punto que marca cada toque, para que se entienda qué se aprieta.
 const TAPS = () => {
@@ -32,8 +34,9 @@ async function context(browser, name, { user } = {}) {
   await ctx.addInitScript(() => { localStorage.setItem('cripta.prefs', JSON.stringify({ country: 'AR', choice: 'es', remember: true })); });
   await ctx.addInitScript(TAPS);
   if (user) {
-    const r = await ctx.request.post(BASE + '/api/auth/register', { data: { username: user, password: 'demo-demo-1234', accept: true } });
-    if (!r.ok()) await ctx.request.post(BASE + '/api/auth/login', { data: { username: user, password: 'demo-demo-1234' } });
+    if (!DEMO_PASSWORD) throw new Error('Falta DEMO_PASSWORD para las cuentas de demostración');
+    const r = await ctx.request.post(BASE + '/api/auth/register', { data: { username: user, password: DEMO_PASSWORD, accept: true } });
+    if (!r.ok()) await ctx.request.post(BASE + '/api/auth/login', { data: { username: user, password: DEMO_PASSWORD } });
   }
   return ctx;
 }
