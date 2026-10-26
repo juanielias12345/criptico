@@ -89,7 +89,7 @@ const CAROUSELS = {
   'k1-todo-gratis': [
     `<div class="k" style="margin-top:auto">Guardalo</div><h1 style="margin-top:28px">Todo lo que podés hacer <em>gratis</em></h1><p style="margin-top:36px">En Play Crípticos, hoy. Deslizá →</p>`,
     `<div class="k" style="margin-top:110px">1 · Jugar</div><h2 style="margin-top:28px">Crípticos sin límite</h2>${list(['Sin tope diario y sin registrarte', '5 dificultades: de «muy fácil» a «experto»', 'Pistas que te dicen el truco', 'Cada solución, explicada paso a paso'])}`,
-    `<div class="k" style="margin-top:110px">2 · El Diario</div><h2 style="margin-top:28px">Uno por día, el mismo para todos</h2>${list(['Se renueva a las 21 h de Argentina', 'Mirá cuántos lo resolvieron', 'Calendario para jugar los días anteriores'])}`,
+    `<div class="k" style="margin-top:110px">2 · El Diario</div><h2 style="margin-top:28px">Uno por día, el mismo para todos</h2>${list(['Se renueva cada día a las 00:00 UTC', 'Mirá cuántos lo resolvieron', 'Calendario para jugar los días anteriores'])}`,
     `<div class="k" style="margin-top:110px">3 · Desafíos</div><h2 style="margin-top:28px">Torneo semanal y duelos</h2>${list(['Torneo: 7 rondas, una por día, con ranking', 'Duelos 1 contra 1 con un enlace', 'Amigos: mirá quién está conectado', 'Se juega con una cuenta gratis'])}`,
     `<div class="k" style="margin-top:110px">4 · Tu perfil</div><h2 style="margin-top:28px">Tu progreso, a la vista</h2>${list(['12 niveles: de Curioso a Leyenda del crucigrama', 'Rachas, récords y logros', 'Tus fortalezas por tipo de pista', 'Perfil público solo si querés'])}`,
     `<div class="k" style="margin-top:110px">5 · Aprender</div><h2 style="margin-top:28px">De cero a experto</h2>${list(['«Cómo jugar»: 7 lecciones cortas', 'Guía de los 9 mecanismos', 'Práctica libre por tipo de pista'])}`,
@@ -98,7 +98,7 @@ const CAROUSELS = {
   'k2-torneo': [
     `<div class="k" style="margin-top:auto">Desafíos</div><h1 style="margin-top:28px">El torneo <em>semanal</em>, explicado</h1><p style="margin-top:36px">Gratis, con ranking y una ronda por día.</p>`,
     `<div class="k" style="margin-top:110px">Cómo entrar</div><h2 style="margin-top:28px">Te anotás con un toque</h2>${list(['Entrá a Desafíos en playcripticos.com', 'Creá tu cuenta gratis (usuario y contraseña)', 'Tocá «Inscribirme gratis»', 'Tu nombre aparece en el ranking'])}`,
-    `<div class="k" style="margin-top:110px">Las rondas</div><h2 style="margin-top:28px">7 crípticos, uno por día</h2>${list(['Cada ronda abre a las 21 h de Argentina (00:00 UTC)', 'Tenés ese día y el siguiente para jugarla', 'Empieza el lunes y termina el domingo', 'Si arrancás una ronda, el reloj corre'])}`,
+    `<div class="k" style="margin-top:110px">Las rondas</div><h2 style="margin-top:28px">7 crípticos, uno por día</h2>${list(['Cada ronda abre a las 00:00 UTC', 'Tenés ese día y el siguiente para jugarla', 'Empieza el lunes y termina el domingo', 'Si arrancás una ronda, el reloj corre'])}`,
     `<div class="k" style="margin-top:110px">Puntaje</div><h2 style="margin-top:28px">Hasta 200 por críptico</h2>${table([['Resolver', '100'], ['Cada pista', '−20'], ['Cada error', '−10'], ['Velocidad (10 s o menos)', '+100'], ['Revelar o rendirse', '0']])}<p style="margin-top:28px;font-size:30px">Resolver vale como mínimo 20. La velocidad baja hasta 0 a los 3 minutos.</p>`,
     `<div class="k" style="margin-top:auto">¿Te animás?</div><h2 style="margin-top:28px">Si empatan, gana quien tardó menos</h2><p style="margin-top:32px">Anotate en Desafíos: playcripticos.com · link en el perfil.</p>`,
   ],
@@ -135,7 +135,7 @@ const CAROUSELS = {
 // ── Imágenes del torneo (domingo antes de que abra la primera ronda) ──
 const TORNEOS = [['torneo-02-11', '2 al 8 de noviembre'], ['torneo-09-11', '9 al 15 de noviembre'], ['torneo-16-11', '16 al 22 de noviembre']];
 const torneoImg = (fechas) => page(1080, 1350, `<div style="padding:96px 88px;display:flex;flex-direction:column;height:100%">
-  ${top()}<div class="k" style="margin-top:auto">Hoy 21 h (Argentina)</div>
+  ${top()}<div class="k" style="margin-top:auto">Esta noche · 00:00 UTC</div>
   <h1 style="margin-top:28px">Arranca el <em>torneo</em> de la semana</h1>
   <p style="margin-top:36px">${esc(fechas)} · 7 crípticos, uno por día · gratis</p>
   <div style="margin-top:48px">${tiles('RANKING', { fill: true, maxW: 860 })}</div>
