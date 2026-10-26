@@ -25,14 +25,14 @@ function loadConfig(env = process.env) {
     // Google AdSense: ID de editor (ca-pub-…) y, opcional, un bloque de anuncios manual. Ver docs/MONETIZACION.md.
     adsenseClient: /^ca-pub-\d{10,20}$/.test(env.ADSENSE_CLIENT || '') ? env.ADSENSE_CLIENT : '',
     adsenseSlot: /^\d{6,20}$/.test(env.ADSENSE_SLOT || '') ? env.ADSENSE_SLOT : '',
-    // Plan Plus: suscripción de PayPal (mensual y anual). Sin estas claves, el botón de pago queda deshabilitado.
-    paypal: {
-      env: env.PAYPAL_ENV === 'sandbox' ? 'sandbox' : 'live',
-      clientId: env.PAYPAL_CLIENT_ID || '',
-      clientSecret: env.PAYPAL_CLIENT_SECRET || '',
-      planMonthly: /^P-[A-Z0-9]{6,40}$/.test(env.PAYPAL_PLAN_MONTHLY || '') ? env.PAYPAL_PLAN_MONTHLY : '',
-      planYearly: /^P-[A-Z0-9]{6,40}$/.test(env.PAYPAL_PLAN_YEARLY || '') ? env.PAYPAL_PLAN_YEARLY : '',
-      webhookId: env.PAYPAL_WEBHOOK_ID || '',
+    // Plan Plus: suscripción de Lemon Squeezy (mensual y anual). Sin estas claves, el botón de pago queda deshabilitado.
+    lemonsqueezy: {
+      apiKey: env.LEMONSQUEEZY_API_KEY || '',
+      storeId: /^\d{1,12}$/.test(env.LEMONSQUEEZY_STORE_ID || '') ? env.LEMONSQUEEZY_STORE_ID : '',
+      productId: /^\d{1,12}$/.test(env.LEMONSQUEEZY_PRODUCT_ID || '') ? env.LEMONSQUEEZY_PRODUCT_ID : '',
+      variantMonthly: /^\d{1,12}$/.test(env.LEMONSQUEEZY_VARIANT_MONTHLY || '') ? env.LEMONSQUEEZY_VARIANT_MONTHLY : '',
+      variantYearly: /^\d{1,12}$/.test(env.LEMONSQUEEZY_VARIANT_YEARLY || '') ? env.LEMONSQUEEZY_VARIANT_YEARLY : '',
+      webhookSecret: env.LEMONSQUEEZY_WEBHOOK_SECRET || '',
     },
     siteUrl: siteUrlFrom(env),
     databaseUrl: env.DATABASE_URL || `file:${path.join(process.cwd(), 'data', 'criptico.db')}`,

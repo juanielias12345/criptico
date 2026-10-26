@@ -20,10 +20,6 @@ module.exports = function billingApi() {
     if (req.user && !(await hit(req.app.locals.db, `checkout:${req.user.id}`, 20, 'day')).allowed) throw new HttpError(429, 'rate_limited', 'Probá de nuevo más tarde.');
     res.json(await P.checkout(req.app.locals.db, req.app.locals.config, req.user, (req.body || {}).plan === 'yearly' ? 'yearly' : 'monthly'));
   }));
-  // Vuelta desde PayPal con ?subscription_id=…
-  r.post('/billing/plus/confirm', a(async (req, res) => {
-    res.json(await P.confirm(req.app.locals.db, req.app.locals.config, req.user, (req.body || {}).subscription_id));
-  }));
   // Comparación con la comunidad (solo Plus).
   r.get('/plus/comparison', a(async (req, res) => {
     if (!req.user) throw new HttpError(401, 'login_required');

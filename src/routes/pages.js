@@ -670,19 +670,19 @@ ${rows.length ? `<section class="section" aria-labelledby="more-h"><h2 id="more-
       const m = PLUS.PLANS.monthly; const y = PLUS.PLANS.yearly;
       const perks = [
         ['Sin anuncios', 'Jugá sin publicidad en todo el sitio, en cualquier dispositivo donde entres con tu cuenta.'],
-        ['Críptico Plus del día', 'Un críptico extra cada día, de los difíciles (dificultad 4 y 5), solo para Plus.'],
+        ['10 crípticos Plus por día', 'Una tanda nueva de 10 crípticos exclusivos cada día, de los difíciles (dificultad 4 y 5), solo para Plus.'],
         ['Tu nivel contra la comunidad', 'Compará tus aciertos, tiempos y pistas con los de todos los jugadores, por dificultad.'],
         ['Insignia y avatares Plus', 'La insignia Plus en tu perfil y en los rankings, y avatares exclusivos.'],
       ];
       res.set('Cache-Control', 'no-store');
       render(req, res, {
         page: 'plus', path: P('plus'), title: 'Play Crípticos Plus',
-        description: `Play Crípticos Plus: sin anuncios, un críptico difícil extra por día y estadísticas contra la comunidad. ${m.price} por mes o ${y.price} por año.`,
+        description: `Play Crípticos Plus: sin anuncios, 10 crípticos exclusivos por día y estadísticas contra la comunidad. ${m.price} por mes o ${y.price} por año.`,
         scripts: ['/js/plus.js'],
         body: `<header class="page-head plus-head"><p class="eyebrow"><span class="plus-badge">Plus</span></p>
 <h1>${isPlus ? 'Tu Plus' : 'Más crípticos, cero anuncios.'}</h1>
-<p class="lead">${isPlus ? '¡Gracias por apoyar Play Crípticos! Acá tenés tu críptico extra de hoy y cómo te va contra la comunidad.' : 'Jugar sigue siendo gratis. Con Plus jugás sin publicidad, sumás un críptico difícil por día y ves cómo te va contra todos.'}</p></header>
-${isPlus ? `<section class="plus-daily"><h2>Críptico Plus del día</h2><section class="game" id="game">${skeleton}</section></section>
+<p class="lead">${isPlus ? '¡Gracias por apoyar Play Crípticos! Acá tenés tus 10 crípticos Plus de hoy y cómo te va contra la comunidad.' : 'Jugar sigue siendo gratis. Con Plus jugás sin publicidad, sumás 10 crípticos exclusivos por día y ves cómo te va contra todos.'}</p></header>
+${isPlus ? `<section class="plus-daily"><h2>Crípticos Plus del día</h2><section class="game" id="game">${skeleton}</section></section>
 <section class="plus-compare" id="plus-compare" aria-live="polite"></section>` : ''}
 <section class="plus-perks" aria-label="Qué incluye"><ul>${perks.map(([h, d]) => `<li><h3>${esc(h)}</h3><p>${esc(d)}</p></li>`).join('')}</ul></section>
 <section class="plus-plans" id="plus-plans" aria-label="Planes">
@@ -690,8 +690,8 @@ ${isPlus ? `<section class="plus-daily"><h2>Críptico Plus del día</h2><section
   <article class="plan best" data-plan="yearly"><p class="tag-best">Ahorrás 33%</p><h3>Anual</h3><p class="price"><b>${esc(y.price)}</b> / ${esc(y.per)}</p><p class="muted small">${esc(y.note)}: pagás 8 meses y tenés 12.</p><div class="plan-cta"></div></article>
 </section>
 <section class="plus-faq"><h2>Preguntas frecuentes</h2>
-<details><summary>¿Cómo pago?</summary><p>Con PayPal, con tu saldo o con tarjeta de crédito o débito a través de PayPal. Nosotros nunca vemos tus datos de pago.</p></details>
-<details><summary>¿Puedo cancelar?</summary><p>Sí, cuando quieras, desde los pagos automáticos de tu cuenta de PayPal. Seguís con Plus hasta el final del período que ya pagaste.</p></details>
+<details><summary>¿Cómo pago?</summary><p>Con tarjeta de crédito o débito, o con PayPal, a través de Lemon Squeezy, que procesa el pago e incluye los impuestos de tu país. Nosotros nunca vemos tus datos de pago.</p></details>
+<details><summary>¿Puedo cancelar?</summary><p>Sí, cuando quieras, desde el enlace «Administrar o cancelar» de esta página o del correo de Lemon Squeezy. Seguís con Plus hasta el final del período que ya pagaste.</p></details>
 <details><summary>¿Y si me arrepiento?</summary><p>Si nos escribís dentro de los 10 días del primer pago, te devolvemos ese pago completo.</p></details>
 <details><summary>¿Da ventajas en torneos o duelos?</summary><p>No. Los torneos y duelos son iguales para todos: Plus no da puntos, pistas ni tiempo extra.</p></details>
 </section>`,

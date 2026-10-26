@@ -1,190 +1,169 @@
 'use strict';
 
-// Plan Plus: suscripción de PayPal, mensual o anual. Incluye: sin anuncios, el Críptico Plus
-// del día, la comparación con la comunidad, la insignia Plus y avatares exclusivos. Nunca da
-// ventajas en torneos ni duelos. Flujo de pago sin scripts de terceros:
-//  1) POST /api/billing/ad-free/checkout crea la suscripción en PayPal con el id de la
-//     cuenta (custom_id) y devuelve el enlace de aprobación de PayPal.
-//  2) PayPal vuelve a /es/cuenta?subscription_id=…; la página llama a /confirm y el
-//     servidor consulta la suscripción en PayPal antes de dar el beneficio.
-//  3) El webhook de PayPal (firma verificada con la API de PayPal) mantiene el estado al
-//     día: renovaciones, cancelaciones, suspensiones.
+// Plan Plus: suscripción mensual o anual cobrada con Lemon Squeezy (vendedor registrado: cobra,
+// factura y liquida los impuestos de cada país). Incluye: sin anuncios, 10 Crípticos Plus por día,
+// la comparación con la comunidad, la insignia Plus y avatares exclusivos. Nunca da ventajas en
+// torneos ni duelos. Flujo de pago sin scripts de terceros:
+//  1) POST /api/billing/plus/checkout crea un checkout de Lemon Squeezy con el id de la cuenta
+//     (custom.user_id) y devuelve su enlace.
+//  2) Lemon Squeezy vuelve a /es/plus?plus=ok; la página espera a que llegue el webhook.
+//  3) El webhook (firma HMAC con el secreto del webhook) da y mantiene el beneficio:
+//     altas, renovaciones, cancelaciones, vencimientos.
 // El beneficio se guarda en users.plus_until, que viaja con la sesión: ver si una
 // página lleva anuncios no suma lecturas a la base. Ver docs/PLUS.md.
 
+const crypto = require('node:crypto');
 const { now, HttpError } = require('./util');
 const { audit } = require('./audit');
 const { getSetting } = require('./settings');
 
-// Precios que se muestran (el cobro real lo define cada plan en PayPal).
+// Precios que se muestran (el cobro real lo define cada variante en Lemon Squeezy).
 const PLANS = {
   monthly: { price: 'USD 1,50', per: 'mes', months: 1 },
   yearly: { price: 'USD 12', per: 'año', months: 12, note: 'equivale a USD 1 por mes' },
 };
 const GRACE_MS = 3 * 86400000;          // margen si el cobro de la renovación se demora
-const MONTH_MS = 31 * 86400000;
-const API = { live: 'https://api-m.paypal.com', sandbox: 'https://api-m.sandbox.paypal.com' };
+const API = 'https://api.lemonsqueezy.com/v1';
 
-const cfgOf = (config) => config.paypal || {};
+const cfgOf = (config) => config.lemonsqueezy || {};
 function configured(config) {
   const c = cfgOf(config);
-  return !!(c.clientId && c.clientSecret && (c.planMonthly || c.planYearly));
+  return !!(c.apiKey && c.storeId && c.webhookSecret && (c.variantMonthly || c.variantYearly || c.productId));
 }
-// Qué planes se pueden contratar (los que tienen id de plan de PayPal).
-function planIds(config) {
+// Qué planes se pueden contratar (los que tienen variante en Lemon Squeezy). Con LEMONSQUEEZY_PRODUCT_ID
+// las variantes se buscan una vez en la API (la mensual y la anual publicadas) y se recuerdan.
+let variantCache = { key: '', ids: null, exp: 0 };
+async function variantIds(config, fetchImpl = fetch) {
   const c = cfgOf(config);
-  return Object.fromEntries([['monthly', c.planMonthly], ['yearly', c.planYearly]].filter(([, id]) => id));
+  const fixed = Object.fromEntries([['monthly', c.variantMonthly], ['yearly', c.variantYearly]].filter(([, id]) => id));
+  if (Object.keys(fixed).length || !c.productId || !c.apiKey) return fixed;
+  const key = `${c.productId}:${c.apiKey.slice(-6)}`;
+  if (variantCache.key === key && variantCache.exp > Date.now()) return variantCache.ids;
+  const ids = {};
+  try {
+    const res = await fetchImpl(`${API}/variants?filter[product_id]=${encodeURIComponent(c.productId)}`, {
+      headers: { Accept: 'application/vnd.api+json', Authorization: `Bearer ${c.apiKey}` } });
+    const body = res.ok ? await res.json() : {};
+    for (const v of body.data || []) {
+      const a = v.attributes || {};
+      if (!a.is_subscription || a.status !== 'published' || Number(a.interval_count || 1) !== 1) continue;
+      const plan = a.interval === 'month' ? 'monthly' : a.interval === 'year' ? 'yearly' : null;
+      if (plan && !ids[plan]) ids[plan] = String(v.id);
+    }
+  } catch { /* sin conexión: se reintenta en la próxima consulta */ }
+  // Si no encontró nada se vuelve a intentar en un minuto; si encontró, se recuerda una hora.
+  variantCache = { key, ids, exp: Date.now() + (Object.keys(ids).length ? 3600000 : 60000) };
+  return ids;
 }
-const planOf = (config, planId) => Object.entries(planIds(config)).find(([, id]) => id === planId)?.[0] || null;
+const clearVariantCache = () => { variantCache = { key: '', ids: null, exp: 0 }; };
+const planOf = async (config, variantId) => Object.entries(await variantIds(config)).find(([, id]) => String(id) === String(variantId))?.[0] || null;
 
-// El pago se habilita con las claves de PayPal y los términos del plan publicados.
+// El pago se habilita con las claves y los términos del plan (con Lemon Squeezy) publicados.
 async function available(db, config) {
   if (!configured(config)) return false;
-  try { return (await getSetting(db, 'billing.enabled')) === true; } catch { return false; }
+  try { return (await getSetting(db, 'billing.lemonsqueezy')) === true; } catch { return false; }
 }
 
 function isPlus(user) {
   return !!(user && user.plus_until && Date.parse(user.plus_until) > Date.now());
 }
 
-// Token de acceso de PayPal (dura ~9 h; se reutiliza mientras viva la instancia).
-let tokenCache = { key: '', token: '', exp: 0 };
-async function accessToken(config, fetchImpl) {
-  const c = cfgOf(config);
-  const key = `${c.env}:${c.clientId}`;
-  if (tokenCache.key === key && tokenCache.exp > Date.now() + 60000) return tokenCache.token;
-  const res = await fetchImpl(`${API[c.env] || API.live}/v1/oauth2/token`, {
-    method: 'POST',
-    headers: { Authorization: 'Basic ' + Buffer.from(`${c.clientId}:${c.clientSecret}`).toString('base64'), 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: 'grant_type=client_credentials',
-  });
-  const body = await res.json().catch(() => ({}));
-  if (!res.ok || !body.access_token) throw new HttpError(502, 'paypal_auth_failed', 'No se pudo conectar con PayPal. Probá de nuevo en un rato.');
-  tokenCache = { key, token: body.access_token, exp: Date.now() + (Number(body.expires_in) || 3600) * 1000 };
-  return body.access_token;
-}
-const clearTokenCache = () => { tokenCache = { key: '', token: '', exp: 0 }; };
-
-async function paypal(config, fetchImpl, method, path, body) {
-  const c = cfgOf(config);
-  const res = await fetchImpl(`${API[c.env] || API.live}${path}`, {
-    method,
-    headers: { Authorization: `Bearer ${await accessToken(config, fetchImpl)}`, 'Content-Type': 'application/json', Accept: 'application/json' },
-    ...(body ? { body: JSON.stringify(body) } : {}),
-  });
-  const data = await res.json().catch(() => ({}));
-  return { ok: res.ok, status: res.status, data };
-}
-
 async function status(db, config, user) {
-  const sub = user ? await db.get('SELECT plan, status, renews_at, ends_at FROM subscriptions WHERE user_id = ? ORDER BY updated_at DESC LIMIT 1', [user.id]) : null;
+  const sub = user ? await db.get('SELECT plan, status, renews_at, ends_at, portal_url FROM subscriptions WHERE user_id = ? ORDER BY updated_at DESC LIMIT 1', [user.id]) : null;
   const ok = await available(db, config);
-  const ids = planIds(config);
+  const ids = ok ? await variantIds(config) : {};
   return {
     available: ok, plans: Object.fromEntries(Object.entries(PLANS).map(([k, p]) => [k, { ...p, available: ok && !!ids[k] }])),
     active: isPlus(user), until: user ? user.plus_until || null : null,
     subscription: sub ? { plan: sub.plan, status: sub.status, renews_at: sub.renews_at, ends_at: sub.ends_at } : null,
-    manage_url: cfgOf(config).env === 'sandbox' ? 'https://www.sandbox.paypal.com/myaccount/autopay/' : 'https://www.paypal.com/myaccount/autopay/',
+    manage_url: (sub && sub.portal_url) || 'https://app.lemonsqueezy.com/my-orders',
   };
 }
 
-// Crea la suscripción en PayPal y devuelve el enlace para que la persona la apruebe.
+// Crea el checkout en Lemon Squeezy y devuelve su enlace.
 async function checkout(db, config, user, plan = 'monthly', fetchImpl = fetch) {
   if (!user) throw new HttpError(401, 'login_required', 'Entrá o creá una cuenta gratis para hacerte Plus.');
   if (!(await available(db, config))) throw new HttpError(503, 'not_configured', 'El pago todavía no está disponible.');
-  const planId = planIds(config)[plan];
-  if (!planId) throw new HttpError(400, 'invalid_plan');
+  const variant = (await variantIds(config, fetchImpl))[plan];
+  if (!variant) throw new HttpError(400, 'invalid_plan');
   if (isPlus(user)) throw new HttpError(409, 'already_active', 'Ya sos Plus.');
-  const back = `${config.siteUrl}/es/plus`;
-  const r = await paypal(config, fetchImpl, 'POST', '/v1/billing/subscriptions', {
-    plan_id: planId, custom_id: user.id,
-    application_context: { brand_name: config.siteName || 'Play Crípticos', locale: 'es-AR', user_action: 'SUBSCRIBE_NOW', shipping_preference: 'NO_SHIPPING',
-      return_url: `${back}?plus=ok`, cancel_url: `${back}?plus=cancelado` },
-  });
-  const link = r.ok && (r.data.links || []).find((l) => l.rel === 'approve');
-  if (!link) throw new HttpError(502, 'checkout_failed', 'No se pudo abrir PayPal. Probá de nuevo en un rato.');
-  await saveSubscription(db, { id: r.data.id, userId: user.id, plan, status: r.data.status || 'APPROVAL_PENDING', renewsAt: null, endsAt: null });
-  return { url: link.href };
-}
-
-// Hasta cuándo queda sin anuncios según la suscripción de PayPal.
-function untilFor(sub, months = 1) {
-  const st = String(sub.status || '').toUpperCase();
-  const next = Date.parse((sub.billing_info || {}).next_billing_time || '');
-  if (st === 'ACTIVE') return new Date((Number.isFinite(next) ? next : Date.now() + months * MONTH_MS) + GRACE_MS).toISOString();
-  if (st === 'CANCELLED') {
-    // Al cancelar se respeta lo ya pagado: hasta el último cobro + un mes.
-    const last = Date.parse(((sub.billing_info || {}).last_payment || {}).time || '');
-    const end = Number.isFinite(next) ? next : Number.isFinite(last) ? last + months * MONTH_MS : NaN;
-    return Number.isFinite(end) && end > Date.now() ? new Date(end).toISOString() : null;
-  }
-  return null;   // APPROVAL_PENDING, APPROVED (todavía sin cobrar), SUSPENDED, EXPIRED
-}
-
-async function saveSubscription(db, { id, userId, plan, status: st, renewsAt, endsAt }, until) {
-  const subId = `paypal:${id}`;
-  await db.tx(async (t) => {
-    await t.run(`INSERT INTO subscriptions (id, user_id, provider, plan, status, renews_at, ends_at, updated_at) VALUES (?, ?, 'paypal', ?, ?, ?, ?, ?)
-      ON CONFLICT(id) DO UPDATE SET user_id = COALESCE(subscriptions.user_id, excluded.user_id), plan = excluded.plan, status = excluded.status,
-        renews_at = excluded.renews_at, ends_at = excluded.ends_at, updated_at = excluded.updated_at`,
-    [subId, userId || null, plan || 'monthly', st, renewsAt, endsAt, now()]);
-    if (userId && until !== undefined) await t.run('UPDATE users SET plus_until = ? WHERE id = ?', [until, userId]);
-  });
-}
-
-// Lee la suscripción en PayPal y aplica su estado a la cuenta dueña (custom_id).
-async function syncSubscription(db, config, subscriptionId, fetchImpl, source) {
-  if (!/^I-[A-Z0-9]{6,40}$/.test(String(subscriptionId || ''))) throw new HttpError(400, 'bad_subscription');
-  const r = await paypal(config, fetchImpl, 'GET', `/v1/billing/subscriptions/${encodeURIComponent(subscriptionId)}`);
-  if (!r.ok) throw new HttpError(r.status === 404 ? 404 : 502, 'subscription_not_found', 'No encontramos la suscripción en PayPal.');
-  const sub = r.data;
-  const plan = planOf(config, sub.plan_id);
-  if (!plan) throw new HttpError(400, 'wrong_plan');
-  const user = sub.custom_id ? await db.get('SELECT id FROM users WHERE id = ?', [sub.custom_id]) : null;
-  const until = untilFor(sub, PLANS[plan].months);
-  await saveSubscription(db, { id: sub.id, userId: user ? user.id : null, plan, status: String(sub.status || 'UNKNOWN'),
-    renewsAt: (sub.billing_info || {}).next_billing_time || null, endsAt: sub.status === 'CANCELLED' ? until : null }, user ? until : undefined);
-  await audit(db, { actorId: null, action: 'billing.subscription', targetKind: 'user', targetId: user ? user.id : null,
-    details: { source, plan, status: sub.status || null, until } });
-  return { userId: user ? user.id : null, plan, status: sub.status, until };
-}
-
-// Vuelta desde PayPal: solo la cuenta dueña de la suscripción puede confirmarla.
-async function confirm(db, config, user, subscriptionId, fetchImpl = fetch) {
-  if (!user) throw new HttpError(401, 'login_required');
-  if (!configured(config)) throw new HttpError(503, 'not_configured');
-  const out = await syncSubscription(db, config, subscriptionId, fetchImpl, 'return');
-  if (out.userId !== user.id) throw new HttpError(403, 'not_yours');
-  return { active: !!(out.until && Date.parse(out.until) > Date.now()), status: out.status, until: out.until };
-}
-
-// Webhook de PayPal: se verifica la firma con la API de PayPal y después se vuelve a leer
-// la suscripción (nunca se confía en el contenido del aviso).
-async function handleWebhook(db, config, raw, headers, fetchImpl = fetch) {
   const c = cfgOf(config);
-  if (!configured(config) || !c.webhookId) throw new HttpError(503, 'not_configured');
+  const res = await fetchImpl(`${API}/checkouts`, {
+    method: 'POST',
+    headers: { Accept: 'application/vnd.api+json', 'Content-Type': 'application/vnd.api+json', Authorization: `Bearer ${c.apiKey}` },
+    body: JSON.stringify({ data: { type: 'checkouts', attributes: {
+      checkout_data: { custom: { user_id: user.id } },
+      product_options: { redirect_url: `${config.siteUrl}/es/plus?plus=ok` },
+      checkout_options: { embed: false },
+    }, relationships: {
+      store: { data: { type: 'stores', id: String(c.storeId) } },
+      variant: { data: { type: 'variants', id: String(variant) } },
+    } } }),
+  }).catch(() => null);
+  const body = res ? await res.json().catch(() => ({})) : {};
+  const url = res && res.ok && body.data && body.data.attributes && body.data.attributes.url;
+  if (!url || !/^https:\/\//.test(url)) throw new HttpError(502, 'checkout_failed', 'No se pudo abrir el pago. Probá de nuevo en un rato.');
+  return { url };
+}
+
+// Hasta cuándo queda Plus según la suscripción de Lemon Squeezy.
+function untilFor(sub) {
+  const st = String(sub.status || '').toLowerCase();
+  const renews = Date.parse(sub.renews_at || '');
+  const ends = Date.parse(sub.ends_at || '');
+  if (['active', 'on_trial', 'past_due'].includes(st)) {
+    const base = st === 'on_trial' && Number.isFinite(Date.parse(sub.trial_ends_at || '')) ? Date.parse(sub.trial_ends_at) : renews;
+    return Number.isFinite(base) ? new Date(base + GRACE_MS).toISOString() : null;
+  }
+  // Cancelada: se respeta lo ya pagado, hasta el final del período.
+  if (st === 'cancelled') return Number.isFinite(ends) && ends > Date.now() ? new Date(ends).toISOString() : null;
+  return null;   // expired, unpaid, paused
+}
+
+const safeEqual = (a, b) => a.length === b.length && crypto.timingSafeEqual(a, b);
+
+// Webhook de Lemon Squeezy: firma HMAC-SHA256 del cuerpo crudo con el secreto del webhook.
+async function handleWebhook(db, config, raw, headers) {
+  const c = cfgOf(config);
+  if (!configured(config)) throw new HttpError(503, 'not_configured');
+  const buf = Buffer.isBuffer(raw) ? raw : Buffer.from(String(raw || ''), 'utf8');
+  const sig = String(headers['x-signature'] || '');
+  const expected = crypto.createHmac('sha256', c.webhookSecret).update(buf).digest('hex');
+  if (!/^[0-9a-f]{64}$/i.test(sig) || !safeEqual(Buffer.from(sig.toLowerCase()), Buffer.from(expected))) throw new HttpError(401, 'bad_signature');
   let ev;
-  try { ev = JSON.parse(Buffer.isBuffer(raw) ? raw.toString('utf8') : String(raw || '')); } catch { throw new HttpError(400, 'invalid_json'); }
-  const h = (k) => headers[k] || headers[k.toLowerCase()];
-  const v = await paypal(config, fetchImpl, 'POST', '/v1/notifications/verify-webhook-signature', {
-    auth_algo: h('paypal-auth-algo'), cert_url: h('paypal-cert-url'), transmission_id: h('paypal-transmission-id'),
-    transmission_sig: h('paypal-transmission-sig'), transmission_time: h('paypal-transmission-time'), webhook_id: c.webhookId, webhook_event: ev,
+  try { ev = JSON.parse(buf.toString('utf8')); } catch { throw new HttpError(400, 'invalid_json'); }
+  const meta = ev.meta || {};
+  const kind = String(meta.event_name || '');
+  const data = ev.data || {};
+  if (!/^subscription_/.test(kind) || data.type !== 'subscriptions' || !data.id) return { ok: true, ignored: kind || null };
+  const attrs = data.attributes || {};
+  if (c.storeId && attrs.store_id != null && String(attrs.store_id) !== String(c.storeId)) return { ok: true, ignored: 'other_store' };
+  const plan = await planOf(config, attrs.variant_id);
+  if (!plan) return { ok: true, ignored: 'other_variant' };
+  // Un mismo aviso (mismo evento, misma suscripción, misma fecha de actualización) se aplica una vez.
+  const eventId = `lemonsqueezy:${kind}:${data.id}:${attrs.updated_at || ''}`;
+  if (await db.get('SELECT id FROM payment_events WHERE id = ?', [eventId])) return { ok: true, duplicate: true };
+  const subId = `lemonsqueezy:${data.id}`;
+  const prev = await db.get('SELECT user_id FROM subscriptions WHERE id = ?', [subId]);
+  const claimed = (meta.custom_data || {}).user_id;
+  const owner = prev && prev.user_id ? prev.user_id : claimed;
+  const user = owner ? await db.get('SELECT id FROM users WHERE id = ?', [String(owner)]) : null;
+  const until = untilFor(attrs);
+  const st = String(attrs.status || 'unknown');
+  await db.tx(async (t) => {
+    await t.run(`INSERT INTO subscriptions (id, user_id, provider, plan, status, renews_at, ends_at, portal_url, updated_at) VALUES (?, ?, 'lemonsqueezy', ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(id) DO UPDATE SET user_id = COALESCE(subscriptions.user_id, excluded.user_id), plan = excluded.plan, status = excluded.status,
+        renews_at = excluded.renews_at, ends_at = excluded.ends_at, portal_url = COALESCE(excluded.portal_url, subscriptions.portal_url), updated_at = excluded.updated_at`,
+    [subId, user ? user.id : null, plan, st, attrs.renews_at || null, attrs.ends_at || null, ((attrs.urls || {}).customer_portal) || null, now()]);
+    if (user) await t.run('UPDATE users SET plus_until = ? WHERE id = ?', [until, user.id]);
+    await t.run('INSERT OR IGNORE INTO payment_events (id, provider, kind) VALUES (?, ?, ?)', [eventId, 'lemonsqueezy', kind]);
   });
-  if (!v.ok || v.data.verification_status !== 'SUCCESS') throw new HttpError(401, 'bad_signature');
-  const kind = String(ev.event_type || '');
-  const resource = ev.resource || {};
-  // Avisos de suscripción: el id viene en resource.id. Cobros: en resource.billing_agreement_id.
-  const subId = /^BILLING\.SUBSCRIPTION\./.test(kind) ? resource.id : /^PAYMENT\.SALE\./.test(kind) ? resource.billing_agreement_id : null;
-  if (!subId) return { ok: true, ignored: kind || null };
-  const eventId = `paypal:${ev.id || ''}`;
-  if (ev.id && await db.get('SELECT id FROM payment_events WHERE id = ?', [eventId])) return { ok: true, duplicate: true };
-  const out = await syncSubscription(db, config, subId, fetchImpl, kind);
-  if (ev.id) await db.run('INSERT OR IGNORE INTO payment_events (id, provider, kind) VALUES (?, ?, ?)', [eventId, 'paypal', kind]);
-  return { ok: true, user: !!out.userId, until: out.until };
+  await audit(db, { actorId: null, action: 'billing.subscription', targetKind: 'user', targetId: user ? user.id : null,
+    details: { source: kind, plan, status: st, until } });
+  return { ok: true, user: !!user, until };
 }
 
 // ── Comparación con la comunidad (Plus) ──
-// Las referencias de la comunidad se recalculan como mucho una vez por día (y solo cuando
 // alguien Plus las pide): leen las partidas de los últimos 30 días una vez, no en cada visita.
 const BENCH_TTL = 24 * 3600000;
 const BENCH_DAYS = 30;
@@ -238,4 +217,4 @@ async function comparison(db, user, lang = 'es') {
   return { days: BENCH_DAYS, computed_at: community.length ? community[0].computed_at : null, rows };
 }
 
-module.exports = { benchmarks, comparison, PLANS, configured, available, isPlus, status, checkout, confirm, handleWebhook, untilFor, clearTokenCache };
+module.exports = { benchmarks, comparison, PLANS, configured, available, isPlus, status, checkout, handleWebhook, untilFor, clearVariantCache };
