@@ -128,7 +128,7 @@ p { margin: 0 0 var(--s-3); text-wrap: pretty; }
 @media (max-width: 419px) { .prefs-btn span { display: none; } .prefs-btn { width: 38px; padding: 0; justify-content: center; } }
 .main-nav { flex: 1; display: flex; justify-content: center; }
 .main-nav ul { list-style: none; display: flex; gap: var(--s-1); margin: 0; padding: 0; }
-.main-nav a { display: block; padding: 8px 12px; text-decoration: none; color: var(--ink-2); font-weight: 500; position: relative; border-radius: var(--r-1); }
+.main-nav a { display: block; padding: 8px 12px; text-decoration: none; color: var(--ink-2); font-weight: 500; position: relative; border-radius: var(--r-1); white-space: nowrap; }
 .main-nav a:hover { color: var(--ink); }
 .main-nav a[aria-current="page"] { color: var(--ink); }
 .main-nav a[aria-current="page"]::after { content: ""; position: absolute; left: 12px; right: 12px; bottom: 2px; height: 2px; background: var(--accent); }
@@ -142,7 +142,7 @@ p { margin: 0 0 var(--s-3); text-wrap: pretty; }
 .icon-btn { width: 38px; height: 38px; display: inline-flex; align-items: center; justify-content: center; border: var(--b-1); background: transparent; color: var(--ink); border-radius: var(--r-pill); cursor: pointer; text-decoration: none; flex: none; transition: border-color var(--d-1) var(--ease); }
 .icon-btn:hover { border-color: var(--ink-3); color: var(--ink); }
 .icon-btn svg { width: 18px; height: 18px; }
-@media (max-width: 900px) {
+@media (max-width: 1100px) {
   .site-header .bar { height: 58px; gap: var(--s-3); }
   .icon-btn.nav-toggle { display: inline-flex; order: 3; }
   .main-nav { position: absolute; top: 100%; left: 0; right: 0; background: var(--paper); border-bottom: var(--b-1); display: none; box-shadow: var(--e-2); }
