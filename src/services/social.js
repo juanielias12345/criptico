@@ -217,10 +217,10 @@ function metricoolBody(p, siteUrl) {
 }
 
 // Programa una pieza aprobada. Devuelve { scheduled } con evidencia, { manual } o { error }.
-async function scheduleOne(db, p, { fetchImpl = global.fetch, siteUrl = process.env.SITE_URL || 'https://playcripticos.com' } = {}) {
+async function scheduleOne(db, p, { fetchImpl = global.fetch, siteUrl = process.env.SITE_URL || 'https://playcripticos.com', clock = Date.now() } = {}) {
   if (p.status !== 'approved' || !p.approved_hash || company.pieceHash(p) !== p.approved_hash) return { skipped: true };
   if (p.manual || !NETWORK[p.platform]) return { manual: true };
-  if (new Date(p.scheduled_at).getTime() < Date.now() + 5 * 60000) {
+  if (new Date(p.scheduled_at).getTime() < clock + 5 * 60000) {
     await db.run('UPDATE content_pieces SET external_error = ? WHERE id = ?', ['El horario ya pasó: elegí otro o publicala a mano.', p.id]);
     return { error: 'past' };
   }
