@@ -180,15 +180,15 @@ function table(title, rows) {
   table('Errores del servidor por ámbito', errs.map((r) => [r.scope, r.n]));
   // Detalle de los errores http: mensaje y ruta normalizada (los identificadores se reemplazan por «:id»).
   const http = await db.all(`SELECT substr(message, 1, 120) AS m, details, substr(created_at, 1, 13) AS h FROM error_log WHERE scope = 'http' AND created_at >= ?`, [FROM]);
-  const grp = {}; const hours = {};
+  const grp = {}; const byHour = {};
   for (const e of http) {
     let d = {}; try { d = JSON.parse(e.details || '{}'); } catch { /* sin detalle */ }
     const path = String(d.path || '').replace(/[0-9a-f]{8}-[0-9a-f-]{27,}/g, ':id').replace(/\/c\/[^/]+/, '/c/:slug').replace(/\/u\/[^/]+/, '/u/:user');
     const k = (d.method || '') + ' ' + path + ' | ' + e.m.replace(/[0-9a-f]{8}-[0-9a-f-]{27,}/g, ':id');
-    grp[k] = (grp[k] || 0) + 1; hours[e.h] = (hours[e.h] || 0) + 1;
+    grp[k] = (grp[k] || 0) + 1; byHour[e.h] = (byHour[e.h] || 0) + 1;
   }
   table('Errores http: ruta | mensaje (top 15)', Object.entries(grp).sort((a, b) => b[1] - a[1]).slice(0, 15).map(([k, v]) => [v, k]));
-  table('Errores http por hora UTC (top 10)', Object.entries(hours).sort((a, b) => b[1] - a[1]).slice(0, 10).map(([k, v]) => [k, v]));
+  table('Errores http por hora UTC (top 10)', Object.entries(byHour).sort((a, b) => b[1] - a[1]).slice(0, 10).map(([k, v]) => [k, v]));
   const gst = {}; for (const g of games) gst[g.status] = (gst[g.status] || 0) + 1;
   table('Estados de las partidas del período', Object.entries(gst).map(([k, v]) => [k, v, pct(v, games.length)]));
   process.exit(0);
