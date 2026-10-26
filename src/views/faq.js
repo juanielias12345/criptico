@@ -29,7 +29,7 @@ module.exports = {
       ['¿Qué pasa si me trabo?',
         'Cada críptico tiene ayudas progresivas: primero el mecanismo y su palabra indicadora, después la definición, luego la primera letra y por último la mitad de las letras. También podés ver la solución con la explicación completa de cómo se arma.'],
       ['¿Desde qué países se puede jugar?',
-        'Desde cualquier país. Los crípticos están en español neutro y algunos usan vocabulario o pronunciación de una región (Argentina, España, México y otras variantes); esos llevan la variante indicada y se pueden filtrar.'],
+        'Desde cualquier país. Los crípticos están en español neutro y algunos usan vocabulario o pronunciación de una región (España, México y otras variantes del español); esos llevan la variante indicada y se pueden filtrar.'],
       ['¿Quién escribe los crípticos?',
         'Los crípticos salen del equipo editorial, de un banco que se valida automáticamente letra por letra antes de publicarse y de propuestas de la comunidad, que se revisan a mano antes de aparecer. Podés mandar el tuyo en {contribute}.'],
       ['¿Hay niveles de dificultad?',

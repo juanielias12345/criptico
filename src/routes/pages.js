@@ -225,7 +225,7 @@ ${Object.entries(G.mechs).map(([k, m]) => `- [${t('es', 'mech_' + k)}](${u('guid
   // Títulos y descripciones para buscadores: apuntan a «crípticos», «crucigrama críptico» y «críptico del día».
   const SEO = {
     es: {
-      home: ['Crípticos en español: jugá gratis y sin límite | Play Crípticos', 'Resolvé crípticos (pistas de crucigrama críptico) en español, gratis y sin límite: ayudas progresivas, explicación paso a paso y un críptico del día. Con variantes de Argentina, España y México.'],
+      home: ['Crípticos en español: jugá gratis y sin límite | Play Crípticos', 'Resolvé crípticos (pistas de crucigrama críptico) en español, gratis y sin límite: ayudas progresivas, explicación paso a paso y un críptico del día. Con variantes regionales de todo el mundo hispanohablante.'],
       play: ['Jugar crípticos online gratis | Play Crípticos', 'Crípticos en español para jugar online, sin registro y sin límite. Elegí la dificultad, pedí pistas y mirá la explicación de cada solución.'],
       daily: ['Críptico del día: el desafío diario | Play Crípticos', 'Un críptico nuevo cada día, el mismo para todos. Resolvelo, compartí tu resultado y repasá los días anteriores.'],
       archive: ['Archivo de crípticos en español | Play Crípticos', 'Todos los crípticos publicados, con filtros por dificultad, tema y mecanismo: anagramas, palabras ocultas, iniciales y más.'],
