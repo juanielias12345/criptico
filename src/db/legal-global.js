@@ -491,7 +491,33 @@ const ADS_REVISIONS = {
   },
 };
 
-// Revisiones en orden: cada una se arma sobre la versión anterior del mismo documento.
-const REVISION_SETS = [[ORIGIN_NOTE, REVISIONS], [ADS_NOTE, ADS_REVISIONS]];
+// Revisión del 26/10/2026: plan pago Plus (mensual o anual) cobrado con PayPal.
+// Al publicarse los términos de esta revisión se habilita el botón de pago.
+const PREMIUM_NOTE = 'plus-2026-10-26';
+const PREMIUM_REVISIONS = {
+  terms: (t) => swap(t, '## 8. Servicio gratuito y sin garantías\n',
+    '## 7 bis. Plan Plus\n'
+    + 'Jugar es gratis. Si querés, podés suscribirte a Plus, que mientras tengas la sesión iniciada incluye: el sitio sin anuncios, un críptico extra por día (el «Críptico Plus del día»), la comparación de tus resultados con los de la comunidad, la insignia Plus y avatares exclusivos. Plus no da ventajas en torneos ni duelos.\n\n'
+    + '- **Precio y cobro:** USD 1,50 por mes o USD 12 por año (el precio final lo muestra PayPal antes de pagar). Se cobra por adelantado a través de PayPal y se renueva solo al final de cada período.\n'
+    + '- **Cancelación:** podés cancelarlo cuando quieras desde los pagos automáticos de tu cuenta de PayPal. Seguís con Plus hasta el final del período ya pagado y no se te vuelve a cobrar.\n'
+    + '- **Arrepentimiento y reembolsos:** si lo pedís dentro de los 10 días corridos desde el primer pago, te devolvemos ese pago completo. Después no hay reembolsos por períodos parciales, salvo que la ley de tu país disponga otra cosa.\n'
+    + '- **Cambios:** si cambiamos el precio te avisamos con al menos 30 días de anticipación y podés cancelar antes de que se aplique. Podemos sumar beneficios; si quitamos alguno de los de esta lista, podés pedir el reembolso proporcional del período que falte.\n\n'
+    + '## 8. Servicio gratuito y sin garantías\n'),
+  privacy: (t) => {
+    t = swap(t, 'que financian el juego gratuito. Google y sus socios usan cookies e identificadores del navegador para mostrar y medir anuncios y prevenir fraude (ver la sección 4).',
+      'que financian el juego gratuito. Google y sus socios usan cookies e identificadores del navegador para mostrar y medir anuncios y prevenir fraude (ver la sección 4).\n'
+      + '- **Plan Plus (opcional):** si te suscribís, guardamos el identificador de la suscripción de PayPal, el plan (mensual o anual), su estado y hasta cuándo está pagada. El pago lo procesa PayPal: nunca vemos ni guardamos tu tarjeta ni tu cuenta de PayPal. La comparación con la comunidad usa estadísticas agregadas de todas las partidas, sin mostrar datos de otras personas.');
+    t = swap(t, '| Mostrar anuncios (Google AdSense) |',
+      '| Plan Plus y su cobro | Ejecución del contrato que aceptás al suscribirte; los registros de pago, además, obligación legal |\n| Mostrar anuncios (Google AdSense) |');
+    t = swap(t, '## 4. Con quién compartimos datos\n',
+      '## 4. Con quién compartimos datos\nSi te suscribís a Plus, el pago lo procesa PayPal (PayPal Holdings, Inc. y sus filiales), que actúa como responsable independiente de los datos de pago según su propia política de privacidad: https://www.paypal.com/legalhub/privacy-full.\n\n');
+    return t;
+  },
+  processors: (t) => swap(t, '| GitHub Inc. |',
+    '| PayPal (PayPal Holdings, Inc. y filiales) | Cobro del plan Plus | Datos de pago y de la suscripción; nosotros solo recibimos el identificador, el plan y el estado de la suscripción | Estados Unidos y otros | Responsable independiente; política de privacidad de PayPal |\n| GitHub Inc. |'),
+};
 
-module.exports = { NOTE, ORIGIN_NOTE, ADS_NOTE, REVISIONS, ADS_REVISIONS, REVISION_SETS, OWNER, PUBLIC, DOCS, ownerReady, fill };
+// Revisiones en orden: cada una se arma sobre la versión anterior del mismo documento.
+const REVISION_SETS = [[ORIGIN_NOTE, REVISIONS], [ADS_NOTE, ADS_REVISIONS], [PREMIUM_NOTE, PREMIUM_REVISIONS]];
+
+module.exports = { NOTE, ORIGIN_NOTE, ADS_NOTE, PREMIUM_NOTE, REVISIONS, ADS_REVISIONS, PREMIUM_REVISIONS, REVISION_SETS, OWNER, PUBLIC, DOCS, ownerReady, fill };

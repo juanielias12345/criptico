@@ -27,3 +27,7 @@ Decisión de juan (26/10/2026): el sitio se monetiza con Google AdSense. Jugar, 
 - Empezar con pocos formatos (anuncios automáticos en densidad baja) para no espantar a quien juega; medir retención antes de subir.
 - No poner anuncios dentro de la pantalla de una ronda de torneo o duelo (la regla de AdSense pide no ubicarlos donde se puedan tocar sin querer).
 - Más tráfico = más ingresos: los torneos semanales, los duelos y compartir resultados existen para traer y retener gente.
+
+## Plan Plus
+
+Además de los anuncios, hay un plan pago opcional (mensual o anual, con PayPal) que los quita y suma beneficios. Ver [PLUS.md](PLUS.md).

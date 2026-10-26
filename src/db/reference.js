@@ -152,6 +152,7 @@ const DEFAULT_SETTINGS = {
   'privacy.store_origin': false,
   // Anuncios de Google AdSense: se encienden solos al publicarse la privacidad y las cookies que los explican.
   'ads.enabled': false,
+  'billing.enabled': false,
   // Seguimiento de partidas (ver docs/PANEL.md)
   'analytics.abandon_minutes': 30,
   'analytics.active_gap_seconds': 120,

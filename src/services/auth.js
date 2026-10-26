@@ -119,7 +119,7 @@ async function logout(db, token) {
 
 function publicUser(u) {
   return { id: u.id, username: u.username, role: u.role, display_name: u.display_name, email: u.email || null,
-    country_code: u.country_code || null, play_variant: u.play_variant || null,
+    country_code: u.country_code || null, play_variant: u.play_variant || null, plus_until: u.plus_until || null,
     title: u.role === 'player' ? undefined : (u.title || null), mfa_enabled: u.role === 'player' ? undefined : !!u.mfa_enabled_at };
 }
 

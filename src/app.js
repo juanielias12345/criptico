@@ -61,6 +61,10 @@ function createApp({ db, config }) {
   app.locals.config = config;
 
   app.use(securityHeaders(config));
+  // Webhook del procesador de pagos: necesita el cuerpo crudo para verificar la firma.
+  app.post('/api/billing/webhook', express.raw({ type: '*/*', limit: '200kb' }), async (req, res, next) => {
+    try { res.json(await require('./services/plus').handleWebhook(db, config, req.body, req.headers)); } catch (e) { next(e); }
+  });
   app.use(express.json({ limit: '200kb' }));
 
   // Identidad: sesión (opcional) y jugador anónimo.
@@ -97,6 +101,7 @@ function createApp({ db, config }) {
   app.use('/api/admin', require('./routes/admin')());
   app.use('/api', require('./routes/profile')());
   app.use('/api', require('./routes/arena')());
+  app.use('/api', require('./routes/billing')());
   app.use('/api', require('./routes/api')());
   app.use(express.static(path.join(__dirname, '..', 'public'), { maxAge: config.production ? '7d' : 0, index: false }));
   app.use(require('./routes/pages')());

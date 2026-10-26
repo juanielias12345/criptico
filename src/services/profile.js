@@ -637,7 +637,10 @@ async function library(db, unit, q) {
 // ── Perfil público ──
 const AVATAR_GLYPHS = ['A', 'C', 'E', 'K', 'M', 'Ñ', 'Q', 'R', 'S', 'X', 'Z', '?', '&', '§'];
 const AVATAR_TONES = 8;
-const validAvatar = (a) => { const m = /^(.+)-([0-7])$/.exec(a || ''); return !!(m && AVATAR_GLYPHS.includes(m[1]) && Number(m[2]) < AVATAR_TONES); };
+// Avatares exclusivos de Plus (ver services/plus.js): se pueden elegir solo siendo Plus.
+const PLUS_GLYPHS = ['★', '♛', '◆', '✦', '∞', 'Ω'];
+const isPlusRow = (u) => !!(u && u.plus_until && Date.parse(u.plus_until) > Date.now());
+const validAvatar = (a, plus = false) => { const m = /^(.+)-([0-7])$/.exec(a || ''); return !!(m && (AVATAR_GLYPHS.includes(m[1]) || (plus && PLUS_GLYPHS.includes(m[1]))) && Number(m[2]) < AVATAR_TONES); };
 const SHARE_KEYS = ['level', 'solved', 'streaks', 'languages', 'country', 'badges'];
 
 async function updateProfile(db, userId, b) {
@@ -649,7 +652,10 @@ async function updateProfile(db, userId, b) {
     if (n && (n.length > 30 || /[@<>]/.test(n) || /[\u0000-\u001f]/.test(n))) throw new HttpError(400, 'invalid_name', 'El nombre público admite hasta 30 caracteres, sin @.');
     set.public_name = n || null;
   }
-  if (b.avatar !== undefined) { if (b.avatar !== null && !validAvatar(b.avatar)) throw new HttpError(400, 'invalid_avatar'); set.avatar = b.avatar; }
+  if (b.avatar !== undefined) {
+    if (b.avatar !== null && !validAvatar(b.avatar, isPlusRow(cur))) throw new HttpError(400, 'invalid_avatar', /^(.+)-/.test(b.avatar || '') && PLUS_GLYPHS.includes(/^(.+)-/.exec(b.avatar)[1]) ? 'Ese avatar es exclusivo de Plus.' : undefined);
+    set.avatar = b.avatar;
+  }
   if (b.share !== undefined) {
     const s = {};
     for (const k of SHARE_KEYS) if (b.share && b.share[k] === true) s[k] = true;
@@ -674,7 +680,7 @@ async function publicProfile(db, username) {
   const share = parseJson(u.profile_share, {});
   const unit = { ids: (await db.all('SELECT id FROM players WHERE user_id = ?', [u.id])).map((r) => r.id), owner: 'u:' + u.id, userId: u.id };
   const f = unit.ids.length ? await facts(db, unit.ids) : null;
-  const out = { name: u.public_name || u.username, username: u.username, avatar: u.avatar || null };
+  const out = { name: u.public_name || u.username, username: u.username, avatar: u.avatar || null, plus: isPlusRow(u) };
   if (share.level) { const achN = (await db.get('SELECT COUNT(*) AS n FROM achievements_earned WHERE owner = ?', [unit.owner])).n; out.level = levelFor(xpOf(f, achN)).level; }
   if (share.solved) out.unique_solved = f ? f.unique_solved : 0;
   if (share.streaks) out.streaks = { current: f ? f.day_streak : 0, best: f ? f.day_streak_best : 0 };
@@ -720,23 +726,23 @@ async function leaderboard(db, q, user) {
   const nameOf = (r) => r.public_name || r.username;
   if (q.board === 'weekly') {
     const [a, b] = windowOf('week');
-    const rows = await db.all(`SELECT u.id, u.username, u.public_name, COUNT(DISTINCT g.clue_id) AS solved FROM games g JOIN players p ON p.id = g.player_id
+    const rows = await db.all(`SELECT u.id, u.username, u.public_name, u.plus_until, COUNT(DISTINCT g.clue_id) AS solved FROM games g JOIN players p ON p.id = g.player_id
       JOIN users u ON u.id = p.user_id JOIN clues c ON c.id = g.clue_id WHERE u.leaderboard_opt_in = 1 AND u.deleted_at IS NULL AND u.disabled = 0
       AND g.status = 'solved' AND g.mode <> 'practice' AND g.duration_ms >= ${MIN_VALID_MS} AND c.language_code = ? AND g.finished_at >= ? AND g.finished_at < ?
       GROUP BY u.id ORDER BY solved DESC, MIN(g.finished_at) ASC LIMIT 100`, [lang, new Date(a).toISOString(), new Date(b).toISOString()]);
-    return { board: 'weekly', lang, from: dayStr(a), to: dayStr(b - DAY), items: rows.slice(0, 50).map((r, i) => ({ rank: i + 1, name: nameOf(r), solved: r.solved, me: !!(user && user.id === r.id) })),
+    return { board: 'weekly', lang, from: dayStr(a), to: dayStr(b - DAY), items: rows.slice(0, 50).map((r, i) => ({ rank: i + 1, name: nameOf(r), plus: isPlusRow(r), solved: r.solved, me: !!(user && user.id === r.id) })),
       me: user ? (rows.findIndex((r) => r.id === user.id) + 1 || null) : null };
   }
   const date = /^\d{4}-\d{2}-\d{2}$/.test(q.date || '') ? q.date : dayStr(Date.now());
   const clean = q.board !== 'assisted';
   const rows = await db.all(`WITH first AS (
-      SELECT u.id AS uid, u.username, u.public_name, g.*, ROW_NUMBER() OVER (PARTITION BY u.id ORDER BY g.started_at) AS n
+      SELECT u.id AS uid, u.username, u.public_name, u.plus_until, g.*, ROW_NUMBER() OVER (PARTITION BY u.id ORDER BY g.started_at) AS n
       FROM games g JOIN players p ON p.id = g.player_id JOIN users u ON u.id = p.user_id JOIN clues c ON c.id = g.clue_id
       WHERE g.daily_date = ? AND g.mode = 'daily' AND c.language_code = ? AND u.leaderboard_opt_in = 1 AND u.deleted_at IS NULL AND u.disabled = 0)
     SELECT * FROM first WHERE n = 1 AND status = 'solved' AND duration_ms >= ${MIN_VALID_MS} AND ${clean ? 'hints_used = 0' : 'hints_used > 0'}
     ORDER BY ${clean ? 'attempts ASC, duration_ms ASC' : 'hints_used ASC, attempts ASC, duration_ms ASC'} LIMIT 100`, [date, lang]);
   return { board: clean ? 'clean' : 'assisted', lang, date,
-    items: rows.slice(0, 50).map((r, i) => ({ rank: i + 1, name: nameOf(r), attempts: r.attempts, hints: r.hints_used, time_ms: r.duration_ms, me: !!(user && user.id === r.uid) })),
+    items: rows.slice(0, 50).map((r, i) => ({ rank: i + 1, name: nameOf(r), plus: isPlusRow(r), attempts: r.attempts, hints: r.hints_used, time_ms: r.duration_ms, me: !!(user && user.id === r.uid) })),
     me: user ? (rows.findIndex((r) => r.uid === user.id) + 1 || null) : null };
 }
 
@@ -768,5 +774,5 @@ module.exports = {
   unitFor, ownerOfPlayer, facts, summary, history, gameDetail, evolution, strengths, records, calendar, recommendations,
   achievementList, evaluateAchievements, onGameFinished, levelFor, xpOf, listGoals, createGoal, updateGoal, library, updateProfile,
   publicProfile, shareGame, sharedCard, leaderboard, linkAnonymous, forgetProfile, prefsOf,
-  ACHIEVEMENTS, ACH_CODES, AVATAR_GLYPHS, AVATAR_TONES, GOAL_KINDS, MIN_MASTERY, dayStreaks,
+  ACHIEVEMENTS, ACH_CODES, AVATAR_GLYPHS, PLUS_GLYPHS, AVATAR_TONES, GOAL_KINDS, MIN_MASTERY, dayStreaks,
 };

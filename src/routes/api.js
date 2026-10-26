@@ -97,6 +97,16 @@ module.exports = function api() {
     res.json(out);
   }));
 
+  // Críptico Plus del día: solo cuentas Plus (ver services/plus.js).
+  r.post('/plus/daily/start', a(async (req, res) => {
+    if (!req.user) throw new HttpError(401, 'login_required', 'Entrá con tu cuenta Plus para jugarlo.');
+    if (!require('../services/plus').isPlus(req.user)) throw new HttpError(403, 'plus_required', 'El Críptico Plus del día es exclusivo de Plus.');
+    const out = await game.startPlusDaily(req.app.locals.db, { playerId: req.playerId, ...readStart(req), origin: await originFor(req, (req.body || {}).origin) });
+    await linkPlayer(req, res, out.player_id);
+    delete out.player_id;
+    res.json(out);
+  }));
+
   const needPlayer = (req) => { if (!req.playerId) throw new HttpError(404, 'game_not_found'); return req.playerId; };
   // Si una acción de la partida falla por un error del servidor, se anota en la partida
   // («interrumpida por error técnico» si después no hay más actividad).
