@@ -10,6 +10,7 @@ const PROFILE = require('../services/profile');
 const PTEXT = require('../views/profile-text');
 const { cardText } = require('../views/share-card');
 const GUIDE = require('../views/guide');
+const FAQ = require('../views/faq');
 const { legalHtml, legalTitle } = require('../views/legal-md');
 const LEGAL = require('../db/legal-global');
 const { indicators: ES_INDICATORS } = require('../lib/lang/es');
@@ -21,6 +22,10 @@ const a = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(
 const altFor = (route, rest = '') => Object.fromEntries(UI_LANGS.map((l) => [l, href(l, route, rest)]));
 // Perfiles oficiales de la marca (para que Google los asocie al sitio).
 const SAME_AS = ['https://www.instagram.com/playcripticos/', 'https://www.facebook.com/1372378769297971', 'https://www.youtube.com/channel/UCaaDK6fVoyY060TFhViw-8A'];
+// Rastreadores de buscadores y asistentes de IA que el sitio permite explícitamente.
+const AI_BOTS = ['Googlebot', 'Bingbot', 'Google-Extended', 'GPTBot', 'OAI-SearchBot', 'ChatGPT-User', 'ClaudeBot', 'Claude-SearchBot', 'Claude-User', 'PerplexityBot', 'Perplexity-User', 'Applebot', 'Applebot-Extended', 'DuckDuckBot', 'YandexBot'];
+// Respuesta de las preguntas frecuentes con sus enlaces resueltos: link(route) devuelve el texto de cada {ruta}.
+const faqText = (ans, link) => ans.replace(/\{(\w+)\}/g, (m, route) => link(route));
 const MECHS = ['anagram', 'hidden', 'reversal', 'container', 'deletion', 'charade', 'homophone', 'double_definition', 'initials'];
 
 function categoryName(cats, slug, lang) {
@@ -126,14 +131,47 @@ module.exports = function pages() {
 
   r.get('/robots.txt', (req, res) => {
     const { siteUrl } = req.app.locals.config;
-    res.type('text/plain').send(`User-agent: *\nDisallow: /admin\nDisallow: /api/\nDisallow: /social/\nAllow: /\n\nSitemap: ${siteUrl}/sitemap.xml\n`);
+    // Los buscadores y los asistentes de IA que citan fuentes se nombran a propósito: el dueño
+    // decidió permitirlos (ver docs/SEO.md). Un grupo con nombre no hereda el de «*», así que repite las reglas.
+    const rules = 'Disallow: /admin\nDisallow: /hq\nDisallow: /api/\nDisallow: /social/\nAllow: /\n';
+    res.type('text/plain').send(`User-agent: *\n${rules}\n${AI_BOTS.map((b) => `User-agent: ${b}`).join('\n')}\n${rules}\nSitemap: ${siteUrl}/sitemap.xml\n`);
+  });
+
+  // llms.txt: resumen en Markdown para asistentes de IA (propuesta llmstxt.org; no garantiza nada, es barato y verificable).
+  r.get('/llms.txt', (req, res) => {
+    const { siteUrl, siteName } = req.app.locals.config;
+    const u = (route, rest = '') => siteUrl + href('es', route, rest);
+    const G = GUIDE.es;
+    res.type('text/markdown; charset=utf-8').send(`# ${siteName}
+
+> ${siteName} (${siteUrl}) es un sitio web para resolver crípticos en español: pistas de crucigrama críptico con una sola respuesta. Se juega gratis en el navegador, sin límite y sin registro, con ayudas progresivas, la explicación de cada solución y un críptico del día.
+
+${FAQ.es.items.slice(0, 5).map(([q, ans]) => `- **${q}** ${faqText(ans, (r) => `(${u(r)})`)}`).join('\n')}
+
+## Jugar
+- [Jugar crípticos](${u('play')}): crípticos al azar por dificultad (1 a 5), con pistas y explicación.
+- [Críptico del día](${u('daily')}): uno nuevo cada día, el mismo para todos.
+- [Archivo de crípticos](${u('archive')}): todos los publicados, con filtros por dificultad, tema y mecanismo.
+- [Desafíos](${u('arena')}): duelos entre jugadores y torneo semanal.
+
+## Aprender
+- [Cómo se resuelve un críptico](${u('help')}): método paso a paso con ejemplos resolubles.
+- [${G.title}](${u('guide')}): ${G.lead}
+${Object.entries(G.mechs).map(([k, m]) => `- [${t('es', 'mech_' + k)}](${u('guide', '/' + m.slug)}): ${m.description}`).join('\n')}
+- [Preguntas frecuentes](${u('faq')})
+
+## Optional
+- [Play Crípticos Plus](${u('plus')}): plan opcional sin anuncios.
+- [Proponer un críptico](${u('contribute')})
+- [Créditos y licencias](${u('credits')})
+`);
   });
 
   r.get('/sitemap.xml', a(async (req, res) => {
     const { siteUrl } = req.app.locals.config;
     const db = req.app.locals.db;
     const urls = [];
-    for (const l of UI_LANGS) for (const route of ['home', 'play', 'arena', 'plus', 'daily', 'archive', 'contribute', 'help', 'privacy', 'terms', 'credits']) urls.push(href(l, route));
+    for (const l of UI_LANGS) for (const route of ['home', 'play', 'arena', 'plus', 'daily', 'archive', 'contribute', 'help', 'faq', 'privacy', 'terms', 'credits']) urls.push(href(l, route));
     if (UI_LANGS.includes('es')) {
       const company = require('../services/company');
       for (const doc of LEGAL.PUBLIC.filter((d) => d !== 'terms' && d !== 'privacy')) if (await company.publicLegal(db, doc)) urls.push(href('es', 'legal', '/' + doc));
@@ -241,8 +279,12 @@ module.exports = function pages() {
       render(req, res, {
         page: 'home', path: P('home'), alternates: altFor('home'), ...seo(lang, 'home'),
         jsonLd: { '@context': 'https://schema.org', '@graph': [
-          { '@type': 'WebSite', name: req.app.locals.config.siteName, url: req.app.locals.config.siteUrl, inLanguage: UI_LANGS },
-          { '@type': 'Organization', name: req.app.locals.config.siteName, url: req.app.locals.config.siteUrl, logo: req.app.locals.config.siteUrl + '/icon-512.png', sameAs: SAME_AS },
+          { '@type': 'WebSite', '@id': req.app.locals.config.siteUrl + '/#website', name: req.app.locals.config.siteName, url: req.app.locals.config.siteUrl, inLanguage: UI_LANGS, publisher: { '@id': req.app.locals.config.siteUrl + '/#org' } },
+          { '@type': 'Organization', '@id': req.app.locals.config.siteUrl + '/#org', name: req.app.locals.config.siteName, url: req.app.locals.config.siteUrl, logo: req.app.locals.config.siteUrl + '/icon-512.png', sameAs: SAME_AS,
+            description: 'Sitio web para resolver crípticos (pistas de crucigrama críptico) en español, gratis y sin límite.' },
+          { '@type': 'WebApplication', name: req.app.locals.config.siteName, url: req.app.locals.config.siteUrl + P('home'), applicationCategory: 'GameApplication', genre: ['Crucigrama críptico', 'Juego de palabras'],
+            operatingSystem: 'Web', browserRequirements: 'Requiere un navegador moderno', inLanguage: 'es', isAccessibleForFree: true,
+            offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' }, publisher: { '@id': req.app.locals.config.siteUrl + '/#org' } },
         ] },
         body: `
 <section class="hero">
@@ -491,8 +533,30 @@ ${related.length ? `<section class="section" aria-labelledby="rel-h"><h2 id="rel
   </div></section>`).join('')}</div>
 <section class="section"><article class="prose">${CONTENT[lang].help}</article></section>
 ${GUIDE[lang] ? `<section class="banner section"><div><h2>${esc(GUIDE[lang].title)}</h2><p>${esc(GUIDE[lang].lead)}</p></div><a class="btn" href="${P('guide')}">${esc(t(lang, 'nav_guide'))}</a></section>` : ''}
+${FAQ[lang] ? `<p class="section"><a class="link-btn" href="${P('faq')}">${esc(FAQ[lang].title)} →</a></p>` : ''}
 <section class="banner"><div><h2>${esc(t(lang, 'try_more'))}</h2><p>${esc(t(lang, 'play_lead'))}</p></div><a class="btn" href="${P('play')}">${esc(t(lang, 'home_cta'))}</a></section>`,
     }));
+
+    // ── Preguntas frecuentes (FAQPage: respuestas citables por buscadores y asistentes) ──
+    const F = FAQ[lang];
+    if (F) {
+      const NAMES = { play: t(lang, 'nav_play'), daily: t(lang, 'nav_daily'), help: t(lang, 'help_title'), guide: GUIDE[lang] ? GUIDE[lang].title : t(lang, 'nav_help'), plus: 'Plus', contribute: t(lang, 'nav_contribute'), arena: t(lang, 'nav_arena') };
+      r.get(P('faq'), (req, res) => {
+        const siteUrl = req.app.locals.config.siteUrl;
+        render(req, res, {
+          page: 'faq', path: P('faq'), alternates: { [lang]: P('faq') }, title: F.title, seoTitle: F.seoTitle, description: F.description,
+          jsonLd: { '@context': 'https://schema.org', '@graph': [
+            { '@type': 'FAQPage', mainEntity: F.items.map(([q, ans]) => ({ '@type': 'Question', name: q, acceptedAnswer: { '@type': 'Answer', text: faqText(ans, (rt) => `(${siteUrl}${P(rt)})`) } })) },
+            breadcrumbs(siteUrl, [[t(lang, 'nav_help'), P('help')], [F.title, P('faq')]]),
+          ] },
+          body: `<nav class="crumbs" aria-label="Ruta"><a href="${P('help')}">${esc(t(lang, 'nav_help'))}</a></nav>
+<header class="page-head"><h1>${esc(F.title)}</h1><p class="lead">${esc(F.lead)}</p></header>
+<article class="prose faq">${F.items.map(([q, ans]) => `<h2>${esc(q)}</h2>
+<p>${faqText(esc(ans), (rt) => `<a href="${P(rt)}">${esc(NAMES[rt] || rt)}</a>`)}</p>`).join('\n')}</article>
+<section class="banner section"><div><h2>${esc(t(lang, 'try_more'))}</h2><p>${esc(t(lang, 'play_lead'))}</p></div><a class="btn" href="${P('play')}">${esc(t(lang, 'home_cta'))}</a></section>`,
+        });
+      });
+    }
 
     // ── Guía de mecanismos: índice y una página por mecanismo ──
     const G = GUIDE[lang];

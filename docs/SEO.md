@@ -16,6 +16,11 @@
 - El Organization del inicio lista los perfiles oficiales (Instagram, Facebook, YouTube) en `sameAs`. TikTok queda afuera mientras la cuenta conectada sea personal.
 - `GOOGLE_SITE_VERIFICATION` (variable de entorno) agrega la etiqueta de verificación de Search Console.
 
+- Preguntas frecuentes (`/es/preguntas-frecuentes`, textos en `src/views/faq.js`) con `FAQPage`: respuestas cortas y citables para buscadores y asistentes. Si cambia el producto (precio, app, registro), se actualiza ahí.
+- `/llms.txt`: resumen en Markdown con las páginas clave (propuesta llmstxt.org). Ningún buscador garantiza usarlo; cuesta poco y se arma solo desde la guía y las preguntas frecuentes.
+- `robots.txt` nombra los rastreadores de buscadores y de IA permitidos (Googlebot, Bingbot, OAI-SearchBot, GPTBot, ChatGPT-User, ClaudeBot, Claude-SearchBot, PerplexityBot, Applebot, Google-Extended…). Un grupo con nombre no hereda las reglas de `*`, por eso se repiten. Para negar el uso en entrenamiento sin perder la búsqueda, sacar `GPTBot`, `Google-Extended`, `ClaudeBot` y `Applebot-Extended` de `AI_BOTS` y agregarles `Disallow: /`.
+- Inicio: `WebApplication` (gratis, categoría juego) enlazado al `Organization` y al `WebSite` por `@id`. Sin valoraciones ni reseñas inventadas.
+
 ## Lo que depende de una persona
 
 1. Search Console: verificar `playcripticos.com` (registro TXT en el DNS o la variable `GOOGLE_SITE_VERIFICATION` en Vercel) y enviar `https://playcripticos.com/sitemap.xml`.

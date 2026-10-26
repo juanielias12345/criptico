@@ -320,3 +320,24 @@ test('SEO: IndexNow avisa las páginas nuevas solo desde el dominio público, y 
   assert.equal(key.text.trim(), KEY);
   assert.match((await client(env.base).get('/es')).text, /"sameAs":\["https:\/\/www.instagram.com\/playcripticos\/"/);
 });
+
+test('SEO/GEO: robots permite buscadores e IA, llms.txt y preguntas frecuentes con FAQPage', async () => {
+  const c = client(env.base);
+  const robots = (await c.get('/robots.txt')).text;
+  assert.match(robots, /User-agent: OAI-SearchBot/);
+  assert.match(robots, /User-agent: ClaudeBot/);
+  assert.equal(robots.match(/Disallow: \/admin/g).length, 2, 'los grupos con nombre repiten las reglas');
+  const llms = await c.get('/llms.txt');
+  assert.equal(llms.status, 200);
+  assert.match(llms.text, /^# Play Crípticos/);
+  assert.match(llms.text, /http:\/\/localhost\/es\/mecanismos\/anagrama/);
+  assert.doesNotMatch(llms.text, /\{\w+\}|undefined/);
+  const faq = await c.get('/es/preguntas-frecuentes');
+  assert.equal(faq.status, 200);
+  assert.match(faq.text, /"@type":"FAQPage"/);
+  assert.match(faq.text, /<h2>¿Es gratis\?<\/h2>/);
+  assert.doesNotMatch(faq.text.split('<article')[1].split('</article>')[0], /\{\w+\}/);
+  assert.match(faq.text, /href="\/es\/plus"/);
+  assert.ok((await c.get('/sitemap.xml')).text.includes('/es/preguntas-frecuentes'));
+  assert.match((await c.get('/es')).text, /"@type":"WebApplication"/);
+});
