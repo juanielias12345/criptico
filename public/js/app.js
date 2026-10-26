@@ -352,7 +352,7 @@
 
     async function modeBlock() {
       if (kind !== 'play') {
-        return el('section', { class: 'rail-block' }, el('h2', { text: t('in_mode') }), el('p', { class: 'small', text: t(kind === 'daily' ? 'mode_daily' : kind === 'plus' ? 'mode_plus_daily' : 'mode_shared') }),
+        return el('section', { class: 'rail-block' }, el('h2', { text: t('in_mode') }), el('p', { class: 'small', text: t(kind === 'daily' ? 'mode_daily' : kind === 'plus' ? 'mode_plus_daily' : 'mode_shared') + (kind === 'plus' && st.plus ? ` · ${st.plus.number}/${st.plus.total}` : '') }),
           kind === 'clue' ? el('a', { class: 'btn small', href: route('play'), text: t('home_cta') }) : null);
       }
       const m = await meta();
@@ -399,7 +399,7 @@
         if (kind === 'clue') body.slug = BOOT.slug;
         const data = await api(kind === 'daily' ? '/api/daily/start' : kind === 'plus' ? '/api/plus/daily/start' : '/api/game/start', { method: 'POST', body });
         Object.assign(st, { game: data.game_id, clue: data.clue, notice: data.notice, recycled: data.recycled, hints: [], solved: false, finished: false,
-          solution: null, maxHints: data.max_hints, timed: data.timed_seconds, dailyDone: data.finished, attempts: 0, hintsUsed: 0, feedback: null, daily: null, tried: [] });
+          solution: null, plus: data.plus || null, maxHints: data.max_hints, timed: data.timed_seconds, dailyDone: data.finished, attempts: 0, hintsUsed: 0, feedback: null, daily: null, tried: [] });
         if (data.finished) { st.finished = true; st.solved = data.finished.result === 'solved'; st.solution = data.finished.solution; st.attempts = data.finished.attempts; st.hintsUsed = data.finished.hints_used; }
         if (st.clue && !data.finished) session.bump('seen');
         if (st.mode === 'guided' && st.game && !st.finished) await hint(true);
@@ -485,6 +485,8 @@
 
     async function next() {
       if (st.game && !st.finished) { try { const r = await api('/api/game/' + st.game + '/skip', { method: 'POST', body: {} }); announceAchievements(r.achievements); } catch (e) { /* ignorar */ } if (st.mode === 'streak') st.streak = 0; }
+      // Plus: sigue con el próximo de la tanda del día mientras queden.
+      if (kind === 'plus' && st.plus && st.plus.number < st.plus.total) { start(); return; }
       if (kind === 'clue' || kind === 'daily' || kind === 'plus') { location.href = route('play'); return; }
       start();
     }
@@ -628,7 +630,8 @@
           s.note ? el('p', { class: 'muted', text: s.note }) : null,
           st.mode === 'guided' ? el('p', { class: 'muted small', text: t('mechhelp_' + s.mechanism) }) : null,
           st.daily && st.daily.players ? el('p', { class: 'small', text: t('daily_stats', { p: st.daily.players, s: st.daily.solved }) }) : null,
-          (kind === 'daily' || kind === 'plus') && st.dailyDone ? el('p', { class: 'small muted', text: t('daily_done') }) : null,
+          kind === 'daily' && st.dailyDone ? el('p', { class: 'small muted', text: t('daily_done') }) : null,
+          kind === 'plus' && st.plus && st.plus.done >= st.plus.total ? el('p', { class: 'small muted', text: t('plus_done') }) : null,
           c.origin === 'external' ? el('p', { class: 'attribution' }, t('source') + ': ', c.source_url ? el('a', { href: c.source_url, rel: 'noopener nofollow', text: c.attribution || c.source_url }) : (c.attribution || '—'),
             ' · ', c.author ? t('author_label') + ': ' + c.author : t('author_unknown'), c.license ? ' · ' + t('license_label') + ': ' + (LICENSE_NAMES[c.license] || c.license) : null) : null,
           c.origin === 'generated' ? el('p', { class: 'attribution' }, t('gen_by') + ' · ', el('a', { href: route('credits'), text: t('gen_sources') })) : null,

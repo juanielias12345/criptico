@@ -163,6 +163,14 @@ test('beneficios: Críptico Plus del día, comparación con la comunidad y avata
   assert.ok(diff >= 4, 'es de los difíciles');
   const s2 = await dani.c.post('/api/plus/daily/start', {});
   assert.equal(s2.json.game_id, s1.json.game_id, 'volver a entrar retoma la misma partida');
+  assert.equal(s1.json.plus.number, 1);
+  assert.equal(s1.json.plus.total, 10, 'una tanda de 10 por día');
+  const set = await env.db.all('SELECT clue_id FROM plus_daily_set WHERE date = ?', [new Date().toISOString().slice(0, 10)]);
+  assert.equal(new Set(set.map((x) => x.clue_id)).size, 10, 'sin repetidos');
+  await dani.c.post('/api/game/' + s1.json.game_id + '/skip', {});
+  const s3 = await dani.c.post('/api/plus/daily/start', {});
+  assert.notEqual(s3.json.clue.id, s1.json.clue.id, 'al terminar uno sigue el próximo de la tanda');
+  assert.equal(s3.json.plus.number, 2);
   const daily = await env.db.get('SELECT clue_id FROM daily_challenges WHERE date = ?', [new Date().toISOString().slice(0, 10)]);
   if (daily) assert.notEqual(daily.clue_id, s1.json.clue.id, 'distinto del diario común');
   const g = await env.db.get('SELECT mode, daily_date FROM games WHERE id = ?', [s1.json.game_id]);

@@ -670,19 +670,19 @@ ${rows.length ? `<section class="section" aria-labelledby="more-h"><h2 id="more-
       const m = PLUS.PLANS.monthly; const y = PLUS.PLANS.yearly;
       const perks = [
         ['Sin anuncios', 'Jugá sin publicidad en todo el sitio, en cualquier dispositivo donde entres con tu cuenta.'],
-        ['Críptico Plus del día', 'Un críptico extra cada día, de los difíciles (dificultad 4 y 5), solo para Plus.'],
+        ['10 crípticos Plus por día', 'Una tanda nueva de 10 crípticos exclusivos cada día, de los difíciles (dificultad 4 y 5), solo para Plus.'],
         ['Tu nivel contra la comunidad', 'Compará tus aciertos, tiempos y pistas con los de todos los jugadores, por dificultad.'],
         ['Insignia y avatares Plus', 'La insignia Plus en tu perfil y en los rankings, y avatares exclusivos.'],
       ];
       res.set('Cache-Control', 'no-store');
       render(req, res, {
         page: 'plus', path: P('plus'), title: 'Play Crípticos Plus',
-        description: `Play Crípticos Plus: sin anuncios, un críptico difícil extra por día y estadísticas contra la comunidad. ${m.price} por mes o ${y.price} por año.`,
+        description: `Play Crípticos Plus: sin anuncios, 10 crípticos exclusivos por día y estadísticas contra la comunidad. ${m.price} por mes o ${y.price} por año.`,
         scripts: ['/js/plus.js'],
         body: `<header class="page-head plus-head"><p class="eyebrow"><span class="plus-badge">Plus</span></p>
 <h1>${isPlus ? 'Tu Plus' : 'Más crípticos, cero anuncios.'}</h1>
-<p class="lead">${isPlus ? '¡Gracias por apoyar Play Crípticos! Acá tenés tu críptico extra de hoy y cómo te va contra la comunidad.' : 'Jugar sigue siendo gratis. Con Plus jugás sin publicidad, sumás un críptico difícil por día y ves cómo te va contra todos.'}</p></header>
-${isPlus ? `<section class="plus-daily"><h2>Críptico Plus del día</h2><section class="game" id="game">${skeleton}</section></section>
+<p class="lead">${isPlus ? '¡Gracias por apoyar Play Crípticos! Acá tenés tus 10 crípticos Plus de hoy y cómo te va contra la comunidad.' : 'Jugar sigue siendo gratis. Con Plus jugás sin publicidad, sumás 10 crípticos exclusivos por día y ves cómo te va contra todos.'}</p></header>
+${isPlus ? `<section class="plus-daily"><h2>Crípticos Plus del día</h2><section class="game" id="game">${skeleton}</section></section>
 <section class="plus-compare" id="plus-compare" aria-live="polite"></section>` : ''}
 <section class="plus-perks" aria-label="Qué incluye"><ul>${perks.map(([h, d]) => `<li><h3>${esc(h)}</h3><p>${esc(d)}</p></li>`).join('')}</ul></section>
 <section class="plus-plans" id="plus-plans" aria-label="Planes">

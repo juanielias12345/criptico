@@ -522,6 +522,7 @@ const PLUS_LS_NOTE = 'plus-ls-2026-10-26';
 const LS = 'Lemon Squeezy (Lemon Squeezy, LLC)';
 const PLUS_LS_REVISIONS = {
   terms: (t) => {
+    t = swap(t, 'un críptico extra por día (el «Críptico Plus del día»)', '10 crípticos exclusivos por día (los «Crípticos Plus del día»)');
     t = swap(t, '(el precio final lo muestra PayPal antes de pagar). Se cobra por adelantado a través de PayPal y se renueva solo al final de cada período.',
       `(el precio final, con los impuestos de tu país, lo muestra el checkout antes de pagar). El cobro lo hace ${LS}, que actúa como vendedor registrado («merchant of record»): procesa el pago, emite el comprobante y liquida los impuestos. Se cobra por adelantado y se renueva solo al final de cada período.`);
     return swap(t, 'desde los pagos automáticos de tu cuenta de PayPal.', 'desde el enlace «Administrar o cancelar» de la página de Plus o del correo de Lemon Squeezy.');

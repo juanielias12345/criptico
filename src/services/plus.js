@@ -1,7 +1,7 @@
 'use strict';
 
 // Plan Plus: suscripción mensual o anual cobrada con Lemon Squeezy (vendedor registrado: cobra,
-// factura y liquida los impuestos de cada país). Incluye: sin anuncios, el Críptico Plus del día,
+// factura y liquida los impuestos de cada país). Incluye: sin anuncios, 10 Crípticos Plus por día,
 // la comparación con la comunidad, la insignia Plus y avatares exclusivos. Nunca da ventajas en
 // torneos ni duelos. Flujo de pago sin scripts de terceros:
 //  1) POST /api/billing/plus/checkout crea un checkout de Lemon Squeezy con el id de la cuenta

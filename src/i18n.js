@@ -14,7 +14,7 @@ const T = {
   es: {
     tagline: 'Crípticos sin límite, de todo el mundo',
     nav_play: 'Jugar', nav_daily: 'Desafío diario', nav_archive: 'Archivo', nav_contribute: 'Proponer', nav_help: 'Ayuda',
-    nav_profile: 'Mi perfil', nav_prefs: 'País e idioma', nav_account: 'Entrar', nav_arena: 'Desafíos', mode_plus_daily: 'Críptico Plus del día', nav_plus: 'Plus',
+    nav_profile: 'Mi perfil', nav_prefs: 'País e idioma', nav_account: 'Entrar', nav_arena: 'Desafíos', mode_plus_daily: 'Crípticos Plus del día', plus_done: 'Terminaste los crípticos Plus de hoy. Mañana hay una tanda nueva.', nav_plus: 'Plus',
     home_title: 'Acertijos de palabras para mentes curiosas',
     home_lead: 'Cada pista esconde una palabra: una parte la define y otra la arma con un juego de letras. Jugá todas las veces que quieras.',
     home_cta: 'Empezar a jugar', home_daily: 'Ver el desafío de hoy', home_how: 'Cómo funciona un críptico',
@@ -87,7 +87,7 @@ const T = {
   en: {
     tagline: 'Unlimited cryptic clues from around the world',
     nav_play: 'Play', nav_daily: 'Daily challenge', nav_archive: 'Archive', nav_contribute: 'Submit', nav_help: 'Help',
-    nav_profile: 'My profile', nav_prefs: 'Country & language', nav_account: 'Sign in', nav_arena: 'Challenges', mode_plus_daily: 'Plus clue of the day', nav_plus: 'Plus',
+    nav_profile: 'My profile', nav_prefs: 'Country & language', nav_account: 'Sign in', nav_arena: 'Challenges', mode_plus_daily: 'Plus clues of the day', plus_done: "You've finished today's Plus clues. A new batch arrives tomorrow.", nav_plus: 'Plus',
     home_title: 'Word puzzles for curious minds',
     home_lead: 'Every clue hides a word: one part defines it, the rest builds it with wordplay. Play as often as you like.',
     home_cta: 'Start playing', home_daily: "See today's challenge", home_how: 'How a cryptic clue works',
