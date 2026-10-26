@@ -455,4 +455,43 @@ const REVISIONS = {
   },
 };
 
-module.exports = { NOTE, ORIGIN_NOTE, REVISIONS, OWNER, PUBLIC, DOCS, ownerReady, fill };
+// Revisión del 26/10/2026: anuncios de Google AdSense y duelos, torneos y amigos.
+// Se arma sobre la última versión global (con la revisión de origen) y entra como borrador.
+// Al publicarse la privacidad y las cookies de esta revisión se encienden los anuncios.
+const ADS_NOTE = 'anuncios-2026-10-26';
+const ADS_REVISIONS = {
+  privacy: (t) => {
+    t = swap(t, '- **Seguridad:** un hash de tu dirección IP con una sal secreta, nunca la IP en claro.',
+      '- **Seguridad:** un hash de tu dirección IP con una sal secreta, nunca la IP en claro.\n'
+      + '- **Torneos, duelos y amigos (con cuenta):** si te inscribís en un torneo, tu nombre público (o tu usuario) y tus puntos aparecen en el ranking del torneo, que es público. Si agregás amigos o jugás duelos, la otra persona ve tu usuario, tus puntos en ese duelo y si estuviste activo en los últimos minutos.\n'
+      + '- **Anuncios:** el sitio muestra anuncios de Google AdSense, que financian el juego gratuito. Google y sus socios usan cookies e identificadores del navegador para mostrar y medir anuncios y prevenir fraude (ver la sección 4).');
+    t = swap(t, '| Moderar y publicar propuestas | Ejecución del servicio y tu consentimiento al enviarlas |',
+      '| Moderar y publicar propuestas | Ejecución del servicio y tu consentimiento al enviarlas |\n'
+      + '| Rankings de torneos, duelos y amigos | Ejecución del servicio que pedís al inscribirte o aceptar un duelo |\n'
+      + '| Mostrar anuncios (Google AdSense) | Tu consentimiento en la Unión Europea, el EEE, el Reino Unido y Suiza; en el resto, interés legítimo en financiar el sitio, con derecho a oponerte |');
+    t = swap(t, 'No vendemos datos personales, no los compartimos para publicidad comportamental y no tomamos decisiones automatizadas que tengan efectos legales sobre vos.',
+      'No vendemos datos personales a cambio de dinero ni tomamos decisiones automatizadas que tengan efectos legales sobre vos. Los anuncios los sirve Google, como se explica en la sección 4.');
+    t = swap(t, 'También podemos entregar datos si una autoridad competente lo exige conforme a la ley.',
+      'Para los anuncios usamos Google AdSense (Google LLC y Google Ireland Limited), que actúa como responsable independiente de los datos que recoge con sus cookies e identificadores. Cómo los usa Google: https://policies.google.com/technologies/partner-sites. Podés desactivar los anuncios personalizados en https://adssettings.google.com. En la Unión Europea, el EEE, el Reino Unido y Suiza te pedimos consentimiento antes, con el aviso de Google; si no lo das, ves anuncios no personalizados o limitados. Si tu navegador envía «Do Not Track» o «Global Privacy Control», pedimos anuncios no personalizados. También podemos entregar datos si una autoridad competente lo exige conforme a la ley.');
+    t = swap(t, 'No vendemos ni «compartimos» datos personales para publicidad, no usamos datos sensibles y respetamos la señal Global Privacy Control.',
+      'Los anuncios de Google AdSense pueden considerarse «compartir» datos para publicidad según algunas leyes estatales. Podés oponerte con la señal Global Privacy Control (pedimos anuncios no personalizados), con el aviso de privacidad de Google o escribiéndonos. No vendemos datos a cambio de dinero ni usamos datos sensibles.');
+    return t;
+  },
+  cookies: (t) => {
+    t = swap(t, 'No usamos cookies de publicidad, de redes sociales ni de analítica de terceros.',
+      'En las páginas con anuncios, Google AdSense usa además sus propias cookies para mostrar y medir anuncios y prevenir fraude. No usamos cookies de redes sociales ni de analítica de terceros.');
+    t = swap(t, '| sid | Cookie propia, técnica | Mantener tu sesión iniciada | Hasta 30 días, o 12 horas en el panel del equipo |',
+      '| sid | Cookie propia, técnica | Mantener tu sesión iniciada | Hasta 30 días, o 12 horas en el panel del equipo |\n'
+      + '| __gads, __gpi, __eoi, IDE, NID y similares | Cookies de terceros (Google AdSense) | Mostrar anuncios, limitar cuántas veces ves el mismo, medirlos y prevenir fraude | Según Google, hasta 13 meses |');
+    t = swap(t, ' ni las equivalentes de otros países. Si en el futuro sumamos cookies que no sean necesarias, te vamos a pedir consentimiento antes y vamos a actualizar esta política.',
+      ' ni las equivalentes de otros países para esos elementos propios. Las cookies de anuncios de Google son distintas y se explican abajo.\n\n'
+      + '## Anuncios\n'
+      + 'En la Unión Europea, el EEE, el Reino Unido y Suiza, las cookies de anuncios solo se usan si das tu consentimiento en el aviso de Google que aparece al entrar; podés cambiar tu elección desde ese mismo aviso. En otros países podés desactivar los anuncios personalizados en https://adssettings.google.com. Si tu navegador envía «Do Not Track» o «Global Privacy Control», pedimos a Google anuncios no personalizados. Más información: https://policies.google.com/technologies/ads.');
+    return t;
+  },
+};
+
+// Revisiones en orden: cada una se arma sobre la versión anterior del mismo documento.
+const REVISION_SETS = [[ORIGIN_NOTE, REVISIONS], [ADS_NOTE, ADS_REVISIONS]];
+
+module.exports = { NOTE, ORIGIN_NOTE, ADS_NOTE, REVISIONS, ADS_REVISIONS, REVISION_SETS, OWNER, PUBLIC, DOCS, ownerReady, fill };

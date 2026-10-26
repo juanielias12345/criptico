@@ -96,6 +96,7 @@ function createApp({ db, config }) {
 
   app.use('/api/admin', require('./routes/admin')());
   app.use('/api', require('./routes/profile')());
+  app.use('/api', require('./routes/arena')());
   app.use('/api', require('./routes/api')());
   app.use(express.static(path.join(__dirname, '..', 'public'), { maxAge: config.production ? '7d' : 0, index: false }));
   app.use(require('./routes/pages')());

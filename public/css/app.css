@@ -907,3 +907,55 @@ dialog::backdrop { background: var(--scrim); }
 .legal-table { border-collapse: collapse; font-size: var(--t-sm); min-width: 520px; }
 .legal-table th, .legal-table td { text-align: left; vertical-align: top; padding: var(--s-2) var(--s-3); border-bottom: var(--b-1); }
 .legal-table th { font-weight: 600; }
+
+/* ── Duelos y torneos (public/js/arena.js) ── */
+.arena-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); gap: var(--s-5); align-items: start; }
+.arena-card { min-height: 0; display: grid; gap: var(--s-4); align-content: start; }
+.arena-card h2 { font-size: var(--t-2xl); margin: 0; }
+.arena-card h3.label { margin: var(--s-2) 0 0; }
+.arena-card > p, .arena-card .notice { margin: 0; }
+.arena-list { margin: 0; padding-left: 1.1em; display: grid; gap: var(--s-2); }
+.arena-me { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s-3); margin: 0; }
+.arena-me div { border: var(--b-1); padding: var(--s-3); background: var(--paper); }
+.arena-me dt { font-size: var(--t-xs); color: var(--ink-3); text-transform: uppercase; letter-spacing: .08em; }
+.arena-me dd { margin: 4px 0 0; font: 500 var(--t-2xl)/1 var(--font-display); }
+.tour-days { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.tour-days li { display: flex; justify-content: space-between; align-items: center; gap: var(--s-3); padding: 8px 12px; border: var(--b-1); background: var(--paper); min-height: 48px; }
+.tour-days li.state-open, .tour-days li.state-playing { border-color: var(--accent); }
+.tour-days .d { font-weight: 600; text-transform: capitalize; }
+.tour-days .pts { font-weight: 700; color: var(--ok); }
+.rank-table { width: 100%; border-collapse: collapse; font-size: var(--t-sm); }
+.rank-table th, .rank-table td { text-align: left; padding: 8px 6px; border-bottom: var(--b-1); }
+.rank-table th { font-size: var(--t-xs); text-transform: uppercase; letter-spacing: .08em; color: var(--ink-3); font-weight: 600; }
+.rank-table th:last-child, .rank-table td:last-child, .rank-table th:nth-child(3), .rank-table td:nth-child(3) { text-align: right; }
+.rank-table tr.me td { background: var(--accent-soft); }
+.online-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: var(--rule); flex: none; vertical-align: .05em; }
+.online-dot.on { background: var(--ok); box-shadow: 0 0 0 3px var(--ok-soft); }
+.share-row { display: flex; flex-wrap: wrap; gap: var(--s-2); }
+.duel-score { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s-3); }
+.duel-score > div { display: grid; gap: 4px; justify-items: center; text-align: center; padding: var(--s-4); border: var(--b-ink); background: var(--paper); }
+.duel-score b { font: 500 var(--t-3xl)/1 var(--font-display); }
+.duel-score .who { font-weight: 600; overflow-wrap: anywhere; }
+.duel-list, .friend-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.duel-list a { display: flex; flex-wrap: wrap; gap: 4px var(--s-3); align-items: center; padding: 10px 12px; border: var(--b-1); background: var(--paper); text-decoration: none; color: inherit; }
+.duel-list li.todo a { border-color: var(--accent); }
+.duel-list .who, .friend-list .who { font-weight: 600; flex: 1 1 140px; overflow-wrap: anywhere; }
+.friend-list li { display: flex; align-items: center; gap: var(--s-3); padding: 8px 12px; border: var(--b-1); background: var(--paper); }
+.duel-form .row { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+.arena-play { display: grid; gap: var(--s-4); align-content: start; max-width: 760px; }
+.arena-play .clue-text { max-width: 26ch; }
+.round-clock { font-variant-numeric: tabular-nums; }
+.round-hints { margin: 0; padding-left: 1.1em; display: grid; gap: 4px; color: var(--near); font-weight: 500; }
+.round-hints:empty { display: none; }
+.round-result { font: 500 var(--t-2xl)/1.1 var(--font-display); margin: 0; }
+.round-result.ok { color: var(--ok); } .round-result.miss { color: var(--near); }
+.round-points { margin: 0; font-size: var(--t-lg); } .round-points b { font: 500 var(--t-3xl)/1 var(--font-display); color: var(--accent); }
+.round-solution .answer { font: 500 var(--t-2xl)/1 var(--font-display); letter-spacing: .14em; color: var(--ok); margin: 0 0 var(--s-2); }
+.podium { margin: 0; padding-left: 1.4em; display: grid; gap: 4px; }
+@media (max-width: 480px) { .arena-me dd { font-size: var(--t-xl); } .duel-score b { font-size: var(--t-2xl); } }
+
+/* ── Anuncios (Google AdSense, public/js/ads.js) ── */
+.ad-slot { margin: var(--s-6) auto 0; max-width: 1200px; padding: 0 var(--s-4); min-height: 0; }
+.ad-slot .ad-label { font-size: var(--t-xs); color: var(--ink-3); text-transform: uppercase; letter-spacing: .1em; margin: 0 0 4px; }
+.ad-slot ins.adsbygoogle { display: block; }
+.ad-slot:has(ins[data-ad-status="unfilled"]) { display: none; }

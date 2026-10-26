@@ -5,16 +5,16 @@
 
 const ROUTES = {
   es: { home: '', play: 'jugar', daily: 'diario', archive: 'archivo', clue: 'c', contribute: 'contribuir', submission: 'propuesta',
-    help: 'ayuda', guide: 'mecanismos', legal: 'legal', privacy: 'privacidad', terms: 'condiciones', credits: 'creditos', profile: 'perfil', account: 'cuenta' },
+    help: 'ayuda', guide: 'mecanismos', legal: 'legal', privacy: 'privacidad', terms: 'condiciones', credits: 'creditos', profile: 'perfil', account: 'cuenta', arena: 'desafios', tournament: 'torneos' },
   en: { home: '', play: 'play', daily: 'daily', archive: 'archive', clue: 'c', contribute: 'contribute', submission: 'submission',
-    help: 'help', guide: 'devices', legal: 'legal', privacy: 'privacy', terms: 'terms', credits: 'credits', profile: 'profile', account: 'account' },
+    help: 'help', guide: 'devices', legal: 'legal', privacy: 'privacy', terms: 'terms', credits: 'credits', profile: 'profile', account: 'account', arena: 'challenges', tournament: 'tournaments' },
 };
 
 const T = {
   es: {
     tagline: 'Crípticos sin límite, de todo el mundo',
     nav_play: 'Jugar', nav_daily: 'Desafío diario', nav_archive: 'Archivo', nav_contribute: 'Proponer', nav_help: 'Ayuda',
-    nav_profile: 'Mi perfil', nav_prefs: 'País e idioma', nav_account: 'Entrar',
+    nav_profile: 'Mi perfil', nav_prefs: 'País e idioma', nav_account: 'Entrar', nav_arena: 'Duelos y torneos',
     home_title: 'Acertijos de palabras para mentes curiosas',
     home_lead: 'Cada pista esconde una palabra: una parte la define y otra la arma con un juego de letras. Jugá todas las veces que quieras.',
     home_cta: 'Empezar a jugar', home_daily: 'Ver el desafío de hoy', home_how: 'Cómo funciona un críptico',
@@ -87,7 +87,7 @@ const T = {
   en: {
     tagline: 'Unlimited cryptic clues from around the world',
     nav_play: 'Play', nav_daily: 'Daily challenge', nav_archive: 'Archive', nav_contribute: 'Submit', nav_help: 'Help',
-    nav_profile: 'My profile', nav_prefs: 'Country & language', nav_account: 'Sign in',
+    nav_profile: 'My profile', nav_prefs: 'Country & language', nav_account: 'Sign in', nav_arena: 'Duels & tournaments',
     home_title: 'Word puzzles for curious minds',
     home_lead: 'Every clue hides a word: one part defines it, the rest builds it with wordplay. Play as often as you like.',
     home_cta: 'Start playing', home_daily: "See today's challenge", home_how: 'How a cryptic clue works',
@@ -179,7 +179,7 @@ Object.assign(T.es, {
   same_guess: "Ya probaste esa respuesta.",
   nav_archive: 'Explorar', nav_daily: 'Diario', nav_help: 'Cómo jugar', nav_prefs: 'Idioma y región',
   footer_play: 'Jugar', footer_community: 'Comunidad', nav_guide: 'Mecanismos', ui_language: 'Interfaz',
-  footer_made: 'Crípticos originales y de fuentes con permiso, validados uno por uno. Sin anuncios ni registro obligatorio.',
+  footer_made: 'Crípticos originales y de fuentes con permiso, validados uno por uno. Gratis y sin registro obligatorio para jugar.',
   home_eyebrow: 'Crípticos sin límite', home_title_a: 'Cada pista esconde', home_title_b: 'una palabra.',
   home_lead: 'Una parte la define; la otra la arma con un juego de letras. Encontrá las dos y resolvé tantos como quieras, sin límite diario ni registro.',
   home_cta: 'Jugar ahora', home_explore: 'Explorar el archivo', home_daily: 'Ver el desafío de hoy',
@@ -234,7 +234,7 @@ Object.assign(T.en, {
   same_guess: "You've already tried that one.",
   nav_archive: 'Explore', nav_daily: 'Daily', nav_help: 'How to play', nav_prefs: 'Language & region',
   footer_play: 'Play', footer_community: 'Community', nav_guide: 'Devices', ui_language: 'Interface',
-  footer_made: 'Original clues and clues from sources that gave permission, each one validated. No ads, no sign-up required.',
+  footer_made: 'Original clues and clues from sources that gave permission, each one validated. Free, no sign-up required to play.',
   home_eyebrow: 'Unlimited cryptic clues', home_title_a: 'Every clue hides', home_title_b: 'a word.',
   home_lead: 'One part defines it; the rest builds it with wordplay. Find both, and solve as many as you like — no daily limit, no sign-up.',
   home_cta: 'Play now', home_explore: 'Explore the archive', home_daily: "See today's challenge",

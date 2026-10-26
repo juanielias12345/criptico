@@ -17,6 +17,9 @@ const MODES = {
   guided: { maxDifficulty: 3 }, timed: {}, themed: { needsCategory: true }, daily: {},
 };
 
+// Modos de duelos y torneos: sus partidas las crea services/arena.js, no startGame.
+const ARENA_MODES = ['duel', 'tournament'];
+
 async function ensurePlayer(db, playerId, { country, variant, origin } = {}) {
   if (playerId && /^[0-9a-f-]{36}$/.test(playerId)) {
     const p = await db.get('SELECT * FROM players WHERE id = ?', [playerId]);
@@ -163,6 +166,8 @@ async function finish(db, g, result, extra = {}) {
   if (!r.changes) return false;
   await track.event(db, g.id, { solved: 'guess_correct', revealed: 'reveal', skipped: 'skip', timeout: 'timeout' }[result], extra.data || null);
   if (result === 'solved') await track.bumpPlayerDay(db, g.player_id, { solved: 1 });
+  // Duelos y torneos: los puntos de la ronda se suman al cerrar la partida.
+  if (ARENA_MODES.includes(g.mode)) await require('./arena').onGameClosed(db, g.id);
   return true;
 }
 
@@ -259,6 +264,8 @@ async function skip(db, { gameId, playerId, reason }) {
 async function restart(db, { gameId, playerId }) {
   const { g, clue } = await loadGame(db, gameId, playerId);
   if (g.result === 'solved') throw new HttpError(409, 'already_solved');
+  // Una ronda de duelo o torneo se juega una sola vez.
+  if (ARENA_MODES.includes(g.mode)) throw new HttpError(409, 'arena_round', 'Las rondas de duelos y torneos no se pueden reiniciar.');
   if (!g.finished_at) await finish(db, g, 'skipped', { data: { restarted: true } });
   const id = await insertGame(db, { playerId, clueId: g.clue_id, mode: g.mode, variant: g.play_variant, country: g.country_code, dailyDate: g.daily_date, restartOf: g.id });
   return { game_id: id, clue: publicClue(clue) };
@@ -379,4 +386,4 @@ async function pingGame(db, { gameId, playerId }) {
   return track.ping(db, g);
 }
 
-module.exports = { pingGame, startGame, guess, hint, reveal, skip, restart, startDaily, ensureDaily, dailySummary, playerStats, ensurePlayer, resolveVariant, buildHints, MODES, today };
+module.exports = { insertGame, ARENA_MODES, pingGame, startGame, guess, hint, reveal, skip, restart, startDaily, ensureDaily, dailySummary, playerStats, ensurePlayer, resolveVariant, buildHints, MODES, today };

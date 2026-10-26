@@ -150,6 +150,8 @@ const DEFAULT_SETTINGS = {
   'retention.traffic_days': 730,
   // Guardar el origen de cada jugador o cuenta nueva: se enciende al publicarse la política de privacidad que lo explica.
   'privacy.store_origin': false,
+  // Anuncios de Google AdSense: se encienden solos al publicarse la privacidad y las cookies que los explican.
+  'ads.enabled': false,
   // Seguimiento de partidas (ver docs/PANEL.md)
   'analytics.abandon_minutes': 30,
   'analytics.active_gap_seconds': 120,

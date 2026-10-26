@@ -116,13 +116,15 @@ test('Metricool: arma el pedido de cada red y guarda el identificador como evide
 
   const piece = await get('facebook_reel');
   assert.equal(piece.status, 'approved');
+  // Reloj fijo antes del lanzamiento: el calendario es de fechas reales y la prueba no debe vencer.
+  const clock = Date.parse('2026-10-22T12:00:00Z');
   // Sin credenciales: espera.
-  assert.deepEqual(await social.scheduleOne(env.db, piece), { waiting: true });
+  assert.deepEqual(await social.scheduleOne(env.db, piece, { clock }), { waiting: true });
   const old = { ...process.env };
   Object.assign(process.env, { METRICOOL_USER_TOKEN: 't', METRICOOL_USER_ID: '1', METRICOOL_BLOG_ID: '2' });
   try {
     let sent = null;
-    const ok = await social.scheduleOne(env.db, piece, { fetchImpl: async (url, o) => { sent = { url, o }; return { ok: true, status: 200, text: async () => JSON.stringify({ data: { id: 98765 } }) }; } });
+    const ok = await social.scheduleOne(env.db, piece, { fetchImpl: async (url, o) => { sent = { url, o }; return { ok: true, status: 200, text: async () => JSON.stringify({ data: { id: 98765 } }) }; }, clock });
     assert.deepEqual(ok, { scheduled: true, id: '98765' });
     assert.match(sent.url, /^https:\/\/app\.metricool\.com\/api\/v2\/scheduler\/posts\?blogId=2&userId=1$/);
     assert.equal(sent.o.headers['X-Mc-Auth'], 't');
@@ -131,7 +133,7 @@ test('Metricool: arma el pedido de cada red y guarda el identificador como evide
     assert.equal(after.external_id, '98765');
     // Un error de Metricool no la marca como programada.
     const other = await get('instagram_clue');
-    const bad = await social.scheduleOne(env.db, other, { fetchImpl: async () => ({ ok: false, status: 403, text: async () => 'plan sin API' }) });
+    const bad = await social.scheduleOne(env.db, other, { fetchImpl: async () => ({ ok: false, status: 403, text: async () => 'plan sin API' }), clock });
     assert.match(bad.error, /403/);
     const o2 = await get('instagram_clue');
     assert.equal(o2.status, 'approved');

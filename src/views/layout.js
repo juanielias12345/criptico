@@ -49,18 +49,22 @@ const ICON = {
 
 // boot: datos para el script del navegador (no ejecutable, compatible con la CSP).
 // seoTitle: título completo para buscadores (reemplaza «título · sitio»).
-function layout({ lang, config, title, seoTitle, description, page, path, alternates, body, boot = {}, jsonLd, noindex, scripts = [], ogImage }) {
+// ads: { nonce } cuando la página lleva anuncios de Google AdSense (ver services/ads.js).
+function layout({ lang, config, title, seoTitle, description, page, path, alternates, body, boot = {}, jsonLd, noindex, scripts = [], ogImage, ads }) {
   const site = config.siteName;
   const fullTitle = seoTitle || (title ? `${title} · ${site}` : `${site} · ${t(lang, 'tagline')}`);
   const og = ogImage || config.siteUrl + '/og-image.png';
   const canonical = `${config.siteUrl}${path}`;
   const alt = alternates || {};
-  const nav = [['play', 'nav_play'], ['archive', 'nav_archive'], ['daily', 'nav_daily'], ['help', 'nav_help']];
+  const nav = [['play', 'nav_play'], ['arena', 'nav_arena'], ['archive', 'nav_archive'], ['daily', 'nav_daily'], ['help', 'nav_help']];
   const strings = T[lang];
   // pmini: lo mínimo del perfil que usa el juego (avisos de logros y práctica dirigida).
   const PT = PTEXT[lang];
   const pmini = { ach: Object.fromEntries(Object.entries(PT.ach).map(([k, v]) => [k, v[0]])), ach_new: PT.ach_new, practice_banner: PT.practice_banner, practice_clear: PT.practice_clear };
-  const bootData = JSON.stringify({ lang, page, site, routes: ROUTES[lang], allRoutes: ROUTES, strings, pmini, ...boot }).replace(/</g, '\\u003c');
+  const adsBoot = ads ? { ads: { client: config.adsenseClient, slot: config.adsenseSlot || null } } : {};
+  const bootData = JSON.stringify({ lang, page, site, routes: ROUTES[lang], allRoutes: ROUTES, strings, pmini, ...boot, ...adsBoot }).replace(/</g, '\\u003c');
+  const nonce = ads ? ` nonce="${esc(ads.nonce)}"` : '';
+  const allScripts = ['/js/app.js', ...scripts, ...(ads ? ['/js/ads.js'] : [])];
   return `<!doctype html>
 <html lang="${lang}">
 <head>
@@ -81,6 +85,7 @@ ${noindex ? '<meta name="robots" content="noindex">' : ''}
 <meta property="og:site_name" content="${esc(site)}">
 <meta name="twitter:card" content="summary_large_image">
 ${config.googleSiteVerification ? `<meta name="google-site-verification" content="${esc(config.googleSiteVerification)}">` : ''}
+${config.adsenseClient ? `<meta name="google-adsense-account" content="${esc(config.adsenseClient)}">` : ''}
 <meta name="theme-color" content="#f4eee2" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#15130f" media="(prefers-color-scheme: dark)">
 <link rel="preload" href="/fonts/fraunces-latin-opsz-normal.woff2" as="font" type="font/woff2" crossorigin>
@@ -98,7 +103,7 @@ ${jsonLd ? `<script type="application/ld+json">${JSON.stringify(jsonLd).replace(
     <a class="brand" href="${href(lang, 'home')}" aria-label="${esc(site)} — ${lang === 'es' ? 'inicio' : 'home'}">${LOGO}${brandName(site)}</a>
     <nav class="main-nav" id="main-nav" aria-label="${lang === 'es' ? 'Principal' : 'Main'}">
       <ul id="nav-links">
-        ${[...nav, ['profile', 'nav_profile']].map(([r, k]) => `<li><a href="${href(lang, r)}"${page === r || (r === 'archive' && page === 'clue') ? ' aria-current="page"' : ''}>${esc(t(lang, k))}</a></li>`).join('')}
+        ${[...nav, ['profile', 'nav_profile']].map(([r, k]) => `<li><a href="${href(lang, r)}"${page === r || (r === 'archive' && page === 'clue') || (r === 'arena' && page === 'tournament') ? ' aria-current="page"' : ''}>${esc(t(lang, k))}</a></li>`).join('')}
       </ul>
     </nav>
     <div class="header-tools">
@@ -112,6 +117,7 @@ ${jsonLd ? `<script type="application/ld+json">${JSON.stringify(jsonLd).replace(
 <main id="main" tabindex="-1">
 ${body}
 </main>
+${ads && config.adsenseSlot ? `<aside class="ad-slot" aria-label="Publicidad"><p class="ad-label">Publicidad</p><ins class="adsbygoogle" data-ad-client="${esc(config.adsenseClient)}" data-ad-slot="${esc(config.adsenseSlot)}" data-ad-format="auto" data-full-width-responsive="true"></ins></aside>` : ''}
 <footer class="site-footer">
   <div class="inner">
     <div class="about">
@@ -139,8 +145,7 @@ ${body}
 </footer>
 <div id="dialog-root"></div>
 <script type="application/json" id="boot">${bootData}</script>
-<script src="/js/app.js?v=${ASSET_V}" defer></script>
-${scripts.map((src) => `<script src="${esc(src)}?v=${ASSET_V}" defer></script>`).join('\n')}
+${allScripts.map((src) => `<script src="${esc(src)}?v=${ASSET_V}" defer${nonce}></script>`).join('\n')}
 </body>
 </html>`;
 }

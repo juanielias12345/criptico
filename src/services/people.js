@@ -228,6 +228,8 @@ async function anonymizeUser(db, id) {
   await db.tx(async (t) => {
     // Perfil: logros, objetivos, biblioteca, colecciones y enlaces compartidos.
     await require('./profile').forgetProfile(t, id, playerIds);
+    // Duelos, torneos y amigos.
+    await require('./arena').forgetUser(t, id);
     const subs = await t.all('SELECT id FROM submissions WHERE user_id = ?', [id]);
     for (const s of subs) await t.run('UPDATE clues SET author_name = NULL WHERE submission_id = ?', [s.id]);
     await t.run('UPDATE submissions SET user_id = NULL, public_name = NULL WHERE user_id = ?', [id]);

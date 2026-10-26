@@ -793,6 +793,8 @@
   }
 
   // ── Cuenta (el perfil vive en /js/profile.js) ──
+  // ?next=/es/desafios/…: después de entrar se vuelve a esa página (solo rutas de este sitio).
+  const nextPath = () => { const n = new URLSearchParams(location.search).get('next') || ''; return /^\/[a-z]{2}(\/[\w\-\/]*)?$/.test(n) ? n : null; };
   async function Account(root) {
     await authReady;
     if (me) {
@@ -816,7 +818,7 @@
         kind === 'register' ? el('label', { class: 'field' }, el('span', { text: t('email_optional') }), e) : null, accept, err, el('div', {}, btn));
       f.addEventListener('submit', async (ev) => {
         ev.preventDefault(); err.textContent = ''; btn.setAttribute('aria-busy', 'true');
-        try { await api('/api/auth/' + kind, { method: 'POST', body: { username: u.value, password: p.value, email: e.value || null, ...(kind === 'register' ? { accept: ok.checked, origin: await visitOrigin() } : {}) } }); location.href = route('profile'); } catch (x) { err.textContent = (x.data && x.data.message) || t('error_generic'); btn.removeAttribute('aria-busy'); }
+        try { await api('/api/auth/' + kind, { method: 'POST', body: { username: u.value, password: p.value, email: e.value || null, ...(kind === 'register' ? { accept: ok.checked, origin: await visitOrigin() } : {}) } }); location.href = nextPath() || route('profile'); } catch (x) { err.textContent = (x.data && x.data.message) || t('error_generic'); btn.removeAttribute('aria-busy'); }
       });
       return f;
     };

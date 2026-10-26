@@ -13,6 +13,7 @@ const GUIDE = require('../views/guide');
 const { legalHtml, legalTitle } = require('../views/legal-md');
 const LEGAL = require('../db/legal-global');
 const { indicators: ES_INDICATORS } = require('../lib/lang/es');
+const ADS = require('../services/ads');
 
 const a = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
 
@@ -105,6 +106,22 @@ module.exports = function pages() {
     res.redirect(302, `/${pickUiLang(req.headers['accept-language'])}`);
   });
 
+  // Anuncios: se decide una vez por pedido de página (el ajuste está en caché unos minutos).
+  r.use(async (req, res, next) => {
+    try {
+      if (req.method === 'GET' && !req.path.startsWith('/api') && !req.path.startsWith('/admin') && !req.path.startsWith('/hq')) {
+        res.locals.adsOn = await ADS.adsEnabled(req.app.locals.db, req.app.locals.config);
+      }
+      next();
+    } catch (e) { next(e); }
+  });
+
+  r.get('/ads.txt', (req, res, next) => {
+    const txt = ADS.adsTxt(req.app.locals.config);
+    if (!txt) return next();
+    res.type('text/plain').send(txt);
+  });
+
   r.get('/robots.txt', (req, res) => {
     const { siteUrl } = req.app.locals.config;
     res.type('text/plain').send(`User-agent: *\nDisallow: /admin\nDisallow: /api/\nDisallow: /social/\nAllow: /\n\nSitemap: ${siteUrl}/sitemap.xml\n`);
@@ -114,7 +131,7 @@ module.exports = function pages() {
     const { siteUrl } = req.app.locals.config;
     const db = req.app.locals.db;
     const urls = [];
-    for (const l of UI_LANGS) for (const route of ['home', 'play', 'daily', 'archive', 'contribute', 'help', 'privacy', 'terms', 'credits']) urls.push(href(l, route));
+    for (const l of UI_LANGS) for (const route of ['home', 'play', 'arena', 'daily', 'archive', 'contribute', 'help', 'privacy', 'terms', 'credits']) urls.push(href(l, route));
     if (UI_LANGS.includes('es')) {
       const company = require('../services/company');
       for (const doc of LEGAL.PUBLIC.filter((d) => d !== 'terms' && d !== 'privacy')) if (await company.publicLegal(db, doc)) urls.push(href('es', 'legal', '/' + doc));
@@ -192,7 +209,16 @@ module.exports = function pages() {
   for (const lang of UI_LANGS) {
     const R = ROUTES[lang];
     const P = (route) => `/${lang}${R[route] ? '/' + R[route] : ''}`;
-    const render = (req, res, opts) => res.send(layout({ lang, config: req.app.locals.config, ...opts }));
+    // Las páginas con anuncios llevan su propia política de seguridad, con nonce (ver services/ads.js).
+    const render = (req, res, opts) => {
+      let ads = null;
+      if (res.locals.adsOn && ADS.AD_PAGES.has(opts.page)) {
+        ads = { nonce: ADS.newNonce() };
+        res.setHeader('Content-Security-Policy', ADS.adsCsp(ads.nonce));
+        res.setHeader('Cross-Origin-Opener-Policy', 'same-origin-allow-popups');
+      }
+      res.send(layout({ lang, config: req.app.locals.config, ...opts, ads }));
+    };
     const ex = CONTENT.EXAMPLES[lang];
 
     // ── Inicio ──
@@ -632,6 +658,44 @@ ${rows.length ? `<section class="section" aria-labelledby="more-h"><h2 id="more-
   <p><a class="btn primary big" href="${href(clueLang, 'clue', '/' + encodeURIComponent(c.slug))}">${esc(PT.card_play)}</a></p>
   <p class="small muted">${esc(PT.card_note)}</p>
 </article>`,
+      });
+    }));
+
+    // ── Duelos y torneos ──
+    const ARENA_BODY = (extra = '') => `<header class="page-head arena-head"><p class="eyebrow">${esc(t(lang, 'nav_arena'))}</p><h1>${esc(lang === 'es' ? 'Duelos y torneos' : 'Duels & tournaments')}</h1>
+<p class="lead">${esc(lang === 'es' ? 'Desafiá a tus amigos o a quien quieras, sumá puntos por acertar rápido y anotate en el torneo semanal: un críptico nuevo por día.' : 'Challenge your friends, score points for fast answers and join the weekly tournament.')}</p></header>
+${extra}<section id="arena-root" class="arena" aria-live="polite">${skeleton}</section>
+<noscript><p class="notice">${esc(lang === 'es' ? 'Los duelos y torneos necesitan JavaScript.' : 'Duels and tournaments need JavaScript.')}</p></noscript>`;
+    r.get(P('arena'), (req, res) => render(req, res, {
+      page: 'arena', path: P('arena'), alternates: altFor('arena'), title: t(lang, 'nav_arena'),
+      description: lang === 'es' ? 'Duelos de crípticos contra tus amigos y un torneo semanal con ranking: puntos por acertar y por velocidad.' : undefined,
+      scripts: ['/js/arena.js'], body: ARENA_BODY(),
+    }));
+    // Enlace de un desafío: lo abre quien fue desafiado (o cualquiera, si es abierto).
+    r.get(`${P('arena')}/duelo/:token`, (req, res) => render(req, res, {
+      page: 'arena', path: `${P('arena')}/duelo/${encodeURIComponent(req.params.token)}`, noindex: true,
+      title: lang === 'es' ? 'Te desafiaron a un duelo' : 'You were challenged',
+      description: lang === 'es' ? 'Te desafiaron a un duelo de crípticos en Play Crípticos. ¿Aceptás?' : undefined,
+      boot: { duelToken: String(req.params.token).slice(0, 40) }, scripts: ['/js/arena.js'], body: ARENA_BODY(),
+    }));
+    // Página pública del torneo: ranking legible sin JavaScript (para compartir).
+    r.get(`${P('tournament')}/:slug`, a(async (req, res, next) => {
+      const tv = await require('../services/arena').tournamentBySlug(req.app.locals.db, req.params.slug, req.user, { limit: 50 });
+      if (!tv) return next();
+      const d = (s) => s.slice(8, 10) + '/' + s.slice(5, 7);
+      const stateTxt = { live: 'En juego', upcoming: 'Empieza pronto', finished: 'Terminado', cancelled: 'Cancelado' }[tv.state] || '';
+      const rows = tv.standings.items.map((x) => `<tr${x.me ? ' class="me"' : ''}><td>${x.rank}</td><td>${esc(x.name)}</td><td>${x.solved}</td><td><b>${x.points}</b></td></tr>`).join('');
+      res.set('Cache-Control', 'no-store');
+      render(req, res, {
+        page: 'tournament', path: `${P('tournament')}/${encodeURIComponent(tv.slug)}`, title: tv.title,
+        description: `${tv.title}: un críptico por día, puntos por acertar y por velocidad. ${tv.standings.players} inscriptos. Anotate gratis en Play Crípticos.`,
+        boot: { tournamentSlug: tv.slug }, scripts: ['/js/arena.js'],
+        body: `<header class="page-head arena-head"><p class="eyebrow">${esc(stateTxt)} · ${esc(d(tv.starts_on))} al ${esc(d(tv.ends_on))}</p><h1>${esc(tv.title)}</h1>
+<p class="lead">Un críptico por día durante ${tv.days} días. Cada acierto suma hasta 200 puntos: 100 por resolverlo y hasta 100 más por la velocidad. Inscripción gratis con tu cuenta.</p></header>
+<section id="arena-root" class="arena" aria-live="polite">
+<div class="sheet"><h2>Ranking · ${tv.standings.players} ${tv.standings.players === 1 ? 'inscripto' : 'inscriptos'}</h2>
+${rows ? `<table class="rank-table"><thead><tr><th>#</th><th>Jugador</th><th>Resueltos</th><th>Puntos</th></tr></thead><tbody>${rows}</tbody></table>` : '<p class="muted">Todavía nadie sumó puntos. ¡Podés ser el primero!</p>'}
+<p><a class="btn primary big" href="${P('arena')}">Jugar el torneo</a></p></div></section>`,
       });
     }));
 
