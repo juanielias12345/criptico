@@ -318,6 +318,47 @@ async function startDaily(db, { playerId, choice, country, origin }) {
   };
 }
 
+// ── Críptico Plus del día (solo cuentas Plus; ver services/plus.js) ──
+// Uno difícil (dificultad 4 o 5) por día e idioma, distinto de los diarios comunes. Se
+// elige con la clave aleatoria indexada: lee unas decenas de filas, no todo el banco.
+async function ensurePlusDaily(db, lang, date = today()) {
+  const existing = await db.get('SELECT clue_id FROM plus_daily_challenges WHERE date = ? AND language_code = ?', [date, lang]);
+  if (existing) return existing.clue_id;
+  const seed = parseInt(sha256(`plus:${date}:${lang}`).slice(0, 8), 16) % 1e9;
+  // Si se agotan los de dificultad 4 y 5, se usan los de 3.
+  let pick = null;
+  for (const min of [4, 3]) {
+    const base = `SELECT id FROM clues WHERE status = 'published' AND language_code = ? AND variant_code IS NULL AND difficulty >= ${min}
+      AND id NOT IN (SELECT clue_id FROM plus_daily_challenges WHERE language_code = ?) AND id NOT IN (SELECT clue_id FROM daily_challenges WHERE language_code = ?)`;
+    pick = await db.get(`${base} AND (origin <> 'generated' OR audit_status = 'ok') AND shuffle > ? ORDER BY shuffle LIMIT 1`, [lang, lang, lang, seed])
+      || await db.get(`${base} ORDER BY shuffle LIMIT 1`, [lang, lang, lang]);
+    if (pick) break;
+  }
+  if (!pick) return null;
+  await db.run('INSERT OR IGNORE INTO plus_daily_challenges(date, language_code, clue_id) VALUES (?,?,?)', [date, lang, pick.id]);
+  return (await db.get('SELECT clue_id FROM plus_daily_challenges WHERE date = ? AND language_code = ?', [date, lang])).clue_id;
+}
+
+async function startPlusDaily(db, { playerId, choice, country, origin }) {
+  const sel = await resolveVariant(db, choice || 'es');
+  if (!sel.enabled) return { clue: null, notice: { kind: 'language_unavailable', language: sel.lang } };
+  const player = await ensurePlayer(db, playerId, { country, variant: choice, origin });
+  const date = today();
+  const clueId = await ensurePlusDaily(db, sel.lang, date);
+  if (!clueId) return { player_id: player.id, clue: null, notice: { kind: 'empty', alternatives: [] } };
+  // Si ya lo jugó hoy, se retoma la misma partida (las partidas del Plus no llevan daily_date:
+  // así no se mezclan con el diario común ni con su racha).
+  const prev = await db.get(`SELECT * FROM games WHERE player_id = ? AND mode = 'plus_daily' AND clue_id = ? ORDER BY started_at DESC LIMIT 1`, [player.id, clueId]);
+  const clue = await db.get('SELECT * FROM clues WHERE id = ?', [clueId]);
+  let gameId = prev && prev.id;
+  if (!prev) gameId = await insertGame(db, { playerId: player.id, clueId, mode: 'plus_daily', variant: choice, country });
+  else if (!prev.finished_at) await track.resumeIfAbandoned(db, prev);
+  return {
+    player_id: player.id, game_id: gameId, date, clue: publicClue(clue), max_hints: await getSetting(db, 'game.max_hints'),
+    finished: prev && prev.finished_at ? { result: prev.result, attempts: prev.attempts, hints_used: prev.hints_used, solution: solutionView(clue) } : null,
+  };
+}
+
 async function dailySummary(db, date, lang) {
   const row = await db.get(
     `SELECT COUNT(*) AS players, SUM(CASE WHEN g.result = 'solved' THEN 1 ELSE 0 END) AS solved,
@@ -386,4 +427,4 @@ async function pingGame(db, { gameId, playerId }) {
   return track.ping(db, g);
 }
 
-module.exports = { insertGame, ARENA_MODES, pingGame, startGame, guess, hint, reveal, skip, restart, startDaily, ensureDaily, dailySummary, playerStats, ensurePlayer, resolveVariant, buildHints, MODES, today };
+module.exports = { insertGame, ARENA_MODES, startPlusDaily, ensurePlusDaily, pingGame, startGame, guess, hint, reveal, skip, restart, startDaily, ensureDaily, dailySummary, playerStats, ensurePlayer, resolveVariant, buildHints, MODES, today };

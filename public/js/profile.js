@@ -9,6 +9,7 @@
   const { el, t, api, route, toast, authReady, countryName, meta, store } = C;
   const BOOT = JSON.parse(document.getElementById('boot').textContent);
   const L = BOOT.lang;
+  const isPlus = () => { const m = C.getMe(); return !!(m && m.plus_until && Date.parse(m.plus_until) > Date.now()); };
   const PT = BOOT.ptext;
   const get = (path) => path.split('.').reduce((o, k) => (o == null ? o : o[k]), PT);
   const fill = (s, vars) => { let out = String(s); for (const [a, b] of Object.entries(vars || {})) out = out.split('{' + a + '}').join(b); return out; };
@@ -699,7 +700,7 @@
           r.me ? el('p', { class: 'small', text: p('lb_me', { n: num(r.me) }) }) : null,
           r.items.length ? el('div', { class: 'table-wrap' }, el('table', { class: 'pf-table compact lb' },
             el('thead', {}, el('tr', {}, head.map((h) => el('th', { scope: 'col', text: h })))),
-            el('tbody', {}, r.items.map((x) => el('tr', { class: x.me ? 'me' : '' }, el('td', { text: num(x.rank) }), el('td', {}, x.name, x.me ? el('span', { class: 'tag new', text: p('lb_you') }) : null),
+            el('tbody', {}, r.items.map((x) => el('tr', { class: x.me ? 'me' : '' }, el('td', { text: num(x.rank) }), el('td', {}, x.name, x.plus ? el('span', { class: 'plus-badge', title: 'Plus', text: 'Plus' }) : null, x.me ? el('span', { class: 'tag new', text: p('lb_you') }) : null),
               weekly ? el('td', { text: num(x.solved) }) : [el('td', { text: num(x.attempts) }), r.board === 'assisted' ? el('td', { text: num(x.hints) }) : null, el('td', { text: ms(x.time_ms) })])))))
             : emptyBox(p('lb_empty')));
       } catch (e) { put(out, failBox(load)); }
@@ -732,6 +733,12 @@
         el('div', { class: 'av-row', role: 'radiogroup', 'aria-label': p('set_avatar') },
           el('button', { type: 'button', role: 'radio', 'aria-checked': String(!glyph), class: 'av-opt' + (!glyph ? ' on' : ''), text: p('set_avatar_none'), onclick: () => pick(null) }),
           BOOT.avatars.glyphs.map((g) => el('button', { type: 'button', role: 'radio', 'aria-checked': String(glyph === g), 'aria-label': g, class: 'av-opt' + (glyph === g ? ' on' : ''), onclick: () => pick(g + '-' + tone) }, avatar(g + '-' + tone, g)))),
+        // Avatares exclusivos de Plus: sin Plus se ven con candado y llevan a la página del plan.
+        (BOOT.avatars.plus || []).length ? el('div', { class: 'av-row av-plus', role: 'radiogroup', 'aria-label': 'Avatares Plus' },
+          el('span', { class: 'plus-badge', text: 'Plus' }),
+          BOOT.avatars.plus.map((g) => isPlus()
+            ? el('button', { type: 'button', role: 'radio', 'aria-checked': String(glyph === g), 'aria-label': g, class: 'av-opt' + (glyph === g ? ' on' : ''), onclick: () => pick(g + '-' + tone) }, avatar(g + '-' + tone, g))
+            : el('a', { class: 'av-opt locked', href: '/' + L + '/plus', title: 'Exclusivo de Plus', 'aria-label': g + ' (exclusivo de Plus)' }, avatar(g + '-' + tone, g)))) : null,
         glyph ? el('div', { class: 'av-row', role: 'radiogroup', 'aria-label': p('set_avatar_tone') },
           Array.from({ length: BOOT.avatars.tones }, (_, k) => el('button', { type: 'button', role: 'radio', 'aria-checked': String(tone === k), 'aria-label': p('set_avatar_tone') + ' ' + (k + 1), class: 'av-opt tone' + (tone === k ? ' on' : ''), onclick: () => pick(glyph + '-' + k) }, el('span', { class: 'swatch av-' + k, 'aria-hidden': 'true' })))) : null);
     };

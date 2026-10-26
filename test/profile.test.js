@@ -179,7 +179,7 @@ test('#11 el perfil público no expone estadísticas privadas', async () => {
   await c.put('/api/me/profile', { public_profile: true, public_name: 'Ana P.', share: { solved: true } });
   const pub = await client(env.base).get('/api/u/' + username);
   assert.equal(pub.status, 200);
-  assert.deepEqual(Object.keys(pub.json).sort(), ['avatar', 'name', 'unique_solved', 'username']);
+  assert.deepEqual(Object.keys(pub.json).sort(), ['avatar', 'name', 'plus', 'unique_solved', 'username']);
   for (const secret of ['email', 'history', 'country', 'streaks', 'level', 'hints', 'time', 'answers', 'badges']) assert.equal(pub.json[secret], undefined);
   assert.ok(!/ZZZ|duration|hints_used|@/.test(pub.text));
   // Cada dato se habilita por separado.
@@ -222,7 +222,7 @@ test('#11 rankings: solo con participación voluntaria y separados por ayudas', 
   const clean = await board('clean');
   assert.equal(clean.items.length, 1);
   assert.equal(clean.items[0].name, (await env.db.get('SELECT username FROM users WHERE id = ?', [id])).username);
-  assert.deepEqual(Object.keys(clean.items[0]).sort(), ['attempts', 'hints', 'me', 'name', 'rank', 'time_ms']);
+  assert.deepEqual(Object.keys(clean.items[0]).sort(), ['attempts', 'hints', 'me', 'name', 'plus', 'rank', 'time_ms']);
   assert.equal((await board('assisted')).items.length, 0, 'sin pistas no se mezcla con «con pistas»');
 });
 

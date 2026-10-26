@@ -14,6 +14,7 @@ const { legalHtml, legalTitle } = require('../views/legal-md');
 const LEGAL = require('../db/legal-global');
 const { indicators: ES_INDICATORS } = require('../lib/lang/es');
 const ADS = require('../services/ads');
+const { isPlus } = require('../services/plus');
 
 const a = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
 
@@ -110,7 +111,8 @@ module.exports = function pages() {
   r.use(async (req, res, next) => {
     try {
       if (req.method === 'GET' && !req.path.startsWith('/api') && !req.path.startsWith('/admin') && !req.path.startsWith('/hq')) {
-        res.locals.adsOn = await ADS.adsEnabled(req.app.locals.db, req.app.locals.config);
+        // Las cuentas con el plan «Sin anuncios» no los ven (ver services/plus.js).
+        res.locals.adsOn = !isPlus(req.user) && await ADS.adsEnabled(req.app.locals.db, req.app.locals.config);
       }
       next();
     } catch (e) { next(e); }
@@ -131,7 +133,7 @@ module.exports = function pages() {
     const { siteUrl } = req.app.locals.config;
     const db = req.app.locals.db;
     const urls = [];
-    for (const l of UI_LANGS) for (const route of ['home', 'play', 'arena', 'daily', 'archive', 'contribute', 'help', 'privacy', 'terms', 'credits']) urls.push(href(l, route));
+    for (const l of UI_LANGS) for (const route of ['home', 'play', 'arena', 'plus', 'daily', 'archive', 'contribute', 'help', 'privacy', 'terms', 'credits']) urls.push(href(l, route));
     if (UI_LANGS.includes('es')) {
       const company = require('../services/company');
       for (const doc of LEGAL.PUBLIC.filter((d) => d !== 'terms' && d !== 'privacy')) if (await company.publicLegal(db, doc)) urls.push(href('es', 'legal', '/' + doc));
@@ -592,7 +594,7 @@ ${rows.length ? `<section class="section" aria-labelledby="more-h"><h2 id="more-
     const PT = PTEXT[lang];
     r.get(P('profile'), (req, res) => render(req, res, {
       page: 'profile', path: P('profile'), alternates: altFor('profile'), title: t(lang, 'nav_profile'), noindex: true,
-      boot: { ptext: PT, achGroups: Object.fromEntries(PROFILE.ACHIEVEMENTS.map((x) => [x.family, x.group])), avatars: { glyphs: PROFILE.AVATAR_GLYPHS, tones: PROFILE.AVATAR_TONES } },
+      boot: { ptext: PT, achGroups: Object.fromEntries(PROFILE.ACHIEVEMENTS.map((x) => [x.family, x.group])), avatars: { glyphs: PROFILE.AVATAR_GLYPHS, plus: PROFILE.PLUS_GLYPHS, tones: PROFILE.AVATAR_TONES } },
       scripts: ['/js/profile.js'],
       body: `<section id="profile-root" class="profile" aria-live="polite"><h1 class="sr-only">${esc(t(lang, 'nav_profile'))}</h1>${skeleton}</section>
 <noscript><p class="notice">${esc(lang === 'es' ? 'Tu perfil necesita JavaScript activado.' : 'Your profile needs JavaScript enabled.')}</p></noscript>`,
@@ -625,7 +627,7 @@ ${rows.length ? `<section class="section" aria-labelledby="more-h"><h2 id="more-
         page: 'public-profile', path, noindex: true, title: PT.pub_title.replace('{n}', pub.name),
         body: `<article class="pub-profile">
   <header class="pf-head"><div class="pf-id"><span class="pf-avatar big av-${m ? m[2] : 'x'}" aria-hidden="true">${esc(glyph)}</span>
-    <div><p class="eyebrow">${esc(t(lang, 'nav_profile'))}</p><h1>${esc(pub.name)}</h1><p class="pf-meta">@${esc(pub.username)}</p></div></div>
+    <div><p class="eyebrow">${esc(t(lang, 'nav_profile'))}</p><h1>${esc(pub.name)}${pub.plus ? ' <span class="plus-badge" title="Plus">Plus</span>' : ''}</h1><p class="pf-meta">@${esc(pub.username)}</p></div></div>
   ${items.length ? `<dl class="pf-quick">${items.map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join('')}</dl>` : ''}</header>
   ${pub.badges && pub.badges.length ? `<section class="pf-sec"><h2>${esc(PT.pub_badges)}</h2><ul class="mini-ach">${pub.badges.map((b) => `<li><svg class="badge on" viewBox="0 0 48 48" width="40" height="40" aria-hidden="true"><path class="b-shape" d="M24 3a21 21 0 1 1 0 42a21 21 0 1 1 0-42z"/><path class="b-glyph" d="M15 25l6 6 12-13"/></svg><span><b>${esc(achName(b.code))}</b><span class="small muted">${esc(b.earned_on)}</span></span></li>`).join('')}</ul></section>` : ''}
   <p class="small muted">${esc(PT.pub_note)}</p>
@@ -660,6 +662,41 @@ ${rows.length ? `<section class="section" aria-labelledby="more-h"><h2 id="more-
 </article>`,
       });
     }));
+
+    // ── Plus: plan pago (mensual o anual). Sin anuncios en esta página. Ver docs/PLUS.md. ──
+    r.get(P('plus'), (req, res) => {
+      const PLUS = require('../services/plus');
+      const isPlus = PLUS.isPlus(req.user);
+      const m = PLUS.PLANS.monthly; const y = PLUS.PLANS.yearly;
+      const perks = [
+        ['Sin anuncios', 'Jugá sin publicidad en todo el sitio, en cualquier dispositivo donde entres con tu cuenta.'],
+        ['Críptico Plus del día', 'Un críptico extra cada día, de los difíciles (dificultad 4 y 5), solo para Plus.'],
+        ['Tu nivel contra la comunidad', 'Compará tus aciertos, tiempos y pistas con los de todos los jugadores, por dificultad.'],
+        ['Insignia y avatares Plus', 'La insignia Plus en tu perfil y en los rankings, y avatares exclusivos.'],
+      ];
+      res.set('Cache-Control', 'no-store');
+      render(req, res, {
+        page: 'plus', path: P('plus'), title: 'Play Crípticos Plus',
+        description: `Play Crípticos Plus: sin anuncios, un críptico difícil extra por día y estadísticas contra la comunidad. ${m.price} por mes o ${y.price} por año.`,
+        scripts: ['/js/plus.js'],
+        body: `<header class="page-head plus-head"><p class="eyebrow"><span class="plus-badge">Plus</span></p>
+<h1>${isPlus ? 'Tu Plus' : 'Más crípticos, cero anuncios.'}</h1>
+<p class="lead">${isPlus ? '¡Gracias por apoyar Play Crípticos! Acá tenés tu críptico extra de hoy y cómo te va contra la comunidad.' : 'Jugar sigue siendo gratis. Con Plus jugás sin publicidad, sumás un críptico difícil por día y ves cómo te va contra todos.'}</p></header>
+${isPlus ? `<section class="plus-daily"><h2>Críptico Plus del día</h2><section class="game" id="game">${skeleton}</section></section>
+<section class="plus-compare" id="plus-compare" aria-live="polite"></section>` : ''}
+<section class="plus-perks" aria-label="Qué incluye"><ul>${perks.map(([h, d]) => `<li><h3>${esc(h)}</h3><p>${esc(d)}</p></li>`).join('')}</ul></section>
+<section class="plus-plans" id="plus-plans" aria-label="Planes">
+  <article class="plan" data-plan="monthly"><h3>Mensual</h3><p class="price"><b>${esc(m.price)}</b> / ${esc(m.per)}</p><p class="muted small">Cancelás cuando quieras.</p><div class="plan-cta"></div></article>
+  <article class="plan best" data-plan="yearly"><p class="tag-best">Ahorrás 33%</p><h3>Anual</h3><p class="price"><b>${esc(y.price)}</b> / ${esc(y.per)}</p><p class="muted small">${esc(y.note)}: pagás 8 meses y tenés 12.</p><div class="plan-cta"></div></article>
+</section>
+<section class="plus-faq"><h2>Preguntas frecuentes</h2>
+<details><summary>¿Cómo pago?</summary><p>Con PayPal, con tu saldo o con tarjeta de crédito o débito a través de PayPal. Nosotros nunca vemos tus datos de pago.</p></details>
+<details><summary>¿Puedo cancelar?</summary><p>Sí, cuando quieras, desde los pagos automáticos de tu cuenta de PayPal. Seguís con Plus hasta el final del período que ya pagaste.</p></details>
+<details><summary>¿Y si me arrepiento?</summary><p>Si nos escribís dentro de los 10 días del primer pago, te devolvemos ese pago completo.</p></details>
+<details><summary>¿Da ventajas en torneos o duelos?</summary><p>No. Los torneos y duelos son iguales para todos: Plus no da puntos, pistas ni tiempo extra.</p></details>
+</section>`,
+      });
+    });
 
     // ── Duelos y torneos ──
     const ARENA_BODY = (extra = '') => `<header class="page-head arena-head"><p class="eyebrow">${esc(t(lang, 'nav_arena'))}</p><h1>${esc(lang === 'es' ? 'Duelos y torneos' : 'Duels & tournaments')}</h1>

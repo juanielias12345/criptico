@@ -56,7 +56,7 @@ function layout({ lang, config, title, seoTitle, description, page, path, altern
   const og = ogImage || config.siteUrl + '/og-image.png';
   const canonical = `${config.siteUrl}${path}`;
   const alt = alternates || {};
-  const nav = [['play', 'nav_play'], ['arena', 'nav_arena'], ['archive', 'nav_archive'], ['daily', 'nav_daily'], ['help', 'nav_help']];
+  const nav = [['play', 'nav_play'], ['daily', 'nav_daily'], ['arena', 'nav_arena'], ['archive', 'nav_archive'], ['help', 'nav_help']];
   const strings = T[lang];
   // pmini: lo mínimo del perfil que usa el juego (avisos de logros y práctica dirigida).
   const PT = PTEXT[lang];
@@ -107,6 +107,7 @@ ${jsonLd ? `<script type="application/ld+json">${JSON.stringify(jsonLd).replace(
       </ul>
     </nav>
     <div class="header-tools">
+      <a class="plus-pill" href="${href(lang, 'plus')}"${page === 'plus' ? ' aria-current="page"' : ''}>Plus</a>
       <button type="button" class="prefs-btn" id="prefs-button" aria-haspopup="dialog" title="${esc(t(lang, 'nav_prefs'))}">${ICON.globe}<span id="prefs-label">${esc(t(lang, 'nav_prefs'))}</span></button>
       <button type="button" class="icon-btn" id="theme-button" aria-label="${esc(t(lang, 'theme'))}">${ICON.theme}</button>
       <a class="icon-btn profile-link" href="${href(lang, 'profile')}" aria-label="${esc(t(lang, 'nav_profile'))}"${page === 'profile' ? ' aria-current="page"' : ''}>${ICON.user}</a>
@@ -117,6 +118,7 @@ ${jsonLd ? `<script type="application/ld+json">${JSON.stringify(jsonLd).replace(
 <main id="main" tabindex="-1">
 ${body}
 </main>
+${ads ? `<p class="ad-free-cta"><a href="${href(lang, 'plus')}">Jugá sin anuncios con Plus · desde USD 1 al mes</a></p>` : ''}
 ${ads && config.adsenseSlot ? `<aside class="ad-slot" aria-label="Publicidad"><p class="ad-label">Publicidad</p><ins class="adsbygoogle" data-ad-client="${esc(config.adsenseClient)}" data-ad-slot="${esc(config.adsenseSlot)}" data-ad-format="auto" data-full-width-responsive="true"></ins></aside>` : ''}
 <footer class="site-footer">
   <div class="inner">

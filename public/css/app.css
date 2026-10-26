@@ -142,7 +142,7 @@ p { margin: 0 0 var(--s-3); text-wrap: pretty; }
 .icon-btn { width: 38px; height: 38px; display: inline-flex; align-items: center; justify-content: center; border: var(--b-1); background: transparent; color: var(--ink); border-radius: var(--r-pill); cursor: pointer; text-decoration: none; flex: none; transition: border-color var(--d-1) var(--ease); }
 .icon-btn:hover { border-color: var(--ink-3); color: var(--ink); }
 .icon-btn svg { width: 18px; height: 18px; }
-@media (max-width: 1100px) {
+@media (max-width: 1180px) {
   .site-header .bar { height: 58px; gap: var(--s-3); }
   .icon-btn.nav-toggle { display: inline-flex; order: 3; }
   .main-nav { position: absolute; top: 100%; left: 0; right: 0; background: var(--paper); border-bottom: var(--b-1); display: none; box-shadow: var(--e-2); }
@@ -910,6 +910,7 @@ dialog::backdrop { background: var(--scrim); }
 
 /* ── Duelos y torneos (public/js/arena.js) ── */
 .arena-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); gap: var(--s-5); align-items: start; }
+.arena-col { display: grid; gap: var(--s-5); align-content: start; }
 .arena-card { min-height: 0; display: grid; gap: var(--s-4); align-content: start; }
 .arena-card h2 { font-size: var(--t-2xl); margin: 0; }
 .arena-card h3.label { margin: var(--s-2) 0 0; }
@@ -959,3 +960,35 @@ dialog::backdrop { background: var(--scrim); }
 .ad-slot .ad-label { font-size: var(--t-xs); color: var(--ink-3); text-transform: uppercase; letter-spacing: .1em; margin: 0 0 4px; }
 .ad-slot ins.adsbygoogle { display: block; }
 .ad-slot:has(ins[data-ad-status="unfilled"]) { display: none; }
+.ad-free-cta { max-width: var(--w-page); margin: var(--s-6) auto 0; padding: 0 var(--gutter); font-size: var(--t-sm); text-align: center; }
+.ad-free-cta a { color: var(--ink-3); }
+
+/* ── Plus ── */
+.plus-badge { display: inline-block; font: 700 .68rem/1 var(--font-ui); letter-spacing: .08em; text-transform: uppercase; color: var(--paper); background: var(--accent); padding: 4px 7px 3px; border-radius: var(--r-pill); vertical-align: middle; margin-left: 6px; }
+.plus-pill { display: inline-flex; align-items: center; height: 38px; padding: 0 14px; border-radius: var(--r-pill); background: var(--accent); color: var(--paper); font: 700 var(--t-sm)/1 var(--font-ui); text-decoration: none; letter-spacing: .02em; flex: none; }
+.plus-pill:hover, .plus-pill[aria-current="page"] { color: var(--paper); filter: brightness(1.08); }
+@media (max-width: 420px) { .plus-pill { height: 34px; padding: 0 10px; } }
+@media (max-width: 380px) { .plus-pill { height: 30px; padding: 0 7px; font-size: .74rem; } .site-header .brand-name { font-size: 1rem; } .site-header .logo-mark { width: 22px; height: 22px; } }
+.plus-card { margin-top: var(--s-6); }
+.plus-card h2 .plus-badge { margin-left: 0; font-size: .9rem; padding: 6px 10px 5px; }
+.plus-head .plus-badge { margin-left: 0; font-size: .85rem; padding: 6px 10px 5px; }
+.plus-perks ul { list-style: none; margin: var(--s-6) 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: var(--s-4); }
+.plus-perks li { border: var(--b-1); background: var(--sheet); padding: var(--s-4); }
+.plus-perks h3 { margin: 0 0 var(--s-2); font-size: var(--t-lg); }
+.plus-perks p { margin: 0; color: var(--ink-2); }
+.plus-plans { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: var(--s-4); margin: var(--s-6) 0; }
+.plan { border: var(--b-ink); background: var(--sheet); padding: var(--s-5); position: relative; }
+.plan.best { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
+.plan h3 { margin: 0 0 var(--s-2); }
+.plan .price { font-size: var(--t-lg); margin: 0 0 var(--s-2); }
+.plan .price b { font: 600 2.2rem/1 var(--font-display); }
+.plan .tag-best { position: absolute; top: -12px; right: var(--s-4); margin: 0; background: var(--accent); color: var(--paper); font: 700 var(--t-xs)/1 var(--font-ui); padding: 6px 10px; border-radius: var(--r-pill); }
+.plan .plan-cta { margin-top: var(--s-4); }
+.plan .plan-cta .btn { width: 100%; justify-content: center; }
+.plus-daily, .plus-compare { margin: var(--s-6) 0; }
+.plus-table td.up { color: var(--ok); font-weight: 600; }
+.plus-table td.down { color: var(--accent); }
+.plus-faq details { border-top: var(--b-1); padding: var(--s-3) 0; }
+.plus-faq summary { cursor: pointer; font-weight: 600; }
+.av-plus { align-items: center; }
+.av-opt.locked { opacity: .45; position: relative; }
