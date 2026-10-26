@@ -643,7 +643,7 @@
           el('span', { class: 'bar-track' }, el('span', { class: 'bar-fill', style: 'width:' + Math.max(1, Math.round((x.n / max) * 100)) + '%' })),
           el('span', { class: 'bar-value', text: nf(x.n, 0) + (i > 1 ? ' · ' + pct(x.of_start) + ' de los que iniciaron' : '') })))) ),
       el('div', { class: 'cards' },
-        kpi('Retención D1', r.overall.d1, { fmt: pct, def: 'Del grupo que ya cumplió 1 día desde su primera partida, porcentaje que volvió a jugar al día siguiente.' }),
+        kpi('Retención D1', r.overall.d1, { fmt: pct, def: 'Del grupo que ya cumplió 1 día desde su primera partida, porcentaje que volvió a jugar al día siguiente, en su hora local (según el país elegido).' }),
         kpi('Retención D7', r.overall.d7, { fmt: pct, def: 'Volvieron a jugar dentro de los 7 días siguientes a su primer día (solo quienes ya cumplieron 7 días).' }),
         kpi('Retención D30', r.overall.d30, { fmt: pct, def: 'Ídem, dentro de 30 días.' }),
         kpi('Sesiones', s.sessions, { def: 'Una sesión agrupa las partidas de la misma unidad separadas por menos de 30 minutos.' }),

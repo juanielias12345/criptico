@@ -330,16 +330,24 @@ async function funnel(db, q) {
     of_start: i && steps[1][1] ? round1((n / steps[1][1]) * 100) : null })), ui, signups_via: Object.fromEntries(via.map((r) => [r.via || 'account_page', r.n])) };
 }
 
+// Desfase horario aproximado por país elegido; sin país, Argentina (la mayoría del tráfico).
+const TZ_OFFSET = { UY: -3, PY: -3, CL: -3, BR: -3, BO: -4, VE: -4, DO: -4, PR: -4, CU: -4, CO: -5, PE: -5, EC: -5, PA: -5,
+  MX: -6, GT: -6, SV: -6, HN: -6, NI: -6, CR: -6, US: -5, CA: -5, ES: 1, AD: 1, FR: 1, IT: 1, DE: 1, PT: 0, GB: 0, GQ: 1 };
+const localOffsetSql = (col) => `CASE ${col} ${Object.entries(TZ_OFFSET).map(([c, h]) => `WHEN '${c}' THEN '${h >= 0 ? '+' : ''}${h} hours'`).join(' ')} ELSE '-3 hours' END`;
+
 // ── Retención por cohortes ──
 // Unidad: identificador seudónimo de jugador («all») o cuenta registrada («registered»).
 async function retention(db, q) {
   const segment = q.segment === 'registered' ? 'registered' : 'all';
   const weeks = Math.min(26, Math.max(4, Number(q.weeks) || 12));
-  const unit = segment === 'registered' ? 'pl.user_id' : 'd.player_id';
-  const join = segment === 'registered' ? 'JOIN players pl ON pl.id = d.player_id AND pl.user_id IS NOT NULL' : '';
+  const unit = segment === 'registered' ? 'pl.user_id' : 'g.player_id';
+  const join = segment === 'registered' ? 'AND pl.user_id IS NOT NULL' : '';
   const sinceT = startOfDay(Date.now()) - weeks * 7 * DAY;
   const since = dayStr(sinceT);
-  const rows = await db.all(`WITH act AS (SELECT DISTINCT ${unit} AS u, d.day FROM player_days d ${join} WHERE ${notStaff('d.player_id')}),
+  // Días en la hora local de cada jugador (aproximada por el país elegido): con días UTC, en América
+  // el día cambia a la tarde o la noche y el D1 se distorsiona (docs/CRECIMIENTO-PRODUCTO.md).
+  const rows = await db.all(`WITH act AS (SELECT DISTINCT ${unit} AS u, date(g.started_at, ${localOffsetSql('pl.country_code')}) AS day
+      FROM games g JOIN players pl ON pl.id = g.player_id ${join} WHERE ${notStaff('g.player_id')}),
     first AS (SELECT u, MIN(day) AS d0 FROM act GROUP BY u)
     SELECT f.d0,
       EXISTS(SELECT 1 FROM act a WHERE a.u = f.u AND a.day = date(f.d0, '+1 day')) AS d1,
