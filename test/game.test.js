@@ -8,6 +8,13 @@ let env;
 test.before(async () => { env = await makeEnv(); });
 test.after(async () => { await env.close(); });
 
+// Junta el texto de todos los sitemaps que lista el índice.
+async function sitemaps(c) {
+  const idx = (await c.get('/sitemap.xml')).text;
+  const parts = [];
+  for (const m of idx.matchAll(/<loc>[^<]*?(\/sitemap-[\w-]+\.xml)<\/loc>/g)) parts.push((await c.get(m[1])).text);
+  return parts.join('');
+}
 const answerOf = async (clueId) => (await env.db.get('SELECT answer FROM clues WHERE id = ?', [clueId])).answer;
 
 test('inicio de partida (#4): devuelve la pista sin la respuesta ni el desglose', async () => {
@@ -221,9 +228,10 @@ test('páginas públicas: SEO básico, hreflang y caracteres especiales (#23)', 
   assert.equal(page.status, 200);
   assert.ok(page.text.includes('Entras alterado: utensilio de cocina (6)'));
   assert.ok(!page.text.includes('SARTÉN'), 'la página del críptico no revela la respuesta');
-  const sm = await c.get('/sitemap.xml');
-  assert.match(sm.text, /<urlset/);
-  assert.ok(sm.text.includes('/c/' + clue.slug));
+  const idx = (await c.get('/sitemap.xml')).text;
+  assert.match(idx, /<sitemapindex/);
+  assert.match(idx, /sitemap-cripticos-1\.xml/);
+  assert.ok((await sitemaps(c)).includes('/c/' + clue.slug));
   assert.match((await c.get('/robots.txt')).text, /Disallow: \/admin/);
   const redirect = await c.get('/', { 'accept-language': 'en-GB,en;q=0.9' });
   assert.equal(redirect.status, 301, 'con un solo idioma la portada redirige en forma permanente');
@@ -240,7 +248,7 @@ test('SEO: guía de mecanismos con una página por mecanismo, en el sitemap y en
   assert.match(idx.text, /<title>Mecanismos de los crípticos/);
   const slugs = [...idx.text.matchAll(/href="\/es\/mecanismos\/([a-z-]+)"/g)].map((m) => m[1]);
   assert.equal(new Set(slugs.filter((x) => x !== 'abreviaturas')).size, 9);
-  const sm = (await c.get('/sitemap.xml')).text;
+  const sm = (await sitemaps(c));
   for (const s of new Set(slugs)) {
     const p = await c.get('/es/mecanismos/' + s);
     assert.equal(p.status, 200, s);
@@ -276,7 +284,7 @@ test('solo español: el inglés no se ofrece, /en redirige y los crípticos en i
     const en = await e.db.get("SELECT slug FROM clues WHERE language_code = 'en' AND status = 'published' LIMIT 1");
     assert.ok(en, 'los crípticos en inglés siguen guardados');
     assert.equal((await c.get('/es/c/' + en.slug)).status, 404);
-    assert.ok(!(await c.get('/sitemap.xml')).text.includes('/c/' + en.slug));
+    assert.ok(!(await sitemaps(c)).includes('/c/' + en.slug));
     const list = await c.get('/api/clues?lang=en');
     assert.equal(list.json.total, 0);
     const g = await c.post('/api/game/start', { choice: 'en' });
@@ -338,6 +346,6 @@ test('SEO/GEO: robots permite buscadores e IA, llms.txt y preguntas frecuentes c
   assert.match(faq.text, /<h2>¿Es gratis\?<\/h2>/);
   assert.doesNotMatch(faq.text.split('<article')[1].split('</article>')[0], /\{\w+\}/);
   assert.match(faq.text, /href="\/es\/plus"/);
-  assert.ok((await c.get('/sitemap.xml')).text.includes('/es/preguntas-frecuentes'));
+  assert.ok((await sitemaps(c)).includes('/es/preguntas-frecuentes'));
   assert.match((await c.get('/es')).text, /"@type":"WebApplication"/);
 });

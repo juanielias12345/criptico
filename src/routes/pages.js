@@ -167,7 +167,22 @@ ${Object.entries(G.mechs).map(([k, m]) => `- [${t('es', 'mech_' + k)}](${u('guid
 `);
   });
 
+  // Sitemaps: un índice que apunta a las páginas fijas y a los crípticos en lotes,
+  // para que Search Console muestre la indexación de cada grupo por separado.
+  const SITEMAP_BATCH = 10000;
+  const BUILD_DAY = new Date().toISOString().slice(0, 10);
+  const xmlUrls = (siteUrl, rows) => `<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${rows.map(([u, mod]) => `<url><loc>${esc(siteUrl + u)}</loc>${mod ? `<lastmod>${esc(mod)}</lastmod>` : ''}</url>`).join('')}</urlset>`;
+  const PUBLISHED = "status = 'published' AND language_code IN (SELECT code FROM languages WHERE enabled = 1)";
+
   r.get('/sitemap.xml', a(async (req, res) => {
+    const { siteUrl } = req.app.locals.config;
+    const { n, last } = await req.app.locals.db.get(`SELECT COUNT(*) AS n, MAX(updated_at) AS last FROM clues WHERE ${PUBLISHED}`);
+    const maps = [['/sitemap-paginas.xml', BUILD_DAY]];
+    for (let i = 1; i <= Math.ceil(n / SITEMAP_BATCH); i++) maps.push([`/sitemap-cripticos-${i}.xml`, last ? String(last).slice(0, 10) : null]);
+    res.type('application/xml').send(`<?xml version="1.0" encoding="UTF-8"?><sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${maps.map(([u, mod]) => `<sitemap><loc>${esc(siteUrl + u)}</loc>${mod ? `<lastmod>${esc(mod)}</lastmod>` : ''}</sitemap>`).join('')}</sitemapindex>`);
+  }));
+
+  r.get('/sitemap-paginas.xml', a(async (req, res) => {
     const { siteUrl } = req.app.locals.config;
     const db = req.app.locals.db;
     const urls = [];
@@ -182,11 +197,17 @@ ${Object.entries(G.mechs).map(([k, m]) => `- [${t('es', 'mech_' + k)}](${u('guid
       for (const m of Object.values(GUIDE[l].mechs)) urls.push(href(l, 'guide', '/' + m.slug));
       if (GUIDE[l].abbr) urls.push(href(l, 'guide', '/' + GUIDE[l].abbr.slug));
     }
-    // Solo páginas con contenido real: crípticos publicados, en el idioma de la interfaz que les corresponde.
-    const clues = await db.all("SELECT slug, language_code, updated_at FROM clues WHERE status = 'published' AND language_code IN (SELECT code FROM languages WHERE enabled = 1) ORDER BY published_at DESC LIMIT 45000");
-    const body = urls.map((u) => `<url><loc>${esc(siteUrl + u)}</loc></url>`).join('')
-      + clues.map((c) => `<url><loc>${esc(siteUrl + href(UI_LANGS.includes(c.language_code) ? c.language_code : 'en', 'clue', '/' + c.slug))}</loc><lastmod>${esc(String(c.updated_at).slice(0, 10))}</lastmod></url>`).join('');
-    res.type('application/xml').send(`<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${body}</urlset>`);
+    // Las páginas fijas cambian con cada despliegue: la fecha es la del arranque del servidor.
+    res.type('application/xml').send(xmlUrls(siteUrl, urls.map((u) => [u, BUILD_DAY])));
+  }));
+
+  // Solo páginas con contenido real: crípticos publicados, en el idioma de la interfaz que les corresponde.
+  r.get(/^\/sitemap-cripticos-(\d+)\.xml$/, a(async (req, res, next) => {
+    const page = Number(req.params[0]);
+    if (!page) return next();
+    const clues = await req.app.locals.db.all(`SELECT slug, language_code, updated_at FROM clues WHERE ${PUBLISHED} ORDER BY id LIMIT ? OFFSET ?`, [SITEMAP_BATCH, (page - 1) * SITEMAP_BATCH]);
+    if (!clues.length) return next();
+    res.type('application/xml').send(xmlUrls(req.app.locals.config.siteUrl, clues.map((c) => [href(UI_LANGS.includes(c.language_code) ? c.language_code : 'en', 'clue', '/' + c.slug), String(c.updated_at).slice(0, 10)])));
   }));
 
   // El panel se sirve con la versión del despliegue en los enlaces a sus archivos,
