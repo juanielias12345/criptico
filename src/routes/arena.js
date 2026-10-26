@@ -14,7 +14,8 @@ module.exports = function arenaApi() {
   const db = (req) => req.app.locals.db;
   const needUser = (req) => {
     if (!req.user) throw new HttpError(401, 'login_required', 'Entrá o creá una cuenta gratis para jugar duelos y torneos.');
-    if (req.user.role !== 'player') throw new HttpError(403, 'players_only', 'Los duelos y torneos son para cuentas de jugador.');
+    // Cualquier cuenta juega, también las del equipo (antes solo las de jugador y el equipo
+    // quedaba como si no hubiera iniciado sesión).
     return req.user;
   };
   const json = (fn) => a(async (req, res) => { res.set('Cache-Control', 'no-store'); res.json(await fn(req, res)); });
@@ -23,7 +24,7 @@ module.exports = function arenaApi() {
   };
 
   // ── Resumen para la portada y el juego ──
-  r.get('/arena/pending', json(async (req) => (req.user && req.user.role === 'player' ? A.pending(db(req), req.user) : { tournament: null, duels: 0 })));
+  r.get('/arena/pending', json(async (req) => (req.user ? A.pending(db(req), req.user) : { tournament: null, duels: 0 })));
 
   // ── Amigos ──
   r.get('/friends', json(async (req) => A.friends(db(req), needUser(req))));
