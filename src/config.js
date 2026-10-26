@@ -22,6 +22,9 @@ function loadConfig(env = process.env) {
     siteName: env.SITE_NAME || 'Play Crípticos',
     // Código de verificación de Google Search Console (opcional; también se puede verificar por DNS).
     googleSiteVerification: env.GOOGLE_SITE_VERIFICATION || '',
+    // Google AdSense: ID de editor (ca-pub-…) y, opcional, un bloque de anuncios manual. Ver docs/MONETIZACION.md.
+    adsenseClient: /^ca-pub-\d{10,20}$/.test(env.ADSENSE_CLIENT || '') ? env.ADSENSE_CLIENT : '',
+    adsenseSlot: /^\d{6,20}$/.test(env.ADSENSE_SLOT || '') ? env.ADSENSE_SLOT : '',
     siteUrl: siteUrlFrom(env),
     databaseUrl: env.DATABASE_URL || `file:${path.join(process.cwd(), 'data', 'criptico.db')}`,
     databaseAuthToken: env.DATABASE_AUTH_TOKEN || undefined,

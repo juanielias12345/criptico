@@ -298,9 +298,20 @@ async function markLegalPublished(db, docId, version, language, evidence, actor)
   await gov.markExecuted(db, v.approval_id, evidence, actor);
   await audit(db, { actorId: actor.id, action: 'legal.published', targetKind: 'legal_version', targetId: `${docId}:${v.version}:${language}`, details: { evidence } });
   // La privacidad que explica el origen de las visitas habilita guardarlo por jugador y cuenta.
-  if (docId === 'privacy' && v.source_note === require('../db/legal-global').ORIGIN_NOTE) {
+  const G = require('../db/legal-global');
+  if (docId === 'privacy' && [G.ORIGIN_NOTE, G.ADS_NOTE].includes(v.source_note)) {
     await setSetting(db, 'privacy.store_origin', true, actor.id);
     await audit(db, { actorId: actor.id, action: 'setting.update', targetKind: 'setting', targetId: 'privacy.store_origin', details: { value: true, reason: 'privacidad publicada' } });
+  }
+  // Los anuncios se encienden cuando están publicadas la privacidad y las cookies que los explican.
+  if (['privacy', 'cookies'].includes(docId) && v.source_note === G.ADS_NOTE) {
+    const both = await db.get(`SELECT COUNT(DISTINCT doc_id) AS n FROM legal_document_versions WHERE doc_id IN ('privacy','cookies') AND language = 'es'
+      AND status = 'published' AND source_note = ?`, [G.ADS_NOTE]);
+    if (both.n === 2) {
+      await setSetting(db, 'ads.enabled', true, actor.id);
+      require('./ads').clearCache();
+      await audit(db, { actorId: actor.id, action: 'setting.update', targetKind: 'setting', targetId: 'ads.enabled', details: { value: true, reason: 'privacidad y cookies con anuncios publicadas' } });
+    }
   }
   return legalVersion(db, docId, v.version, language);
 }
@@ -326,17 +337,28 @@ async function seedGlobalLegal(db) {
     await audit(db, { actorKind: 'agent', actorLabel: 'legal-direccion', action: 'legal.draft_created', targetKind: 'legal_version', targetId: `${doc}:${v}:es`, details: { scope: 'global' } });
     loaded++;
   }
-  // Revisiones posteriores (por ejemplo, origen de las visitas): sobre el texto global, una sola vez.
-  for (const [doc, revise] of Object.entries(G.REVISIONS)) {
-    if (await db.get('SELECT 1 FROM legal_document_versions WHERE doc_id = ? AND source_note = ?', [doc, G.ORIGIN_NOTE])) continue;
-    const base = await db.get("SELECT body FROM legal_document_versions WHERE doc_id = ? AND language = 'es' AND source_note = ? ORDER BY version DESC LIMIT 1", [doc, G.NOTE]);
-    if (!base) continue;
-    const body = revise(base.body);
-    const v = ((await db.get("SELECT MAX(version) AS v FROM legal_document_versions WHERE doc_id = ? AND language = 'es'", [doc])).v || 0) + 1;
-    await db.run(`INSERT INTO legal_document_versions(doc_id, version, language, body, content_hash, status, source_note, created_by)
-      VALUES (?,?,'es',?,?,'draft',?,'agente:legal-direccion')`, [doc, v, body, legalHash(doc, v, 'es', body), G.ORIGIN_NOTE]);
-    await audit(db, { actorKind: 'agent', actorLabel: 'legal-direccion', action: 'legal.draft_created', targetKind: 'legal_version', targetId: `${doc}:${v}:es`, details: { scope: 'origin' } });
-    loaded++;
+  // Revisiones posteriores (origen de las visitas, anuncios): cada una sobre la versión
+  // global más reciente del documento, una sola vez.
+  const notes = [G.NOTE];
+  for (const [note, revisions] of G.REVISION_SETS) {
+    for (const [doc, revise] of Object.entries(revisions)) {
+      if (await db.get('SELECT 1 FROM legal_document_versions WHERE doc_id = ? AND source_note = ?', [doc, note])) continue;
+      const base = await db.get(`SELECT body FROM legal_document_versions WHERE doc_id = ? AND language = 'es' AND source_note IN (${notes.map(() => '?').join(',')})
+        ORDER BY version DESC LIMIT 1`, [doc, ...notes]);
+      if (!base) continue;
+      let body;
+      try { body = revise(base.body); } catch (e) {
+        // El texto base cambió a mano: la revisión no se arma sola (no debe frenar el despliegue).
+        console.warn(`legal: no se pudo armar la revisión ${note} de ${doc}: ${e.message}`);
+        continue;
+      }
+      const v = ((await db.get("SELECT MAX(version) AS v FROM legal_document_versions WHERE doc_id = ? AND language = 'es'", [doc])).v || 0) + 1;
+      await db.run(`INSERT INTO legal_document_versions(doc_id, version, language, body, content_hash, status, source_note, created_by)
+        VALUES (?,?,'es',?,?,'draft',?,'agente:legal-direccion')`, [doc, v, body, legalHash(doc, v, 'es', body), note]);
+      await audit(db, { actorKind: 'agent', actorLabel: 'legal-direccion', action: 'legal.draft_created', targetKind: 'legal_version', targetId: `${doc}:${v}:es`, details: { scope: note } });
+      loaded++;
+    }
+    notes.push(note);
   }
   return { loaded };
 }
@@ -346,7 +368,8 @@ async function seedGlobalLegal(db) {
 // exacto, voto del CEO y, si queda aprobado, publicación con su evidencia.
 async function approveGlobalLegal(db, actor, siteUrl) {
   const G = require('../db/legal-global');
-  const rows = await db.all("SELECT * FROM legal_document_versions WHERE source_note IN (?, ?) AND language = 'es' ORDER BY doc_id, version", [G.NOTE, G.ORIGIN_NOTE]);
+  const allNotes = [G.NOTE, ...G.REVISION_SETS.map(([n]) => n)];
+  const rows = await db.all(`SELECT * FROM legal_document_versions WHERE source_note IN (${allNotes.map(() => '?').join(',')}) AND language = 'es' ORDER BY doc_id, version`, allNotes);
   if (!rows.length) throw new HttpError(409, 'no_global_drafts', 'Todavía no hay borradores globales: faltan los datos del titular.');
   const out = [];
   for (const v of rows) {
