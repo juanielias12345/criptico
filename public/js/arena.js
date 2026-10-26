@@ -344,7 +344,7 @@
   async function main() {
     stopPoll();
     await authReady;
-    const me = C.getMe() && C.getMe().role === 'player' ? C.getMe() : null;
+    const me = C.getMe();
     if (BOOT.duelToken) return duelPage(me);
     try {
       if (BOOT.tournamentSlug) {

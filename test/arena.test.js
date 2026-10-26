@@ -186,3 +186,17 @@ test('anuncios: solo con ID de editor y la política publicada; con nonce en la 
     ADS.clearCache();
   }
 });
+
+test('las cuentas del equipo también juegan duelos y torneos', async () => {
+  const boss = await player('jefa_arena');
+  await env.db.run("UPDATE users SET role = 'owner' WHERE id = ?", [boss.user.id]);
+  const t = (await boss.c.get('/api/tournaments')).json.current;
+  const reg = await boss.c.post(`/api/tournaments/${t.id}/register`, {});
+  assert.equal(reg.status, 200, reg.text);
+  const start = await boss.c.post(`/api/tournaments/${t.id}/rounds/${todayRound(t)}/start`, {});
+  assert.equal(start.status, 200, start.text);
+  assert.ok(start.json.clue, 'recibe el críptico de la ronda');
+  const duel = await boss.c.post('/api/duels', { rounds: 3 });
+  assert.equal(duel.status, 200, duel.text);
+  assert.equal((await boss.c.get('/api/arena/pending')).status, 200);
+});

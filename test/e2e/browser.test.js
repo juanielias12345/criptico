@@ -369,7 +369,10 @@ test('#13 perfil personal en escritorio y móvil: pestañas, detalle de partida,
     const card = await ctx.newPage();
     await card.goto(url);
     await card.locator('.share-card').waitFor();
-    assert.equal(await card.locator(`text=${row.answer}`).count(), 0, 'sin la respuesta salvo que se elija');
+    // Se busca la palabra entera dentro de la tarjeta: «text=» de Playwright también encuentra
+    // la respuesta como parte de otra palabra del menú o del pie y la prueba fallaba al azar.
+    const cardText = await card.locator('.share-card').innerText();
+    assert.ok(!new RegExp(`(^|[^\\p{L}])${row.answer}([^\\p{L}]|$)`, 'iu').test(cardText), 'sin la respuesta salvo que se elija');
     await card.close();
     for (const tab of ['progress', 'strengths', 'achievements', 'records', 'leaderboard', 'goals', 'library', 'settings']) {
       await page.goto(env.base + '/es/perfil#' + tab);

@@ -132,7 +132,7 @@ async function onGameClosed(db, gameId) {
 const pair = (x, y) => (x < y ? [x, y] : [y, x]);
 
 async function findPlayerUser(db, username) {
-  const u = await db.get("SELECT id, username, public_name, last_active_at FROM users WHERE username = ? AND role = 'player' AND disabled = 0 AND deleted_at IS NULL",
+  const u = await db.get("SELECT id, username, public_name, last_active_at FROM users WHERE username = ? AND disabled = 0 AND deleted_at IS NULL",
     [String(username || '').trim().replace(/^@/, '').slice(0, 40)]);
   if (!u) throw new HttpError(404, 'user_not_found', 'No encontramos a nadie con ese usuario.');
   return u;
