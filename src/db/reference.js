@@ -153,6 +153,11 @@ const DEFAULT_SETTINGS = {
   // Anuncios de Google AdSense: se encienden solos al publicarse la privacidad y las cookies que los explican.
   'ads.enabled': false,
   'billing.enabled': false,
+  // Activación y retención (docs/CRECIMIENTO-PRODUCTO.md). Cada interruptor revierte su cambio sin desplegar.
+  'growth.direct_start': true,         // «Jugar» empieza enseguida con la sugerencia del navegador, sin el diálogo de país e idioma
+  'growth.signup_prompt': true,        // invitación a crear cuenta en la pantalla de resolución (sin cuenta)
+  'growth.signup_prompt_after': 3,     // crípticos resueltos en la sesión antes de invitar
+  'growth.next_step': true,            // al resolver: aviso del desafío diario pendiente o de cuándo llega el próximo
   // Seguimiento de partidas (ver docs/PANEL.md)
   'analytics.abandon_minutes': 30,
   'analytics.active_gap_seconds': 120,

@@ -626,7 +626,7 @@
   };
 
   // ── Embudo y retención ──
-  const FUNNEL = { visit: 'Navegadores nuevos que visitaron', start: 'Iniciaron una partida', attempt: 'Enviaron al menos una respuesta', hint: 'Pidieron una pista',
+  const FUNNEL = { visit: 'Visitantes nuevos (entradas aproximadas)', start: 'Iniciaron una partida', attempt: 'Enviaron al menos una respuesta', hint: 'Pidieron una pista',
     complete: 'Completaron un críptico', another: 'Jugaron otro', return: 'Volvieron otro día', register: 'Crearon una cuenta' };
   V.funnel = async () => {
     const q = qs(); const seg = q.get('segment') || 'all';
@@ -638,7 +638,7 @@
       can('export.data') ? el('div', { class: 'toolbar' }, el('a', { class: 'btn', href: '/api/admin/export/retention.csv?' + apiQs(q, ['segment', 'weeks']), text: 'Exportar cohortes CSV' })) : ''),
       filterBar(q, { extra: [segSel] }),
       section('Embudo de jugadores nuevos del período',
-        el('p', { class: 'small muted', text: 'Desde «Iniciaron», la unidad es el identificador de jugador creado en el período (un navegador) y cada paso se mide sobre quienes iniciaron: los pasos no son obligatorios en orden (se puede completar sin pedir pistas). La visita es un conteo agregado, sin identificadores, por eso no se encadena exactamente con el segundo paso.' }),
+        el('p', { class: 'small muted', text: 'Desde «Iniciaron», la unidad es el identificador de jugador creado en el período (un navegador), sin las cuentas del equipo, y cada paso se mide sobre quienes iniciaron: los pasos no son obligatorios en orden (se puede completar revelando, sin responder). La visita es un conteo agregado, sin identificadores: cuenta las entradas desde afuera del sitio de navegadores sin preferencias guardadas (no excluye a quien vuelve sin haberlas guardado ni a quien usa «No rastrear»), por eso no se encadena exactamente con el segundo paso. «Volvieron otro día» usa días UTC y no tiene ventana: quien empezó hace poco tuvo menos tiempo para volver.' }),
         el('ol', { class: 'funnel' }, f.steps.map((x, i) => el('li', {}, el('span', { class: 'bar-label', text: (i + 1) + '. ' + FUNNEL[x.key] }),
           el('span', { class: 'bar-track' }, el('span', { class: 'bar-fill', style: 'width:' + Math.max(1, Math.round((x.n / max) * 100)) + '%' })),
           el('span', { class: 'bar-value', text: nf(x.n, 0) + (i > 1 ? ' · ' + pct(x.of_start) + ' de los que iniciaron' : '') })))) ),
@@ -650,11 +650,35 @@
         kpi('Sesiones por unidad', s.sessions_per_unit, { fmt: (v) => nf(v) }), kpi('Partidas por sesión', s.games_per_session, { fmt: (v) => nf(v) }),
         kpi('Horas entre sesiones (prom.)', s.avg_hours_between_sessions, { fmt: (v) => (isNum(v) ? nf(v) + ' h' : NA) }),
         kpi('Jugaron más de una partida', s.multi_game_pct, { fmt: pct })),
+      growthBlock(f),
       section('Cohortes semanales (' + (seg === 'registered' ? 'cuentas registradas' : 'identificadores de jugador') + ')',
         el('p', { class: 'small muted', text: seg === 'registered' ? 'Cada cuenta es una persona identificada.' : 'Un identificador es un navegador, no una persona: alguien que juega en dos dispositivos sin cuenta cuenta dos veces. «—» = la ventana todavía no se cumplió.' }),
         r.cohorts.length ? table(['Semana (lunes)', 'Nuevos', 'D1', 'D7', 'D30', 'Volvieron alguna vez'], r.cohorts.map((c) => el('tr', {}, el('td', { text: c.week }), el('td', { class: 'num', text: c.size }),
           ...['d1', 'd7', 'd30', 'returned'].map((k) => el('td', { class: 'heat', 'data-v': isNum(c[k]) ? String(Math.min(4, Math.floor(c[k] / 20))) : '', text: isNum(c[k]) ? pct(c[k]) : '—' }))))) : empty()));
   };
+
+  // Invitaciones y siguientes pasos (docs/CRECIMIENTO-PRODUCTO.md): contadores diarios sin identificadores.
+  function growthBlock(f) {
+    const u = f.ui || {}; const n = (k) => u[k] || 0;
+    const rate = (a, b) => (b ? pct((a / b) * 100) : NA);
+    const errors = Object.keys(u).filter((k) => k.startsWith('signup_error_')).map((k) => k.replace('signup_error_', '') + ': ' + u[k]).join(' · ');
+    const rows = [
+      ['Inicio directo (sin diálogo de país e idioma)', n('prefs_auto'), ''],
+      ['Invitación a crear cuenta: mostrada', n('signup_prompt_shown'), ''],
+      ['… tocaron «Crear cuenta gratis»', n('signup_prompt_click'), rate(n('signup_prompt_click'), n('signup_prompt_shown')) + ' de las mostradas'],
+      ['… la cerraron', n('signup_prompt_dismiss'), rate(n('signup_prompt_dismiss'), n('signup_prompt_shown')) + ' de las mostradas'],
+      ['Cuentas creadas desde la invitación', n('signup_completed_post_solve'), rate(n('signup_completed_post_solve'), n('signup_prompt_click')) + ' de los que tocaron'],
+      ['Cuentas creadas desde la página de cuenta', n('signup_completed'), ''],
+      ['Aviso «te falta el desafío de hoy»: mostrado', n('daily_nudge_shown'), ''],
+      ['… lo abrieron', n('daily_nudge_click'), rate(n('daily_nudge_click'), n('daily_nudge_shown')) + ' de los mostrados'],
+      ['Aviso «el próximo desafío llega…» al terminar el diario', n('daily_next_shown'), ''],
+      ['«Otro críptico» después de terminar uno', n('next_after_solve'), ''],
+    ];
+    return section('Invitaciones y siguientes pasos',
+      el('p', { class: 'small muted', text: 'Contadores por día, sin identificadores, desde que se publicaron estos cambios. No admiten filtros de país o idioma. No se cuentan los navegadores con «No rastrear».' }),
+      table(['Paso', 'Cantidad', 'Tasa'], rows.map(([a, b, c]) => el('tr', {}, el('td', { text: a }), el('td', { class: 'num', text: nf(b, 0) }), el('td', { text: c })))),
+      errors ? el('p', { class: 'small', text: 'Errores al crear cuenta (por código): ' + errors }) : '');
+  }
 
   // ── Catálogo ──
   V.catstats = async () => {

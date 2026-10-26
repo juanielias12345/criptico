@@ -15,6 +15,7 @@ const { HttpError, uuid, parseJson, now } = require('../services/util');
 const track = require('../services/tracking');
 const people = require('../services/people');
 const { classify } = require('../lib/origin');
+const uiEvents = require('../services/uievents');
 
 const a = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
 
@@ -48,7 +49,9 @@ module.exports = function api() {
     const categories = await db.all('SELECT slug, name_es, name_en FROM categories WHERE enabled = 1 ORDER BY slug');
     res.set('Cache-Control', 'public, max-age=60');
     res.json({ languages, variants, totals, categories, modes: await getSetting(db, 'modes.enabled'), max_hints: await getSetting(db, 'game.max_hints'),
-      store_origin: await getSetting(db, 'privacy.store_origin') });
+      store_origin: await getSetting(db, 'privacy.store_origin'),
+      growth: { direct_start: await getSetting(db, 'growth.direct_start'), signup_prompt: await getSetting(db, 'growth.signup_prompt'),
+        signup_prompt_after: await getSetting(db, 'growth.signup_prompt_after'), next_step: await getSetting(db, 'growth.next_step') } });
   }));
 
   // Origen de la visita para un jugador o cuenta nueva. Solo si la política de privacidad
@@ -148,6 +151,16 @@ module.exports = function api() {
     res.status(204).end();
   }));
 
+  // Contadores de la interfaz (invitaciones y siguientes pasos): solo día y tipo, sin identificadores.
+  r.post('/ui-event', a(async (req, res) => {
+    if (req.headers.dnt === '1' || req.headers['sec-gpc'] === '1') return res.status(204).end();
+    const kind = String((req.body || {}).kind || '');
+    if (!uiEvents.CLIENT_KINDS.has(kind)) throw new HttpError(400, 'invalid_kind');
+    if (!(await hit(req.app.locals.db, 'ui:' + req.ipHash, 300, 'hour')).allowed) return res.status(204).end();
+    await uiEvents.bump(req.app.locals.db, kind);
+    res.status(204).end();
+  }));
+
   // ── Archivo ──
   r.get('/clues', a(async (req, res) => {
     const db = req.app.locals.db;
@@ -212,8 +225,10 @@ module.exports = function api() {
     if (!(await hit(db, 'register:' + req.ipHash, 10, 'day')).allowed) throw new HttpError(429, 'rate_limited');
     const b = req.body || {};
     // Edad mínima y aceptación de Términos y Privacidad: casilla obligatoria.
-    if (b.accept !== true) throw new HttpError(400, 'accept_required', 'Para crear una cuenta tenés que confirmar tu edad y aceptar los Términos y la Política de privacidad.');
-    await auth.createUser(db, { username: b.username, password: b.password, email: b.email || null, role: 'player', termsAcceptedAt: new Date().toISOString() });
+    // Errores de registro: se cuentan por código (sin datos de la persona) para ver dónde se traba el formulario.
+    const fail = async (e) => { if (e instanceof HttpError && /^[a-z_]{2,30}$/.test(e.code || '')) await uiEvents.bump(db, 'signup_error_' + e.code).catch(() => {}); throw e; };
+    if (b.accept !== true) await fail(new HttpError(400, 'accept_required', 'Para crear una cuenta tenés que confirmar tu edad y aceptar los Términos y la Política de privacidad.'));
+    await auth.createUser(db, { username: b.username, password: b.password, email: b.email || null, role: 'player', termsAcceptedAt: new Date().toISOString() }).catch(fail);
     const s = await auth.login(db, { username: b.username, password: b.password, ipHash: req.ipHash, userAgent: req.headers['user-agent'] });
     // Origen de la cuenta: el de esta visita o, si no llegó, el del jugador anónimo de este navegador.
     const o = await originFor(req, b.origin);
@@ -225,6 +240,10 @@ module.exports = function api() {
         (SELECT origin_source, origin_medium, origin_campaign, origin_referrer, origin_landing FROM players WHERE id = ? AND origin_source IS NOT NULL)
         WHERE id = ? AND EXISTS (SELECT 1 FROM players WHERE id = ? AND origin_source IS NOT NULL)`, [req.playerId, s.user.id, req.playerId]);
     }
+    // Desde qué invitación llegó (solo valores conocidos).
+    const via = b.via === 'post_solve' ? 'post_solve' : null;
+    if (via) await db.run('UPDATE users SET signup_via = ? WHERE id = ?', [via, s.user.id]);
+    await uiEvents.bump(db, via ? 'signup_completed_post_solve' : 'signup_completed');
     cookie(res, req.app.locals.config, 'sid', s.token, { maxAge: 30 * 86400 });
     res.status(201).json({ user: s.user, csrf: s.csrf, link_offer: await linkOffer(db, req.playerId) });
   }));

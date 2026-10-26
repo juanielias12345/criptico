@@ -46,6 +46,9 @@ function readFilters(q = {}) {
   return f;
 }
 
+// Las cuentas del equipo (pruebas, demostraciones) no cuentan en embudo, retención ni sesiones.
+const notStaff = (col) => `NOT EXISTS (SELECT 1 FROM players sp JOIN users su ON su.id = sp.user_id WHERE sp.id = ${col} AND su.role <> 'player')`;
+
 function gameWhere(from, to, f, alias = 'g') {
   const w = [`${alias}.started_at >= ?`, `${alias}.started_at < ?`]; const args = [from, to];
   if (f.country) { w.push(`${alias}.country_code = ?`); args.push(f.country); }
@@ -298,7 +301,7 @@ async function geo(db, q) {
 async function funnel(db, q) {
   const p = parsePeriod(q); const f = readFilters(q);
   const visits = await traffic(db, p.from, p.to, f);
-  const w = ['p.created_at >= ?', 'p.created_at < ?']; const args = [p.from, p.to];
+  const w = ['p.created_at >= ?', 'p.created_at < ?', notStaff('p.id')]; const args = [p.from, p.to];
   if (f.country) { w.push('p.country_code = ?'); args.push(f.country); }
   if (f.variant) { w.push('p.play_variant = ?'); args.push(f.variant); }
   if (f.lang) { w.push('(p.play_variant = ? OR p.play_variant LIKE ?)'); args.push(f.lang, f.lang + '-%'); }
@@ -319,8 +322,12 @@ async function funnel(db, q) {
     ['visit', visits.new_visitor], ['start', r.started || 0], ['attempt', r.attempted || 0], ['hint', r.hinted || 0],
     ['complete', r.done || 0], ['another', r.another || 0], ['return', r.returned || 0], ['register', r.registered || 0],
   ];
+  // Invitaciones y siguientes pasos (contadores sin identificadores; no admiten filtros de país o idioma).
+  const ui = await require('./uievents').totals(db, p.from, p.to);
+  const via = await db.all(`SELECT COALESCE(signup_via, '') AS via, COUNT(*) AS n FROM users WHERE role = 'player' AND deleted_at IS NULL
+    AND created_at >= ? AND created_at < ? GROUP BY via`, [p.from, p.to]);
   return { period: p, filters: f, steps: steps.map(([key, n], i) => ({ key, n, of_previous: i && steps[i - 1][1] ? round1((n / steps[i - 1][1]) * 100) : null,
-    of_start: i && steps[1][1] ? round1((n / steps[1][1]) * 100) : null })) };
+    of_start: i && steps[1][1] ? round1((n / steps[1][1]) * 100) : null })), ui, signups_via: Object.fromEntries(via.map((r) => [r.via || 'account_page', r.n])) };
 }
 
 // ── Retención por cohortes ──
@@ -332,7 +339,7 @@ async function retention(db, q) {
   const join = segment === 'registered' ? 'JOIN players pl ON pl.id = d.player_id AND pl.user_id IS NOT NULL' : '';
   const sinceT = startOfDay(Date.now()) - weeks * 7 * DAY;
   const since = dayStr(sinceT);
-  const rows = await db.all(`WITH act AS (SELECT DISTINCT ${unit} AS u, d.day FROM player_days d ${join}),
+  const rows = await db.all(`WITH act AS (SELECT DISTINCT ${unit} AS u, d.day FROM player_days d ${join} WHERE ${notStaff('d.player_id')}),
     first AS (SELECT u, MIN(day) AS d0 FROM act GROUP BY u)
     SELECT f.d0,
       EXISTS(SELECT 1 FROM act a WHERE a.u = f.u AND a.day = date(f.d0, '+1 day')) AS d1,
@@ -368,13 +375,13 @@ async function sessionStats(db, p, f, segment) {
   const join = segment === 'registered' ? 'JOIN players pl ON pl.id = g.player_id AND pl.user_id IS NOT NULL' : '';
   const r = await db.get(`WITH s AS (SELECT ${unit} AS u, g.started_at,
       LAG(g.started_at) OVER (PARTITION BY ${unit} ORDER BY g.started_at) AS prev
-      FROM games g JOIN clues c ON c.id = g.clue_id ${join} WHERE ${gw.sql})
+      FROM games g JOIN clues c ON c.id = g.clue_id ${join} WHERE ${gw.sql} AND ${notStaff('g.player_id')})
     SELECT COUNT(DISTINCT u) AS units, COUNT(*) AS games,
       SUM(CASE WHEN prev IS NULL OR (julianday(started_at) - julianday(prev)) * 1440 > 30 THEN 1 ELSE 0 END) AS sessions,
       AVG(CASE WHEN prev IS NOT NULL AND (julianday(started_at) - julianday(prev)) * 1440 > 30 THEN (julianday(started_at) - julianday(prev)) * 24 END) AS gap_hours
     FROM s`, gw.args);
   const multi = await db.get(`SELECT COUNT(*) AS n FROM (SELECT ${unit} AS u FROM games g JOIN clues c ON c.id = g.clue_id ${join}
-    WHERE ${gw.sql} GROUP BY u HAVING COUNT(*) > 1)`, gw.args);
+    WHERE ${gw.sql} AND ${notStaff('g.player_id')} GROUP BY u HAVING COUNT(*) > 1)`, gw.args);
   const units = r.units || 0;
   return { units, sessions: r.sessions || 0, games: r.games || 0,
     sessions_per_unit: units ? round1(r.sessions / units) : null, games_per_session: r.sessions ? round1(r.games / r.sessions) : null,

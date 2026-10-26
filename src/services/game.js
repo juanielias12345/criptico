@@ -171,6 +171,14 @@ async function finish(db, g, result, extra = {}) {
   return true;
 }
 
+// Siguiente paso al cerrar una partida del modo libre: ¿le queda el desafío de hoy?
+// Una lectura por el índice del jugador; en el diario, duelos y torneos no hace falta.
+async function nextStep(db, g) {
+  if (g.daily_date || g.mode === 'daily' || ARENA_MODES.includes(g.mode)) return null;
+  const played = await db.get('SELECT 1 AS x FROM games WHERE player_id = ? AND daily_date = ? LIMIT 1', [g.player_id, today()]);
+  return { daily_pending: !played };
+}
+
 // Comparación de respuestas: se ignoran mayúsculas, espacios, signos y tildes
 // que no cambian la letra. Variantes ortográficas aceptadas solo si el críptico las declara.
 async function guess(db, { gameId, playerId, answer }) {
@@ -188,7 +196,8 @@ async function guess(db, { gameId, playerId, answer }) {
     const closed = await finish(db, cur, 'solved', { attempt: true, data: { answer: key } });
     const attempts = (await db.get('SELECT attempts FROM games WHERE id = ?', [g.id])).attempts;
     const achievements = closed && g.mode !== 'practice' ? await profile.onGameFinished(db, g.player_id, g.id) : [];
-    return { correct: true, attempts, hints_used: g.hints_used, solution: solutionView(clue), daily: g.daily_date ? await dailySummary(db, g.daily_date, lang) : null, achievements };
+    return { correct: true, attempts, hints_used: g.hints_used, solution: solutionView(clue), daily: g.daily_date ? await dailySummary(db, g.daily_date, lang) : null, achievements,
+      next: closed ? await nextStep(db, g) : null };
   }
   const feedback = [];
   if (key.length !== clue.answer_key.length) feedback.push({ code: 'length', expected: clue.answer_key.length, got: key.length });
@@ -249,7 +258,8 @@ async function reveal(db, { gameId, playerId }) {
   const { g, clue } = await loadGame(db, gameId, playerId);
   const closed = !g.finished_at && await finish(db, g, 'revealed');
   const achievements = closed && g.mode !== 'practice' ? await profile.onGameFinished(db, g.player_id, g.id) : [];
-  return { solution: solutionView(clue), daily: g.daily_date ? await dailySummary(db, g.daily_date, clue.language_code) : null, achievements };
+  return { solution: solutionView(clue), daily: g.daily_date ? await dailySummary(db, g.daily_date, clue.language_code) : null, achievements,
+    next: closed ? await nextStep(db, g) : null };
 }
 
 async function skip(db, { gameId, playerId, reason }) {

@@ -1,0 +1,30 @@
+# Auditoría de solo lectura del embudo y la retención (scripts/audit-funnel.js).
+# Imprime solo totales y proporciones en el registro: ningún identificador ni dato personal.
+# Se ejecuta a mano: Actions → "Auditoría de embudo" → Run workflow.
+# Usa los secretos DATABASE_URL y DATABASE_AUTH_TOKEN (los mismos de "Crear administrador").
+name: Auditoría de embudo
+
+on:
+  workflow_dispatch:
+    inputs:
+      from:
+        description: Desde (AAAA-MM-DD, vacío = últimos 30 días)
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci --omit=dev
+      - run: node scripts/audit-funnel.js
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DATABASE_AUTH_TOKEN: ${{ secrets.DATABASE_AUTH_TOKEN }}
+          AUDIT_FROM: ${{ inputs.from }}
