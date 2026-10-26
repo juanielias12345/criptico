@@ -10,9 +10,6 @@ on:
       from:
         description: Desde (AAAA-MM-DD, vacío = últimos 30 días)
         required: false
-  push:
-    branches: [claude/project-thread-yi5koi]
-    paths: [scripts/audit-funnel.js]
 
 permissions:
   contents: read

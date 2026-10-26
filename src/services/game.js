@@ -108,7 +108,17 @@ async function startGame(db, { playerId, choice, mode = 'infinite', category, di
   const player = await ensurePlayer(db, playerId, { country, variant: choice, origin });
 
   let clue = null; let recycled = false;
-  const filter = poolFilter({ lang: sel.lang, variant: sel.variant, mode, category, difficulty, mechanism });
+  // Quien recién llega empieza con crípticos fáciles: resolver el primero es lo que más se asocia
+  // con volver (docs/CRECIMIENTO-PRODUCTO.md). Solo en el modo libre y sin una dificultad elegida.
+  let easy = false;
+  const easyGames = await getSetting(db, 'growth.easy_start_games');
+  if (easyGames > 0 && mode === 'infinite' && !difficulty && !clueSlug) {
+    easy = player.isNew || (await db.get('SELECT COUNT(*) AS n FROM (SELECT 1 FROM games WHERE player_id = ? LIMIT ?)', [player.id, easyGames])).n < easyGames;
+  }
+  let filter = poolFilter({ lang: sel.lang, variant: sel.variant, mode: easy ? 'beginner' : mode, category, difficulty, mechanism });
+  if (easy && !(await db.get(`SELECT 1 AS x FROM clues c WHERE ${filter.where} LIMIT 1`, filter.args))) {
+    filter = poolFilter({ lang: sel.lang, variant: sel.variant, mode, category, difficulty, mechanism });
+  }
   // Conteo acotado: con decenas de miles de crípticos solo importa si hay o no.
   const poolRow = await db.get(`SELECT COUNT(*) AS n FROM (SELECT 1 FROM clues c WHERE ${filter.where} LIMIT 1000)`, filter.args);
   const notice = await contentNotice(db, sel, poolRow.n);

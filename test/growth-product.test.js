@@ -82,3 +82,22 @@ test('/api/meta expone los interruptores de crecimiento', async () => {
   const m = await client(env.base).get('/api/meta');
   assert.deepEqual(m.json.growth, { direct_start: true, signup_prompt: true, signup_prompt_after: 3, next_step: true });
 });
+
+test('las primeras partidas de un jugador nuevo son fáciles; después, de cualquier dificultad', async () => {
+  const c = client(env.base);
+  const diffs = [];
+  for (let i = 0; i < 3; i++) {
+    const s = await c.post('/api/game/start', { choice: 'es', mode: 'infinite' });
+    diffs.push((await env.db.get('SELECT c.difficulty FROM games g JOIN clues c ON c.id = g.clue_id WHERE g.id = ?', [s.json.game_id])).difficulty);
+  }
+  assert.ok(diffs.every((d) => d <= 2), 'fáciles: ' + diffs);
+  const any = await env.db.get("SELECT COUNT(*) AS n FROM clues WHERE status = 'published' AND language_code = 'es' AND difficulty > 2");
+  if (any.n) {
+    let hard = false;
+    for (let i = 0; i < 25 && !hard; i++) {
+      const s = await c.post('/api/game/start', { choice: 'es', mode: 'infinite' });
+      hard = (await env.db.get('SELECT c.difficulty FROM games g JOIN clues c ON c.id = g.clue_id WHERE g.id = ?', [s.json.game_id])).difficulty > 2;
+    }
+    assert.ok(hard, 'después de las primeras aparecen más difíciles');
+  }
+});
