@@ -910,6 +910,7 @@ dialog::backdrop { background: var(--scrim); }
 
 /* ── Duelos y torneos (public/js/arena.js) ── */
 .arena-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); gap: var(--s-5); align-items: start; }
+.arena-col { display: grid; gap: var(--s-5); align-content: start; }
 .arena-card { min-height: 0; display: grid; gap: var(--s-4); align-content: start; }
 .arena-card h2 { font-size: var(--t-2xl); margin: 0; }
 .arena-card h3.label { margin: var(--s-2) 0 0; }

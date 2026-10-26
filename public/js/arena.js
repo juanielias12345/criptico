@@ -357,7 +357,8 @@
       if (!me) parts.push(guestIntro());
       if (tours.current) parts.push(tournamentCard(tours.current, me));
       else parts.push(el('p', { class: 'notice info', text: 'El torneo de esta semana se está armando. Volvé en un rato.' }));
-      if (me) parts.push(duelsSection(duels, fr), friendsSection(fr, me));
+      // Duelos y, debajo, amigos: en la misma columna.
+      if (me) parts.push(el('div', { class: 'arena-col' }, duelsSection(duels, fr), friendsSection(fr, me)));
       if (tours.previous && tours.previous.podium.length) {
         parts.push(el('section', { class: 'sheet arena-card' }, el('p', { class: 'eyebrow', text: 'Semana pasada' }), el('h2', { text: tours.previous.title }),
           el('ol', { class: 'podium' }, tours.previous.podium.map((x) => el('li', {}, el('b', { text: x.name }), ' · ' + x.points + ' pts'))),

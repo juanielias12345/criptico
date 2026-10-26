@@ -56,7 +56,7 @@ function layout({ lang, config, title, seoTitle, description, page, path, altern
   const og = ogImage || config.siteUrl + '/og-image.png';
   const canonical = `${config.siteUrl}${path}`;
   const alt = alternates || {};
-  const nav = [['play', 'nav_play'], ['arena', 'nav_arena'], ['archive', 'nav_archive'], ['daily', 'nav_daily'], ['help', 'nav_help']];
+  const nav = [['play', 'nav_play'], ['daily', 'nav_daily'], ['arena', 'nav_arena'], ['archive', 'nav_archive'], ['help', 'nav_help']];
   const strings = T[lang];
   // pmini: lo mínimo del perfil que usa el juego (avisos de logros y práctica dirigida).
   const PT = PTEXT[lang];
