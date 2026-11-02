@@ -2,7 +2,7 @@
 # del proyecto), genera, valida, aprueba o rechaza y guarda crípticos por
 # variante, y actualiza el informe del panel. Ver docs/AGENTE.md.
 # Necesita los secretos DATABASE_URL, DATABASE_AUTH_TOKEN y ANTHROPIC_API_KEY.
-# Sin ANTHROPIC_API_KEY (o con presupuesto 0) cada ejecución deja el ciclo
+# Sin ANTHROPIC_API_KEY la ejecución termina sin tocar la base. Con presupuesto 0 deja el ciclo
 # «bloqueado» y lo informa en el panel; no gasta ni simula trabajo.
 name: Agente de biblioteca
 
@@ -28,14 +28,25 @@ jobs:
   run:
     runs-on: ubuntu-latest
     timeout-minutes: 58
+    # Sin clave de la API no hay nada que generar: no toca la base, para no
+    # gastar lecturas de Turso cada hora (el panel conserva el último «bloqueado»).
+    env:
+      HAS_KEY: ${{ secrets.ANTHROPIC_API_KEY != '' }}
     steps:
+      - name: Sin ANTHROPIC_API_KEY
+        if: env.HAS_KEY != 'true'
+        run: echo "::notice::Falta el secreto ANTHROPIC_API_KEY; el agente no corre ni lee la base."
       - uses: actions/checkout@v4
+        if: env.HAS_KEY == 'true'
       - uses: actions/setup-node@v4
+        if: env.HAS_KEY == 'true'
         with:
           node-version: 22
           cache: npm
       - run: npm ci --omit=dev
+        if: env.HAS_KEY == 'true'
       - name: Correr el agente
+        if: env.HAS_KEY == 'true'
         run: node scripts/library-agent.js run --minutes "${{ inputs.minutes || '50' }}"
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
