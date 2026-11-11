@@ -41,11 +41,13 @@ async function resolvePlayer(db, req) {
   const pid = /^[0-9a-f-]{36}$/.test(req.cookies.pid || '') ? req.cookies.pid : null;
   req.cookiePlayerId = pid;
   req.anonPlayer = null;
-  const p = pid ? await db.get('SELECT id, user_id, (SELECT COUNT(*) FROM games g WHERE g.player_id = players.id) AS games FROM players WHERE id = ? AND retired_at IS NULL', [pid]) : null;
+  // Corre en cada pedido a la API: no cuenta partidas salvo en el caso raro que lo necesita.
+  const p = pid ? await db.get('SELECT id, user_id FROM players WHERE id = ? AND retired_at IS NULL', [pid]) : null;
   if (!req.user) { req.playerId = p && !p.user_id ? p.id : null; return; }
   if (p && p.user_id === req.user.id) { req.playerId = p.id; return; }
   req.playerId = null;
   if (p && !p.user_id) {
+    p.games = (await db.get('SELECT COUNT(*) AS n FROM games WHERE player_id = ?', [p.id])).n;
     if (!p.games) { await db.run('UPDATE players SET user_id = ? WHERE id = ? AND user_id IS NULL', [req.user.id, p.id]); req.playerId = p.id; return; }
     req.anonPlayer = { id: p.id, games: p.games };
   }

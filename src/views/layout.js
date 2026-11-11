@@ -128,11 +128,17 @@ ${ads && config.adsenseSlot ? `<aside class="ad-slot" aria-label="Publicidad"><p
     </div>
     <nav aria-label="${lang === 'es' ? 'Jugar' : 'Play'}">
       <h2>${esc(t(lang, 'footer_play'))}</h2>
-      <ul>${[...nav, ...(GUIDE[lang] ? [['guide', 'nav_guide']] : []), ...(lang === 'es' ? [['faq', 'nav_faq']] : [])].map(([r, k]) => `<li><a href="${href(lang, r)}">${esc(t(lang, k))}</a></li>`).join('')}</ul>
+      <ul>${nav.filter(([r]) => r !== 'help').map(([r, k]) => `<li><a href="${href(lang, r)}">${esc(t(lang, k))}</a></li>`).join('')}</ul>
+    </nav>
+    <nav aria-label="${esc(t(lang, 'footer_learn'))}">
+      <h2>${esc(t(lang, 'footer_learn'))}</h2>
+      <ul>${[['help', 'nav_help'], ...(GUIDE[lang] ? [['guide', 'nav_guide']] : []), ...(lang === 'es' ? [['articles', 'nav_articles'], ['faq', 'nav_faq']] : [])].map(([r, k]) => `<li><a href="${href(lang, r)}">${esc(t(lang, k))}</a></li>`).join('')}</ul>
     </nav>
     <nav aria-label="${lang === 'es' ? 'Comunidad' : 'Community'}">
       <h2>${esc(t(lang, 'footer_community'))}</h2>
       <ul>
+        ${lang === 'es' ? `<li><a href="${href(lang, 'about')}">${esc(t(lang, 'nav_about'))}</a></li>
+        <li><a href="${href(lang, 'contact')}">${esc(t(lang, 'nav_contact'))}</a></li>` : ''}
         <li><a href="${href(lang, 'contribute')}">${esc(t(lang, 'nav_contribute'))}</a></li>
         <li><a href="${href(lang, 'submission')}">${esc(t(lang, 'status_title'))}</a></li>
         <li><a href="${href(lang, 'profile')}">${esc(t(lang, 'nav_profile'))}</a></li>

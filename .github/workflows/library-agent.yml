@@ -1,4 +1,4 @@
-# Agente Autónomo de Biblioteca: cada hora retoma el ciclo diario (zona horaria
+# Agente Autónomo de Biblioteca: una vez por día retoma el ciclo diario (zona horaria
 # del proyecto), genera, valida, aprueba o rechaza y guarda crípticos por
 # variante, y actualiza el informe del panel. Ver docs/AGENTE.md.
 # Necesita los secretos DATABASE_URL, DATABASE_AUTH_TOKEN y ANTHROPIC_API_KEY.
@@ -8,7 +8,7 @@ name: Agente de biblioteca
 
 on:
   schedule:
-    - cron: '7 * * * *'
+    - cron: '37 7 * * *'
   workflow_dispatch:
     inputs:
       minutes:

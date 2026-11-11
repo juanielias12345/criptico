@@ -7,6 +7,7 @@ const N = require('../lib/normalize');
 const { walk } = require('../lib/validator/wordplay');
 const { publicClue, solutionView } = require('./clues');
 const { getSetting } = require('./settings');
+const STATS = require('./catalog-stats');
 const { uuid, now, parseJson, HttpError, sha256 } = require('./util');
 const track = require('./tracking');
 const profile = require('./profile');
@@ -83,14 +84,12 @@ async function pickUnseen(db, filter, playerId, windowSize) {
 
 async function contentNotice(db, sel, pool) {
   if (pool === 0) {
-    const others = await db.all(
-      `SELECT c.language_code AS lang, c.variant_code AS variant, COUNT(*) AS n FROM clues c
-       JOIN languages l ON l.code = c.language_code AND l.enabled = 1
-       WHERE c.status = 'published' GROUP BY c.language_code, c.variant_code ORDER BY n DESC LIMIT 6`);
+    const enabled = new Set((await db.all('SELECT code FROM languages WHERE enabled = 1')).map((x) => x.code));
+    const others = (await STATS.variantCounts(db)).filter((x) => enabled.has(x.lang)).sort((a, b) => b.n - a.n).slice(0, 6);
     return { kind: 'empty', alternatives: others };
   }
   if (sel.variant) {
-    const own = await db.get("SELECT COUNT(*) AS n FROM clues WHERE status = 'published' AND variant_code = ?", [sel.variant]);
+    const own = { n: (await STATS.variantCounts(db)).filter((x) => x.variant === sel.variant).reduce((s, x) => s + x.n, 0) };
     if (own.n < (sel.minClues || 10)) return { kind: 'few_regional', regional: own.n, total: pool };
   }
   return null;

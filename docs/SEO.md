@@ -22,6 +22,9 @@
 - `robots.txt` nombra los rastreadores de buscadores y de IA permitidos (Googlebot, Bingbot, OAI-SearchBot, GPTBot, ChatGPT-User, ClaudeBot, Claude-SearchBot, PerplexityBot, Applebot, Google-Extended…). Un grupo con nombre no hereda las reglas de `*`, por eso se repiten. Para negar el uso en entrenamiento sin perder la búsqueda, sacar `GPTBot`, `Google-Extended`, `ClaudeBot` y `Applebot-Extended` de `AI_BOTS` y agregarles `Disallow: /`.
 - Inicio: `WebApplication` (gratis, categoría juego) enlazado al `Organization` y al `WebSite` por `@id`. Sin valoraciones ni reseñas inventadas.
 
+- Artículos (`/es/articulos`, `src/views/articles.js`), quiénes somos y contacto (`src/views/about.js`): en el sitemap, en IndexNow y en `/llms.txt`.
+- Los crípticos `generated` sin auditoría «ok» llevan `noindex` y no entran al sitemap (ver docs/MONETIZACION.md, revisión de AdSense).
+
 ## Lo que depende de una persona
 
 1. Search Console: verificar `playcripticos.com` (registro TXT en el DNS o la variable `GOOGLE_SITE_VERIFICATION` en Vercel) y enviar `https://playcripticos.com/sitemap.xml`.

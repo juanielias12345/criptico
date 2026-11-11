@@ -5,9 +5,9 @@
 
 const ROUTES = {
   es: { home: '', play: 'jugar', daily: 'diario', archive: 'archivo', clue: 'c', contribute: 'contribuir', submission: 'propuesta',
-    help: 'ayuda', guide: 'mecanismos', legal: 'legal', privacy: 'privacidad', terms: 'condiciones', credits: 'creditos', profile: 'perfil', account: 'cuenta', arena: 'desafios', tournament: 'torneos', plus: 'plus', faq: 'preguntas-frecuentes' },
+    help: 'ayuda', guide: 'mecanismos', legal: 'legal', privacy: 'privacidad', terms: 'condiciones', credits: 'creditos', profile: 'perfil', account: 'cuenta', arena: 'desafios', tournament: 'torneos', plus: 'plus', faq: 'preguntas-frecuentes', articles: 'articulos', about: 'quienes-somos', contact: 'contacto' },
   en: { home: '', play: 'play', daily: 'daily', archive: 'archive', clue: 'c', contribute: 'contribute', submission: 'submission',
-    help: 'help', guide: 'devices', legal: 'legal', privacy: 'privacy', terms: 'terms', credits: 'credits', profile: 'profile', account: 'account', arena: 'challenges', tournament: 'tournaments', plus: 'plus', faq: 'faq' },
+    help: 'help', guide: 'devices', legal: 'legal', privacy: 'privacy', terms: 'terms', credits: 'credits', profile: 'profile', account: 'account', arena: 'challenges', tournament: 'tournaments', plus: 'plus', faq: 'faq', articles: 'articles', about: 'about', contact: 'contact' },
 };
 
 const T = {
@@ -179,6 +179,7 @@ Object.assign(T.es, {
   same_guess: "Ya probaste esa respuesta.",
   nav_archive: 'Explorar', nav_daily: 'Diario', nav_help: 'Cómo jugar', nav_prefs: 'Idioma y región',
   footer_play: 'Jugar', footer_community: 'Comunidad', nav_guide: 'Mecanismos', ui_language: 'Interfaz',
+  nav_articles: 'Artículos', nav_about: 'Quiénes somos', nav_contact: 'Contacto', footer_learn: 'Aprender',
   footer_made: 'Crípticos originales y de fuentes con permiso, validados uno por uno. Gratis y sin registro obligatorio para jugar.',
   home_eyebrow: 'Crípticos sin límite', home_title_a: 'Cada pista esconde', home_title_b: 'una palabra.',
   home_lead: 'Una parte la define; la otra la arma con un juego de letras. Encontrá las dos y resolvé tantos como quieras, sin límite diario ni registro.',
@@ -234,6 +235,7 @@ Object.assign(T.en, {
   same_guess: "You've already tried that one.",
   nav_archive: 'Explore', nav_daily: 'Daily', nav_help: 'How to play', nav_prefs: 'Language & region',
   footer_play: 'Play', footer_community: 'Community', nav_guide: 'Devices', ui_language: 'Interface',
+  nav_articles: 'Articles', nav_about: 'About us', nav_contact: 'Contact', footer_learn: 'Learn',
   footer_made: 'Original clues and clues from sources that gave permission, each one validated. Free, no sign-up required to play.',
   home_eyebrow: 'Unlimited cryptic clues', home_title_a: 'Every clue hides', home_title_b: 'a word.',
   home_lead: 'One part defines it; the rest builds it with wordplay. Find both, and solve as many as you like — no daily limit, no sign-up.',

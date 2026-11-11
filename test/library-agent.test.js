@@ -339,9 +339,9 @@ test('panel: datos reales, permisos en el servidor y controles pausar, reanudar 
   assert.ok(await db().get("SELECT 1 FROM audit_log WHERE action = 'agent.control'"));
 });
 
-test('la programación es persistente: GitHub Actions cada hora, sin ejecuciones simultáneas', () => {
+test('la programación es persistente: GitHub Actions una vez por día, sin ejecuciones simultáneas', () => {
   const yml = fs.readFileSync(path.join(__dirname, '..', '.github', 'workflows', 'library-agent.yml'), 'utf8');
-  assert.match(yml, /cron: '7 \* \* \* \*'/);
+  assert.match(yml, /cron: '37 7 \* \* \*'/);
   assert.match(yml, /group: library-agent/);
   assert.match(yml, /ANTHROPIC_API_KEY: \$\{\{ secrets\.ANTHROPIC_API_KEY \}\}/);
   assert.match(yml, /scripts\/library-agent\.js run/);

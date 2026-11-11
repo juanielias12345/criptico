@@ -180,4 +180,11 @@ function solutionView(c) {
   };
 }
 
-module.exports = { rightsStatusFor, CLUE_COLUMNS, slugBase, buildClue, insertClue, setClueStatus, updateClue, publicClue, solutionView, uniqueSlug, normalizeCategory, variantPhonetics, publishBlockedMessage };
+// Páginas de crípticos que se ofrecen a buscadores (y que pueden llevar anuncios): todas menos
+// las generadas en serie que todavía no pasaron la auditoría manual. Las generadas se pueden
+// jugar igual, pero su página sale con noindex y fuera del sitemap: Google trata las páginas
+// hechas en serie y sin revisar como contenido de poco valor (ver docs/MONETIZACION.md).
+const INDEXABLE_SQL = "(origin <> 'generated' OR audit_status = 'ok')";
+const isIndexable = (c) => c.origin !== 'generated' || c.audit_status === 'ok';
+
+module.exports = { INDEXABLE_SQL, isIndexable, rightsStatusFor, CLUE_COLUMNS, slugBase, buildClue, insertClue, setClueStatus, updateClue, publicClue, solutionView, uniqueSlug, normalizeCategory, variantPhonetics, publishBlockedMessage };

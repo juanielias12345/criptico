@@ -94,3 +94,13 @@ Importante: las vistas previas usan las mismas variables que se configuren para 
 ## Servidor propio (alternativa)
 
 También funciona en cualquier servidor con Node 20+: `npm ci && npm run db:setup && npm start`, con `INTERNAL_SCHEDULER=1` para que las tareas corran sin cron externo, detrás de un proxy con HTTPS (Nginx, Caddy). Con un archivo local (`DATABASE_URL=file:./data/criptico.db`) hay que respaldar ese archivo.
+
+## Ahorro de consumo (Turso y Vercel)
+
+Turso cobra por fila leída y, si el cupo se agota o falla el pago, bloquea todas las lecturas y el sitio muestra «server error» (pasó el 25/10 y el 10/11/2026). Para gastar lo mínimo:
+
+- Los conteos del catálogo (portada, guía, Explorar, `/api/meta`, sitemap) se guardan 10 minutos en la instancia (`src/services/catalog-stats.js`, ajustable con `STATS_CACHE_MS`). Antes cada visita leía el catálogo entero, y `/api/meta` lo leía dos veces por variante.
+- `/api/meta`, robots, llms.txt, ads.txt y los sitemaps llevan `s-maxage`: la CDN de Vercel los responde sin invocar la función.
+- Explorar usa el índice `idx_clues_published` (migración 019) y lee solo la página pedida.
+- Tareas automáticas: HQ cada 6 horas, agente de biblioteca una vez por día, banco una vez por semana. Las tres se pueden lanzar a mano.
+- Si el sitio cae con «server error», mirar primero los registros de esas tareas en Actions: `BLOCKED ... reads are blocked` significa cupo o pago de Turso.
