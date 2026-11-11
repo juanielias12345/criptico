@@ -16,6 +16,7 @@ const LEGAL = require('../db/legal-global');
 const { indicators: ES_INDICATORS } = require('../lib/lang/es');
 const ADS = require('../services/ads');
 const { isPlus } = require('../services/plus');
+const STATS = require('../services/catalog-stats');
 
 const a = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
 
@@ -123,6 +124,13 @@ module.exports = function pages() {
     } catch (e) { next(e); }
   });
 
+  // Archivos iguales para todos (robots, llms, ads.txt, sitemaps): la CDN de Vercel los sirve
+  // una hora sin invocar la función ni leer la base, aunque los bots los pidan seguido.
+  r.use(/^\/(robots\.txt|llms\.txt|ads\.txt|sitemap[\w-]*\.xml)$/, (req, res, next) => {
+    res.set('Cache-Control', 'public, max-age=3600, s-maxage=3600, stale-while-revalidate=86400');
+    next();
+  });
+
   r.get('/ads.txt', (req, res, next) => {
     const txt = ADS.adsTxt(req.app.locals.config);
     if (!txt) return next();
@@ -176,7 +184,7 @@ ${Object.entries(G.mechs).map(([k, m]) => `- [${t('es', 'mech_' + k)}](${u('guid
 
   r.get('/sitemap.xml', a(async (req, res) => {
     const { siteUrl } = req.app.locals.config;
-    const { n, last } = await req.app.locals.db.get(`SELECT COUNT(*) AS n, MAX(updated_at) AS last FROM clues WHERE ${PUBLISHED}`);
+    const { n, last } = await STATS.sitemapInfo(req.app.locals.db);
     const maps = [['/sitemap-paginas.xml', BUILD_DAY]];
     for (let i = 1; i <= Math.ceil(n / SITEMAP_BATCH); i++) maps.push([`/sitemap-cripticos-${i}.xml`, last ? String(last).slice(0, 10) : null]);
     res.type('application/xml').send(`<?xml version="1.0" encoding="UTF-8"?><sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${maps.map(([u, mod]) => `<sitemap><loc>${esc(siteUrl + u)}</loc>${mod ? `<lastmod>${esc(mod)}</lastmod>` : ''}</sitemap>`).join('')}</sitemapindex>`);
@@ -285,10 +293,10 @@ ${Object.entries(G.mechs).map(([k, m]) => `- [${t('es', 'mech_' + k)}](${u('guid
     // ── Inicio ──
     r.get(`/${lang}`, a(async (req, res) => {
       const db = req.app.locals.db;
-      const totals = await db.all("SELECT language_code AS l, COUNT(*) AS n FROM clues WHERE status = 'published' AND language_code IN (SELECT code FROM languages WHERE enabled = 1) GROUP BY language_code");
+      const totals = await STATS.totalsByLanguage(db);
       const total = totals.reduce((s, x) => s + x.n, 0);
       const variants = (await db.get('SELECT COUNT(*) AS n FROM language_variants v JOIN languages l ON l.code = v.language_code AND l.enabled = 1 WHERE v.enabled = 1')).n;
-      const mechCounts = Object.fromEntries((await db.all("SELECT mechanism AS m, COUNT(*) AS n FROM clues WHERE status = 'published' AND language_code = ? GROUP BY mechanism", [lang])).map((x) => [x.m, x.n]));
+      const mechCounts = await STATS.mechanismCounts(db, lang);
       const mechs = MECHS.filter((m) => mechCounts[m]);
       const sp = ex.specimen;
       const order = [...sp.to];
@@ -431,14 +439,16 @@ ${mechs.length ? `<section class="section" aria-labelledby="mech-t">
       if (/^[1-5]$/.test(q.difficulty || '')) { where.push('c.difficulty = ?'); args.push(Number(q.difficulty)); }
       if (/^[a-z_]{2,40}$/.test(q.category || '')) { where.push('c.category = ?'); args.push(q.category); }
       if (/^[a-z_]{2,40}$/.test(q.mechanism || '')) { where.push('c.mechanism = ?'); args.push(q.mechanism); }
-      if (q.date === '7' || q.date === '30') { where.push('c.published_at >= ?'); args.push(new Date(Date.now() - Number(q.date) * 86400000).toISOString()); }
+      if (q.date === '7' || q.date === '30') { where.push('c.published_at >= ?'); args.push(new Date(Date.now() - Number(q.date) * 86400000).toISOString().slice(0, 13)); }
       const pid = req.playerId && /^[\w-]{8,64}$/.test(req.playerId) ? req.playerId : null;
       const hasHistory = pid ? !!(await db.get("SELECT 1 FROM games WHERE player_id = ? AND result = 'solved' LIMIT 1", [pid])) : false;
       if (hasHistory && (q.status === 'solved' || q.status === 'unsolved')) {
         where.push(`c.id ${q.status === 'solved' ? 'IN' : 'NOT IN'} (SELECT clue_id FROM games WHERE player_id = ? AND result = 'solved')`); args.push(pid);
       }
       const page = Math.max(1, Math.min(1000, Number(q.page) || 1)); const per = 24;
-      const total = (await db.get(`SELECT COUNT(*) AS n FROM clues c WHERE ${where.join(' AND ')}`, args)).n;
+      // El total sin filtros del jugador se comparte entre visitas (ver services/catalog-stats.js).
+      const countSql = `SELECT COUNT(*) AS n FROM clues c WHERE ${where.join(' AND ')}`;
+      const total = where.some((w) => w.includes('player_id')) ? (await db.get(countSql, args)).n : await STATS.filteredCount(db, countSql, args);
       const rows = await db.all(`SELECT c.* FROM clues c WHERE ${where.join(' AND ')} ORDER BY c.published_at DESC, c.id LIMIT ? OFFSET ?`, [...args, per, (page - 1) * per]);
       const ids = rows.map((x) => x.id); const ph = ids.map(() => '?').join(',') || "''";
       const solved = new Set(pid && ids.length ? (await db.all(`SELECT DISTINCT clue_id FROM games WHERE player_id = ? AND result = 'solved' AND clue_id IN (${ph})`, [pid, ...ids])).map((x) => x.clue_id) : []);
@@ -449,7 +459,7 @@ ${mechs.length ? `<section class="section" aria-labelledby="mech-t">
       const cats = await db.all('SELECT * FROM categories WHERE enabled = 1 ORDER BY slug');
       const langs = await db.all('SELECT code, name_native FROM languages WHERE enabled = 1 ORDER BY sort_order');
       const variants = await db.all('SELECT code, name_native FROM language_variants WHERE enabled = 1 AND language_code = ? ORDER BY code', [fl]);
-      const mechCounts = Object.fromEntries((await db.all("SELECT mechanism AS m, COUNT(*) AS n FROM clues WHERE status = 'published' AND language_code = ? GROUP BY mechanism", [fl])).map((x) => [x.m, x.n]));
+      const mechCounts = await STATS.mechanismCounts(db, fl);
       const sel = (v, cur) => (String(v) === String(cur || '') ? ' selected' : '');
       const qs = (over) => { const u = new URLSearchParams(Object.entries({ ...q, ...over }).filter(([, v]) => v !== '' && v != null)); const s = u.toString(); return s ? '?' + s : P('archive'); };
       const pages = Math.max(1, Math.ceil(total / per));
@@ -583,7 +593,7 @@ ${FAQ[lang] ? `<p class="section"><a class="link-btn" href="${P('faq')}">${esc(F
     const G = GUIDE[lang];
     if (G) {
       const site = (req) => req.app.locals.config.siteUrl;
-      const countsFor = async (db) => Object.fromEntries((await db.all("SELECT mechanism AS m, COUNT(*) AS n FROM clues WHERE status = 'published' AND language_code = ? GROUP BY mechanism", [lang])).map((x) => [x.m, x.n]));
+      const countsFor = (db) => STATS.mechanismCounts(db, lang);
       r.get(P('guide'), a(async (req, res) => {
         const counts = await countsFor(req.app.locals.db);
         render(req, res, {

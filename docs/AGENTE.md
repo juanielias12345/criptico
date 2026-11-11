@@ -160,7 +160,7 @@ Para acercarse a la meta hace falta:
 
 ## Programación
 
-- GitHub Actions **«Agente de biblioteca»** (`.github/workflows/library-agent.yml`) corre **cada hora a los :07 UTC** y también se puede lanzar a mano. GitHub puede demorar los horarios unos minutos.
+- GitHub Actions **«Agente de biblioteca»** (`.github/workflows/library-agent.yml`) corre **una vez por día a las 07:37 UTC** (para ahorrar lecturas de la base) y también se puede lanzar a mano. GitHub puede demorar los horarios unos minutos.
 - Cada ejecución trabaja hasta 50 minutos. Retoma el ciclo del día desde el último lote confirmado, cierra con su informe los ciclos de días anteriores y actualiza el informe del día.
 - Ejecuciones simultáneas: las evita el grupo de concurrencia de la Action y, además, un **bloqueo en la base** (`agent_control.lease_*`, con vencimiento de 15 minutos por si un proceso muere).
 - Recuperación: un lote «en curso» de un proceso cortado se verifica si su escritura llegó a la base, y si no, se abandona. El cursor solo avanza con la escritura atómica, así que no se duplica ni se pierde nada.
