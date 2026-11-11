@@ -225,14 +225,27 @@ La sección está en **Catálogo → Banco por idioma y dificultad**. Cada celda
 
 ## Límites conocidos
 
-- **Capacidad del generador.** El generador solo publica lo que el léxico permite demostrar, así que su capacidad depende del vocabulario con sinónimos confirmados. Con la versión `bank-1.1` (hasta dos alternativas de material por mecanismo, respuestas desde frecuencia zipf 2,2) y las reglas de duplicados actuales, la capacidad medida en local es de unos **4.300 crípticos en español y 12.400 en inglés**, repartidos de forma desigual:
+- **Capacidad del generador.** El generador solo publica lo que el léxico permite demostrar, así que su capacidad depende del vocabulario con sinónimos confirmados. Capacidad medida en local, con las reglas de duplicados actuales:
 
-  | Idioma | 1 | 2 | 3 | 4 | 5 | Total |
-  |---|---|---|---|---|---|---|
-  | es | 554 | 1.265 | 1.765 | 632 | 99 | 4.315 |
-  | en | 996 | 3.164 | 4.454 | 3.129 | 615 | 12.358 |
+  | Versión | Idioma | 1 | 2 | 3 | 4 | 5 | Total |
+  |---|---|---|---|---|---|---|---|
+  | `bank-1.1` | es | 554 | 1.265 | 1.765 | 632 | 99 | 4.315 |
+  | `bank-1.1` | en | 996 | 3.164 | 4.454 | 3.129 | 615 | 12.358 |
+  | `bank-1.2` | es | 1.045 | 3.743 | 6.506 | 2.780 | 388 | 14.462 |
 
-  Casi la mitad de las respuestas posibles en español no tienen ningún juego de palabras demostrable con el léxico (los sinónimos en español exigen dos fuentes que coincidan). Es decir, el generador solo no alcanza las 100.000: llega a cerca del 17 % de la meta total (la versión `bank-1.0` llegaba a 3.400 y 9.500).
+  En inglés `bank-1.2` no cambia nada. Casi 5 de cada 6 pistas nuevas son anagramas, porque es el juego que el léxico permite demostrar con más respuestas.
+- **Formas flexionadas (desde `bank-1.2`, solo español).** Además de las respuestas tal como están en el léxico, el banco recorre sus formas flexionadas, cada una con definiciones en la misma forma:
+
+  | Forma | Ejemplo | Regla |
+  |---|---|---|
+  | `plural` | CASAS: «hogares» | Sustantivos y adjetivos. Nunca los incontables (sustancias, comidas, estados, cualidades, sentimientos, procesos, fenómenos), ni los que no varían (crisis) o ganan una tilde nueva (examen → exámenes). |
+  | `feminine`, `feminine_plural` | RÁPIDA, ALTAS | Adjetivos en -o. Los invariables (verde) concuerdan con todos. |
+  | `gerund` | CORRIENDO: «huyendo» | Verbos regulares. |
+  | `participle` | LIMPIADO | Verbos regulares; los participios irregulares (roto, hecho, dicho, escrito, puesto…) se descartan. |
+  | `present3`, `imperfect3` | CANTA, CORRÍA | Tercera persona del singular. Se descartan los verbos muy irregulares, los que cambian la raíz (piensa, cuenta, vuelve, pide) y los -iar/-uar o con hiato, que a veces llevan tilde (envía, reúne). |
+
+  Cada forma es un léxico derivado (`lexicon.derived('es', forma)` en `src/lib/bank/lexicon.js`): cambia el texto de las palabras y conserva sus sentidos, así que **cada definición sigue necesitando las dos fuentes** (wordnet y tesauro). Una definición solo vale si está en la misma forma que la respuesta (plural con plural, gerundio con gerundio), y toda forma derivada tiene que figurar en el diccionario de comprobación. La evidencia de cada pista guarda la forma (`evidence[].form`) y la verificación del lote la vuelve a comprobar contra ese mismo léxico derivado.
+- **Más material por respuesta (desde `bank-1.2`).** Hasta 3 pares de palabras distintos para los anagramas de dos palabras (sin compartir ninguna), formas flexionadas como material de anagrama («casas», «blanca») y umbrales de frecuencia un poco más bajos para piezas, frases ocultas e inversiones. Los topes por respuesta no cambian: 6 pistas por respuesta y 2 por mecanismo.
 - **Cómo se sigue.**
   - Cada versión nueva del generador (más mecanismos, más patrones de frase, plurales y formas flexionadas, nuevas fuentes léxicas) reinicia el recorrido de cada celda. Lo ya publicado se respeta: los duplicados se descartan solos.
   - Las fuentes externas con licencia y los crípticos de la comunidad aprobados también suman en su celda.
