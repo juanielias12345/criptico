@@ -7,6 +7,9 @@
 const { UI_LANGS } = require('../i18n');
 const { href } = require('../views/layout');
 const GUIDE = require('../views/guide');
+const ARTICLES = require('../views/articles');
+const ABOUT = require('../views/about');
+const { INDEXABLE_SQL } = require('./clues');
 
 const KEY = 'f976081f456136a4fab4599b0fb1881f';
 const ENDPOINT = 'https://api.indexnow.org/indexnow';
@@ -22,10 +25,12 @@ async function pendingUrls(db, siteUrl, since) {
         for (const m of Object.values(GUIDE[l].mechs)) urls.push(href(l, 'guide', '/' + m.slug));
         if (GUIDE[l].abbr) urls.push(href(l, 'guide', '/' + GUIDE[l].abbr.slug));
       }
+      if (ARTICLES[l]) { urls.push(href(l, 'articles')); for (const x of ARTICLES[l].items) urls.push(href(l, 'articles', '/' + x.slug)); }
+      if (ABOUT[l]) urls.push(href(l, 'about'), href(l, 'contact'));
     }
   }
   const clues = await db.all(`SELECT slug, language_code FROM clues WHERE status = 'published'
-    AND language_code IN (SELECT code FROM languages WHERE enabled = 1) ${since ? 'AND published_at > ?' : ''}
+    AND language_code IN (SELECT code FROM languages WHERE enabled = 1) AND ${INDEXABLE_SQL} ${since ? 'AND published_at > ?' : ''}
     ORDER BY published_at DESC LIMIT ?`, since ? [since, MAX] : [MAX]);
   for (const c of clues) if (UI_LANGS.includes(c.language_code)) urls.push(href(c.language_code, 'clue', '/' + c.slug));
   return urls.slice(0, MAX).map((u) => siteUrl + u);

@@ -4,13 +4,15 @@ const express = require('express');
 const { layout, esc, href, ICON } = require('../views/layout');
 const CONTENT = require('../views/content');
 const { t, ROUTES, UI_LANGS, pickUiLang } = require('../i18n');
-const { publicClue } = require('../services/clues');
+const { publicClue, INDEXABLE_SQL, isIndexable } = require('../services/clues');
 const { today } = require('../services/game');
 const PROFILE = require('../services/profile');
 const PTEXT = require('../views/profile-text');
 const { cardText } = require('../views/share-card');
 const GUIDE = require('../views/guide');
 const FAQ = require('../views/faq');
+const ARTICLES = require('../views/articles');
+const ABOUT = require('../views/about');
 const { legalHtml, legalTitle } = require('../views/legal-md');
 const LEGAL = require('../db/legal-global');
 const { indicators: ES_INDICATORS } = require('../lib/lang/es');
@@ -62,6 +64,25 @@ function tryWidget(ex, lang, { label } = {}) {
   </div>
 </div>`;
 }
+
+// Texto editorial con **negrita** y [enlaces](ruta/resto) a páginas del sitio (ver views/articles.js).
+function inlineHtml(text, lang, vars = {}) {
+  return esc(text)
+    .replace(/\{(\w+)\}/g, (m, k) => (vars[k] != null ? vars[k] : m))
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\[([^\]]+)\]\((\w+)((?:\/[\w-]+)*)\)/g, (m, label, route, rest) => (ROUTES[lang] && route in ROUTES[lang] ? `<a href="${href(lang, route, rest)}">${label}</a>` : label));
+}
+function blocksHtml(blocks, lang, vars) {
+  return blocks.map(([kind, v]) => {
+    if (kind === 'h2') return `<h2>${esc(v)}</h2>`;
+    if (kind === 'p') return `<p>${inlineHtml(v, lang, vars)}</p>`;
+    if (kind === 'ul' || kind === 'ol') return `<${kind}>${v.map((x) => `<li>${inlineHtml(x, lang, vars)}</li>`).join('')}</${kind}>`;
+    if (kind === 'try') return tryWidget(v, lang);
+    return '';
+  }).join('\n');
+}
+// Texto plano de un artículo (para contar palabras y para llms.txt).
+const blocksText = (blocks) => blocks.map(([k, v]) => (k === 'try' ? '' : Array.isArray(v) ? v.join(' ') : v)).join(' ').replace(/\*\*|\[|\]\([\w/-]+\)/g, '');
 
 function clueRow(c, lang, cats, { solved, fresh, daily } = {}) {
   const pub = publicClue(c);
@@ -160,10 +181,14 @@ ${FAQ.es.items.slice(0, 5).map(([q, ans]) => `- **${q}** ${faqText(ans, (r) => `
 ${Object.entries(G.mechs).map(([k, m]) => `- [${t('es', 'mech_' + k)}](${u('guide', '/' + m.slug)}): ${m.description}`).join('\n')}
 - [Preguntas frecuentes](${u('faq')})
 
+## Artículos
+${ARTICLES.es.items.map((x) => `- [${x.title}](${u('articles', '/' + x.slug)}): ${x.summary}`).join('\n')}
+
 ## Optional
 - [Play Crípticos Plus](${u('plus')}): plan opcional sin anuncios.
 - [Proponer un críptico](${u('contribute')})
 - [Créditos y licencias](${u('credits')})
+- [Quiénes somos](${u('about')}) y [contacto](${u('contact')})
 `);
   });
 
@@ -172,7 +197,7 @@ ${Object.entries(G.mechs).map(([k, m]) => `- [${t('es', 'mech_' + k)}](${u('guid
   const SITEMAP_BATCH = 10000;
   const BUILD_DAY = new Date().toISOString().slice(0, 10);
   const xmlUrls = (siteUrl, rows) => `<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${rows.map(([u, mod]) => `<url><loc>${esc(siteUrl + u)}</loc>${mod ? `<lastmod>${esc(mod)}</lastmod>` : ''}</url>`).join('')}</urlset>`;
-  const PUBLISHED = "status = 'published' AND language_code IN (SELECT code FROM languages WHERE enabled = 1)";
+  const PUBLISHED = `status = 'published' AND language_code IN (SELECT code FROM languages WHERE enabled = 1) AND ${INDEXABLE_SQL}`;
 
   r.get('/sitemap.xml', a(async (req, res) => {
     const { siteUrl } = req.app.locals.config;
@@ -187,6 +212,11 @@ ${Object.entries(G.mechs).map(([k, m]) => `- [${t('es', 'mech_' + k)}](${u('guid
     const db = req.app.locals.db;
     const urls = [];
     for (const l of UI_LANGS) for (const route of ['home', 'play', 'arena', 'plus', 'daily', 'archive', 'contribute', 'help', 'faq', 'privacy', 'terms', 'credits']) urls.push(href(l, route));
+    for (const l of UI_LANGS.filter((x) => ABOUT[x])) urls.push(href(l, 'about'), href(l, 'contact'));
+    for (const l of UI_LANGS.filter((x) => ARTICLES[x])) {
+      urls.push(href(l, 'articles'));
+      for (const x of ARTICLES[l].items) urls.push(href(l, 'articles', '/' + x.slug));
+    }
     if (UI_LANGS.includes('es')) {
       const company = require('../services/company');
       for (const doc of LEGAL.PUBLIC.filter((d) => d !== 'terms' && d !== 'privacy')) if (await company.publicLegal(db, doc)) urls.push(href('es', 'legal', '/' + doc));
@@ -273,7 +303,8 @@ ${Object.entries(G.mechs).map(([k, m]) => `- [${t('es', 'mech_' + k)}](${u('guid
     // Las páginas con anuncios llevan su propia política de seguridad, con nonce (ver services/ads.js).
     const render = (req, res, opts) => {
       let ads = null;
-      if (res.locals.adsOn && ADS.AD_PAGES.has(opts.page)) {
+      // Nunca en páginas que se le ocultan a Google (noindex): AdSense las revisa igual y cuentan como poco contenido.
+      if (res.locals.adsOn && ADS.AD_PAGES.has(opts.page) && !opts.noindex) {
         ads = { nonce: ADS.newNonce() };
         res.setHeader('Content-Security-Policy', ADS.adsCsp(ads.nonce));
         res.setHeader('Cross-Origin-Opener-Policy', 'same-origin-allow-popups');
@@ -355,6 +386,12 @@ ${mechs.length ? `<section class="section" aria-labelledby="mech-t">
   <ul class="mech-index">${mechs.map((m) => `<li><a href="${P('archive')}?mechanism=${m}"><span class="name">${esc(t(lang, 'mech_' + m))}</span><span class="n">${esc(plural(lang, mechCounts[m], 'n_clue', 'n_clues'))}</span><span class="what">${esc(t(lang, 'mechhelp_' + m))}</span></a></li>`).join('')}</ul>
 </section>` : ''}
 
+${ARTICLES[lang] ? `<section class="section" aria-labelledby="art-t">
+  <div class="section-head"><div><p class="eyebrow">04</p><h2 id="art-t">${esc(ARTICLES[lang].title)}</h2></div><p class="lead">${esc(ARTICLES[lang].lead)}</p></div>
+  <ul class="mech-index article-index">${ARTICLES[lang].items.slice(0, 3).map((x) => `<li><a href="${P('articles')}/${x.slug}"><span class="name">${esc(x.title)}</span><span class="n">${esc(ARTICLES[lang].minutes(x.minutes))}</span><span class="what">${esc(x.summary)}</span></a></li>`).join('')}</ul>
+  <p><a class="link-btn" href="${P('articles')}">${esc(t(lang, 'nav_articles'))} →</a></p>
+</section>` : ''}
+
 <section class="section duo" aria-label="${esc(t(lang, 'banner_daily_t'))}">
   <div class="banner"><div><h2>${esc(t(lang, 'banner_daily_t'))}</h2><p>${esc(t(lang, 'banner_daily'))}</p></div><a class="btn" href="${P('daily')}">${esc(t(lang, 'banner_daily_cta'))}</a></div>
   <div class="banner"><div><h2>${esc(t(lang, 'banner_contrib_t'))}</h2><p>${esc(t(lang, 'banner_contrib'))}</p></div><a class="btn" href="${P('contribute')}">${esc(t(lang, 'banner_contrib_cta'))}</a></div>
@@ -367,7 +404,13 @@ ${mechs.length ? `<section class="section" aria-labelledby="mech-t">
       page: 'play', path: P('play'), alternates: altFor('play'), title: t(lang, 'nav_play'), ...seo(lang, 'play'),
       boot: { mode: req.query.mode || null },
       body: `<h1 class="sr-only">${esc(t(lang, 'play_title'))}</h1>
-<section class="game" id="game">${skeleton}<noscript><p class="notice">${lang === 'es' ? 'El juego necesita JavaScript.' : 'The game needs JavaScript.'}</p></noscript></section>`,
+<section class="game" id="game">${skeleton}<noscript><p class="notice">${lang === 'es' ? 'El juego necesita JavaScript.' : 'The game needs JavaScript.'}</p></noscript></section>
+${lang === 'es' ? `<section class="section play-about" aria-labelledby="play-about-t"><article class="prose">
+<h2 id="play-about-t">Cómo se juega</h2>
+<p>Cada pista esconde una palabra. Una parte de la pista es una definición, al principio o al final; el resto es un juego de letras que lleva a la misma respuesta. El número entre paréntesis indica cuántas letras tiene. Escribí tu respuesta y tocá «Comprobar»: si no sale, pedí una pista (primero te marcamos la definición, después la primera letra) o revelá la solución con su explicación paso a paso.</p>
+<p>El modo infinito no tiene límite: cuando resolvés uno, viene otro, sin repetir los que ya viste. Podés elegir la dificultad (de muy fácil a experto), un tema o un modo distinto, como contrarreloj o racha de aciertos. Si es tu primera vez, empezá por el nivel principiante y el aprendizaje guiado.</p>
+<p>¿Querés entender mejor los trucos? Mirá las <a href="${P('help')}">lecciones de Cómo jugar</a>, la <a href="${P('guide')}">guía de mecanismos</a> o el artículo <a href="${P('articles')}/como-resolver-tu-primer-criptico">cómo resolver tu primer críptico</a>.</p>
+</article></section>` : ''}`,
     }));
 
     // ── Desafío diario con calendario ──
@@ -502,7 +545,7 @@ ${mechs.length ? `<section class="section" aria-labelledby="mech-t">
       const G = GUIDE[lang] && GUIDE[lang].mechs[pub.mechanism];
       const crumbs = [[t(lang, 'archive_title'), P('archive')], [t(lang, 'mech_' + pub.mechanism), G ? href(lang, 'guide', '/' + G.slug) : P('archive')], [pub.clue, href(canonicalLang, 'clue', '/' + c.slug)]];
       render(req, res, {
-        page: 'clue', path: href(canonicalLang, 'clue', '/' + c.slug), title: pub.clue,
+        page: 'clue', path: href(canonicalLang, 'clue', '/' + c.slug), title: pub.clue, noindex: !isIndexable(c),
         description: `${t(lang, 'mech_' + pub.mechanism)} · ${t(lang, 'diff_' + pub.difficulty)} — ${pub.clue}`,
         alternates: { [canonicalLang]: href(canonicalLang, 'clue', '/' + c.slug) },
         boot: { slug: c.slug, clueLang: c.language_code, clueVariant: c.variant_code },
@@ -514,7 +557,9 @@ ${mechs.length ? `<section class="section" aria-labelledby="mech-t">
 <article class="game" id="game"><div class="sheet"><h1 class="clue-text" lang="${esc(c.language_code)}">${clueWithEnum(pub.clue)}</h1></div></article>
 ${source ? `<p class="attribution">${esc(t(lang, 'source'))}: <a href="${esc(c.source_url || source.url)}" rel="noopener nofollow">${esc(c.attribution || source.name)}</a>${c.license_id ? ` · ${esc(c.license_id)}` : ''}</p>` : ''}
 ${pub.author && c.origin === 'community' ? `<p class="attribution">${esc(t(lang, 'by'))} ${esc(pub.author)}</p>` : ''}
-${G ? `<section class="section about-mech" aria-labelledby="mech-h"><h2 id="mech-h">${esc(t(lang, 'mech_' + pub.mechanism))}</h2><p>${esc(t(lang, 'mechhelp_' + pub.mechanism))} <a href="${href(lang, 'guide', '/' + G.slug)}">${esc(GUIDE[lang].guide_link)}</a></p></section>` : ''}
+${G ? `<section class="section about-mech" aria-labelledby="mech-h"><h2 id="mech-h">${esc(t(lang, 'mech_' + pub.mechanism))}</h2><p>${esc(t(lang, 'mechhelp_' + pub.mechanism))} <a href="${href(lang, 'guide', '/' + G.slug)}">${esc(GUIDE[lang].guide_link)}</a></p>
+${G.intro ? `<p>${esc(G.intro[G.intro.length - 1])}</p>` : ''}
+${G.example && G.example.answer !== String(c.answer || '').toUpperCase() ? `<h3>${esc(GUIDE[lang].example_t)}</h3>${tryWidget(G.example, lang)}` : ''}</section>` : ''}
 ${related.length ? `<section class="section" aria-labelledby="rel-h"><h2 id="rel-h">${esc(GUIDE[lang] ? GUIDE[lang].related_t : t(lang, 'try_more'))}</h2><ul class="clue-list">${related.map((x) => clueRow(x, lang, cats)).join('')}</ul></section>` : ''}`,
       });
     }));
@@ -577,6 +622,72 @@ ${FAQ[lang] ? `<p class="section"><a class="link-btn" href="${P('faq')}">${esc(F
 <section class="banner section"><div><h2>${esc(t(lang, 'try_more'))}</h2><p>${esc(t(lang, 'play_lead'))}</p></div><a class="btn" href="${P('play')}">${esc(t(lang, 'home_cta'))}</a></section>`,
         });
       });
+    }
+
+    // ── Artículos: contenido editorial largo (historia, método, glosario, escritura) ──
+    const AR = ARTICLES[lang];
+    if (AR) {
+      const fmtDate = (d) => d.split('-').reverse().join('/');
+      const card = (x) => `<li><a href="${P('articles')}/${x.slug}"><span class="name">${esc(x.title)}</span><span class="n">${esc(AR.minutes(x.minutes))}</span><span class="what">${esc(x.summary)}</span></a></li>`;
+      r.get(P('articles'), (req, res) => {
+        const siteUrl = req.app.locals.config.siteUrl;
+        render(req, res, {
+          page: 'articles', path: P('articles'), alternates: { [lang]: P('articles') }, title: AR.title, seoTitle: AR.seoTitle, description: AR.description,
+          jsonLd: { '@context': 'https://schema.org', '@graph': [
+            { '@type': 'CollectionPage', name: AR.title, description: AR.description, inLanguage: lang,
+              hasPart: AR.items.map((x) => ({ '@type': 'Article', headline: x.title, url: siteUrl + P('articles') + '/' + x.slug })) },
+            breadcrumbs(siteUrl, [[t(lang, 'nav_help'), P('help')], [AR.title, P('articles')]])] },
+          body: `<header class="page-head"><p class="eyebrow">${esc(t(lang, 'footer_learn'))}</p><h1>${esc(AR.title)}</h1><p class="lead">${esc(AR.lead)}</p></header>
+<ul class="mech-index article-index">${AR.items.map(card).join('')}</ul>
+<section class="banner section"><div><h2>${esc(GUIDE[lang] ? GUIDE[lang].title : t(lang, 'help_title'))}</h2><p>${esc(GUIDE[lang] ? GUIDE[lang].lead : t(lang, 'help_lead'))}</p></div><a class="btn" href="${GUIDE[lang] ? P('guide') : P('help')}">${esc(t(lang, GUIDE[lang] ? 'nav_guide' : 'nav_help'))}</a></section>`,
+        });
+      });
+      for (const x of AR.items) {
+        r.get(`${P('articles')}/${x.slug}`, (req, res) => {
+          const siteUrl = req.app.locals.config.siteUrl;
+          const others = AR.items.filter((o) => o !== x).slice(0, 3);
+          render(req, res, {
+            page: 'article', path: `${P('articles')}/${x.slug}`, alternates: { [lang]: `${P('articles')}/${x.slug}` }, title: x.title, seoTitle: x.seoTitle, description: x.description,
+            jsonLd: { '@context': 'https://schema.org', '@graph': [
+              { '@type': 'Article', headline: x.title, description: x.description, inLanguage: lang, datePublished: x.date, dateModified: x.date,
+                wordCount: blocksText(x.body).split(/\s+/).filter(Boolean).length, isAccessibleForFree: true, mainEntityOfPage: siteUrl + P('articles') + '/' + x.slug,
+                author: { '@type': 'Organization', '@id': siteUrl + '/#org', name: req.app.locals.config.siteName },
+                publisher: { '@type': 'Organization', '@id': siteUrl + '/#org', name: req.app.locals.config.siteName, logo: { '@type': 'ImageObject', url: siteUrl + '/icon-512.png' } } },
+              breadcrumbs(siteUrl, [[AR.title, P('articles')], [x.title, P('articles') + '/' + x.slug]])] },
+            body: `<nav class="crumbs" aria-label="Ruta"><a href="${P('articles')}">${esc(AR.title)}</a></nav>
+<article class="prose article">
+<h1>${esc(x.title)}</h1>
+<p class="small muted">${esc(AR.by)} · ${esc(AR.updated)} <time datetime="${x.date}">${fmtDate(x.date)}</time> · ${esc(AR.minutes(x.minutes))}</p>
+${blocksHtml(x.body, lang)}
+</article>
+<section class="banner section"><div><h2>${esc(AR.play_t)}</h2><p>${esc(AR.play_txt)}</p></div><a class="btn" href="${P('play')}">${esc(t(lang, 'home_cta'))}</a></section>
+<section class="section" aria-labelledby="more-art"><h2 id="more-art">${esc(AR.more_t)}</h2><ul class="mech-index article-index">${others.map(card).join('')}</ul></section>`,
+          });
+        });
+      }
+    }
+
+    // ── Quiénes somos y contacto ──
+    const AB = ABOUT[lang];
+    if (AB) {
+      for (const key of ['about', 'contact']) {
+        const D = AB[key];
+        r.get(P(key), (req, res) => {
+          const siteUrl = req.app.locals.config.siteUrl;
+          const email = LEGAL.OWNER && LEGAL.OWNER.email;
+          render(req, res, {
+            page: key, path: P(key), alternates: { [lang]: P(key) }, title: D.title, seoTitle: D.seoTitle, description: D.description,
+            jsonLd: { '@context': 'https://schema.org', '@graph': [
+              { '@type': key === 'about' ? 'AboutPage' : 'ContactPage', name: D.title, description: D.description, inLanguage: lang, url: siteUrl + P(key),
+                about: { '@id': siteUrl + '/#org' } },
+              { '@type': 'Organization', '@id': siteUrl + '/#org', name: req.app.locals.config.siteName, url: siteUrl, logo: siteUrl + '/icon-512.png', sameAs: SAME_AS,
+                ...(email ? { email, contactPoint: { '@type': 'ContactPoint', contactType: 'customer support', email, availableLanguage: ['es'] } } : {}) }] },
+            body: `<header class="page-head"><p class="eyebrow">${esc(req.app.locals.config.siteName)}</p><h1>${esc(D.title)}</h1><p class="lead">${esc(D.lead)}</p></header>
+<article class="prose">${blocksHtml(D.body, lang, { email: email ? `<a href="mailto:${esc(email)}">${esc(email)}</a>` : esc(t(lang, 'nav_contribute')) })}</article>
+<section class="banner section"><div><h2>${esc(t(lang, 'try_more'))}</h2><p>${esc(t(lang, 'play_lead'))}</p></div><a class="btn" href="${P('play')}">${esc(t(lang, 'home_cta'))}</a></section>`,
+          });
+        });
+      }
     }
 
     // ── Guía de mecanismos: índice y una página por mecanismo ──
@@ -787,7 +898,14 @@ ${isPlus ? `<section class="plus-daily"><h2>Crípticos Plus del día</h2><sectio
     const ARENA_BODY = (extra = '') => `<header class="page-head arena-head"><p class="eyebrow">${esc(t(lang, 'nav_arena'))}</p><h1>${esc(lang === 'es' ? 'Duelos y torneos' : 'Duels & tournaments')}</h1>
 <p class="lead">${esc(lang === 'es' ? 'Desafiá a tus amigos o a quien quieras, sumá puntos por acertar rápido y anotate en el torneo semanal: un críptico nuevo por día.' : 'Challenge your friends, score points for fast answers and join the weekly tournament.')}</p></header>
 ${extra}<section id="arena-root" class="arena" aria-live="polite">${skeleton}</section>
-<noscript><p class="notice">${esc(lang === 'es' ? 'Los duelos y torneos necesitan JavaScript.' : 'Duels and tournaments need JavaScript.')}</p></noscript>`;
+<noscript><p class="notice">${esc(lang === 'es' ? 'Los duelos y torneos necesitan JavaScript.' : 'Duels and tournaments need JavaScript.')}</p></noscript>
+${lang === 'es' ? `<section class="section arena-rules" aria-labelledby="arena-rules-t"><article class="prose">
+<h2 id="arena-rules-t">Reglas de duelos y torneos</h2>
+<p><strong>Duelos.</strong> Elegís a quién desafiar (un amigo o cualquiera que abra tu enlace), la cantidad de rondas (3 o 5) y la dificultad. Las dos personas resuelven los mismos crípticos, cada una a su ritmo, y gana quien suma más puntos.</p>
+<p><strong>Torneo semanal.</strong> Empieza cada lunes a las 00:00 UTC y dura siete días, con un críptico nuevo por día que sube de dificultad a lo largo de la semana. Cada ronda se puede jugar el día que se abre y el siguiente. Hace falta anotarse y tener cuenta para aparecer en el ranking.</p>
+<p><strong>Puntos.</strong> Acertar vale hasta 100 puntos: cada pista pedida descuenta 20 y cada intento fallido descuenta 10, con un mínimo de 20 si acertás. Además hay un bonus de velocidad de hasta 100 puntos: completo si resolvés en 10 segundos o menos y decreciente hasta los 3 minutos (una respuesta en menos de 3 segundos no suma bonus). Revelar la solución no suma.</p>
+<p>Plus no da ninguna ventaja: los duelos y torneos son iguales para todos. Si recién empezás, practicá antes en <a href="${P('play')}">Jugar</a> o con el <a href="${P('daily')}">críptico del día</a>.</p>
+</article></section>` : ''}`;
     r.get(P('arena'), (req, res) => render(req, res, {
       page: 'arena', path: P('arena'), alternates: altFor('arena'), title: t(lang, 'nav_arena'),
       description: lang === 'es' ? 'Duelos de crípticos contra tus amigos y un torneo semanal con ranking: puntos por acertar y por velocidad.' : undefined,
