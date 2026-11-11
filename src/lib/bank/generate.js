@@ -20,7 +20,7 @@ const SURFACE = require('./surface');
 const { walk, mechanismsIn } = require('../validator/wordplay');
 const LANG = { es: require('../lang/es'), en: require('../lang/en') };
 
-const VERSION = 'bank-1.1';
+const VERSION = 'bank-1.2';
 
 const CATEGORY_BY_LEX = {
   5: 'animales', 6: 'objetos', 8: 'ciencia', 9: 'cultura', 10: 'lenguaje', 12: 'sentimientos', 37: 'sentimientos',
@@ -65,6 +65,15 @@ function genderEs(t) {
   return null;
 }
 
+// Plural de una forma de adjetivo ya concordada en género (blanco → blancos,
+// verde → verdes, azul → azules, feliz → felices). Las demás se evitan.
+function adjPluralEs(t) {
+  if (/[aeo]$/.test(t)) return t + 's';
+  if (/z$/.test(t)) return t.slice(0, -1) + 'ces';
+  if (/[lr]$/.test(t) && !/[áéíóú]/.test(t)) return t + 'es';
+  return null;
+}
+
 function adjFormsEs(t) {
   if (/(or|ón|án|ín|és)$/.test(t)) return null;   // varían de forma irregular: se evitan
   if (/o$/.test(t)) return { m: t, f: t.slice(0, -1) + 'a' };
@@ -75,11 +84,13 @@ function adjFormsEs(t) {
 class Engine {
   constructor(lang, opts = {}) {
     this.lang = lang;
-    this.L = lexicon.load(lang);
-    if (!this.L) throw new Error('lexicon_missing:' + lang);
+    this.form = opts.form || null;
+    this.L = this.form ? lexicon.derived(lang, this.form) : lexicon.load(lang);
+    if (!this.L) throw new Error('lexicon_missing:' + lang + (this.form ? ':' + this.form : ''));
     this.S = SURFACE[lang];
     this.R = LANG[lang];
-    this.opts = { minAnswerZipf: 2.2, minPieceZipf: 3.4, alternatives: 2, ...opts };
+    this.opts = { minAnswerZipf: 2.2, minPieceZipf: 3.4, alternatives: 2, fodderZipf: 3.2, fodderInflected: false,
+      nounZipf: 3.6, adjZipf: 3.9, defMinZipf: 3, defMaxRank: 1, pieceDefZipf: 3.3, litZipf: 3.3, delZipf: 3.5, twoWordAnagrams: 1, hiddenMax: 3, ...opts };
     this.pieceCache = new Map();
     this.defCache = new Map();
   }
@@ -90,7 +101,7 @@ class Engine {
     const L = this.L;
     const bySorted = new Map(); const list = [];
     L.words.forEach((w, i) => {
-      if (!L.single(i) || L.zipf(i) < 3.2 || !L.checkable(i) || L.inflected(i)) return;
+      if (!L.single(i) || L.zipf(i) < this.opts.fodderZipf || !L.checkable(i) || (!this.opts.fodderInflected && L.inflected(i))) return;
       const k = L.key(i);
       if (k.length < 3) return;
       const s = sortKey(k);
@@ -114,9 +125,10 @@ class Engine {
     L.words.forEach((w, i) => {
       if (!L.single(i) || !L.checkable(i) || L.inflected(i) || L.key(i).length < 3) return;
       if (INTERJECTIONS.has(L.text(i))) return;
+      if (this.form && this.form !== 'plural' && L.isDerived(i)) return;
       const p = L.pos(i);
-      if (p === 'n' && L.zipf(i) >= 3.6) nouns.push(i);
-      if (p === 'a' && L.zipf(i) >= 3.9) adjs.push(i);
+      if (p === 'n' && L.zipf(i) >= this.opts.nounZipf) nouns.push(i);
+      if (p === 'a' && L.zipf(i) >= this.opts.adjZipf) adjs.push(i);
     });
     const ends = (map, text, k, z, g) => { for (let s = 1; s <= Math.min(8, k.length); s++) addTo(map, k.slice(-s), { text, k, z, g }); };
     const starts = (map, text, k, z, g) => { for (let s = 1; s <= Math.min(8, k.length); s++) addTo(map, k.slice(0, s), { text, k, z, g }); };
@@ -125,16 +137,24 @@ class Engine {
       for (const n of nouns) if (L.zipf(n) >= 4.2) ends(first, L.text(n), L.key(n), L.zipf(n) - 0.2, null);
       for (const n of nouns) starts(second, L.text(n), L.key(n), L.zipf(n), null);
     } else {
+      // en el léxico de plurales, la frase concuerda también en número:
+      // «casas blancas», «perro blanco»
+      const num = (i) => (L.isPlural(i) ? 'p' : 's');
       for (const n of nouns) {
-        const g = genderEs(L.text(n));
+        const g0 = genderEs(L.isPlural(n) ? L.baseText[n] : L.text(n));
+        const g = g0 && g0 + num(n);
         if (g) ends(first, L.text(n), L.key(n), L.zipf(n), g);
         ends(nounEnd, L.text(n), L.key(n), L.zipf(n), null);
         starts(nounStart, L.text(n), L.key(n), L.zipf(n), null);
       }
       for (const a of adjs) {
-        const f = adjFormsEs(L.text(a));
+        const f = adjFormsEs(L.isPlural(a) ? L.baseText[a] : L.text(a));
         if (!f) continue;
-        for (const g of ['m', 'f']) starts(second, f[g], N.letters(f[g], 'es'), L.zipf(a), g);
+        for (const g of ['m', 'f']) {
+          starts(second, f[g], N.letters(f[g], 'es'), L.zipf(a), g + 's');
+          const pl = this.form === 'plural' && adjPluralEs(f[g]);
+          if (pl) starts(second, pl, N.letters(pl, 'es'), L.zipf(a) - 0.2, g + 'p');
+        }
       }
       for (const m of [first, second, nounEnd, nounStart]) for (const v of m.values()) v.sort((x, y) => y.z - x.z);
     }
@@ -169,6 +189,9 @@ class Engine {
       const t = L.text(i); const k = L.key(i);
       if (!L.single(i) || k.length < 4 || k.length > 12) return;
       if (L.zipf(i) < this.opts.minAnswerZipf || !L.checkable(i) || L.inflected(i)) return;
+      // en un motor de formas derivadas, solo las respuestas que cambian de forma
+      // (las demás ya las recorre el motor normal)
+      if (this.form && (!L.isDerived(i) || L.text(i) === L.baseText[i] || L.byText.get(L.text(i)) !== i)) return;
       if (!this.defs(i).length) return;
       if (this.lang === 'en' && !/^[a-z]+$/.test(t)) return;
       out.push(i);
@@ -179,7 +202,7 @@ class Engine {
   }
 
   defs(i) {
-    if (!this.defCache.has(i)) this.defCache.set(i, this.L.definitions(i, { minZipf: 3, maxRank: 1 }));
+    if (!this.defCache.has(i)) this.defCache.set(i, this.L.definitions(i, { minZipf: this.opts.defMinZipf, maxRank: this.opts.defMaxRank }));
     return this.defCache.get(i);
   }
 
@@ -193,7 +216,7 @@ class Engine {
       if (k.length >= 3) {
         for (const j of L.withKey(k)) {
           if (!L.single(j) || L.zipf(j) < this.opts.minPieceZipf || !L.checkable(j) || L.inflected(j)) continue;
-          const d = L.definitions(j, { minZipf: 3.3, maxRank: 0, maxWords: 2 }).find((x) => x.kind === 'syn' || x.z >= 4);
+          const d = L.definitions(j, { minZipf: this.opts.pieceDefZipf, maxRank: 0, maxWords: 2 }).find((x) => x.kind === 'syn' || x.z >= 4);
           if (d) out.push({ op: 'syn', from: d.text, text: L.text(j), word: L.text(j), z: Math.min(L.zipf(j), d.z), ev: { word: L.text(j), def: d.text, kind: d.kind, synset: d.synset } });
         }
       }
@@ -236,7 +259,7 @@ class Engine {
     };
 
     // Palabra oculta
-    for (const hid of this.hiddenPhrases(K, A)) {
+    for (const hid of this.hiddenPhrases(K, A, this.opts.hiddenMax)) {
       both('h' + hid.phrase, (d) => plans.push({ type: 'hidden', d, phrase: hid.phrase, z: hid.z }));
     }
 
@@ -249,14 +272,15 @@ class Engine {
       both('a1' + t, (d) => plans.push({ type: 'anagram1', d, fodder: [t], z: L.zipf(j) }));
       if (++nA >= alt) break;
     }
-    const two = this.twoWordAnagram(K, A);
-    if (two) both('a2', (d) => plans.push({ type: 'anagram2', d, fodder: two.words, z: two.z }));
+    for (const [n, two] of this.twoWordAnagrams(K, A, this.opts.twoWordAnagrams).entries()) {
+      both('a2' + (n ? two.words.join('') : ''), (d) => plans.push({ type: 'anagram2', d, fodder: two.words, z: two.z }));
+    }
 
     // Inversión
     const rev = [...K].reverse().join('');
     if (rev !== K) {
       for (const j of L.withKey(rev)) {
-        if (!L.single(j) || L.zipf(j) < 3.3 || !L.checkable(j) || L.inflected(j)) continue;
+        if (!L.single(j) || L.zipf(j) < this.opts.litZipf || !L.checkable(j) || L.inflected(j)) continue;
         const t = L.text(j);
         both('rl' + t, (d) => plans.push({ type: 'reversal_lit', d, piece: { op: 'lit', text: t, word: t }, z: L.zipf(j) }));
         const p = this.pieces(rev, A).find((x) => x.op === 'syn' && x.word === t);
@@ -269,7 +293,7 @@ class Engine {
     for (const c of ALPHA + (this.lang === 'es' ? 'Ñ' : '')) {
       for (const [k2, remove] of [[c + K, 'first'], [K + c, 'last']]) {
         for (const j of L.withKey(k2)) {
-          if (!L.single(j) || L.zipf(j) < 3.5 || !L.checkable(j) || L.inflected(j)) continue;
+          if (!L.single(j) || L.zipf(j) < this.opts.delZipf || !L.checkable(j) || L.inflected(j)) continue;
           const t = L.text(j);
           if (plans.filter((p) => p.type === 'deletion_lit').length >= alt * 2) break;
           both('dl' + t, (d) => plans.push({ type: 'deletion_lit', d, remove, piece: { op: 'lit', text: t, word: t }, z: L.zipf(j) }));
@@ -393,11 +417,16 @@ class Engine {
     return found.sort((p, q) => q.z - p.z).slice(0, max);
   }
 
-  twoWordAnagram(K, A) {
+  twoWordAnagram(K, A) { return this.twoWordAnagrams(K, A, 1)[0] || null; }
+
+  // Pares de palabras cuyo anagrama da la respuesta, del más frecuente al menos
+  // frecuente. Dos pares distintos no comparten ninguna palabra, para que cada
+  // pista sea un juego de palabras realmente diferente.
+  twoWordAnagrams(K, A, max = 1) {
     const { list, bySorted } = this.fodder;
     const want = sortKey(K); const wantMask = maskOf(K);
     const counts = {}; for (const ch of K) counts[ch] = (counts[ch] || 0) + 1;
-    let best = null;
+    const found = [];
     for (const f of list) {
       if (f.k.length < 3 || f.k.length > K.length - 3) continue;
       if ((f.m & ~wantMask) !== 0) continue;
@@ -412,10 +441,17 @@ class Engine {
         if (t1 === t2 || lexicon.sameFamily(t1, A) || lexicon.sameFamily(t2, A)) continue;
         if (sortKey(f.k + this.L.key(j)) !== want) continue;
         const z = Math.min(this.L.zipf(f.i), this.L.zipf(j));
-        if (!best || z > best.z) best = { words: [t1, t2], z };
+        found.push({ words: [t1, t2], z });
       }
     }
-    return best;
+    found.sort((a, b) => b.z - a.z || (a.words.join() < b.words.join() ? -1 : 1));
+    const out = []; const used = new Set();
+    for (const p of found) {
+      if (out.length >= max) break;
+      if (p.words.some((w) => used.has(w))) continue;
+      p.words.forEach((w) => used.add(w)); out.push(p);
+    }
+    return out;
   }
 
   homophoneMates(i) {
@@ -578,6 +614,7 @@ class Engine {
       dedup_key: this.dedupKey(K, mechanism, wordplay),
       generator_version: VERSION,
     };
+    if (this.form) for (const e of evidence) e.form = this.form;
     clue.hints = hintsFor(clue, this.lang);
     return clue;
   }
@@ -643,4 +680,51 @@ function engine(lang) {
   return engines[lang];
 }
 
-module.exports = { Engine, engine, VERSION, hintsFor, genderEs, adjFormsEs, BASE, CATEGORY_BY_LEX };
+// Opciones del banco desde bank-1.2: más pares de palabras para anagramas
+// (cada par distinto es otro juego de palabras), formas flexionadas como
+// material de anagrama («casas», «blanca») y umbrales de frecuencia algo más
+// bajos para piezas, frases ocultas e inversiones. La validación no cambia.
+const BANK_OPTS = {
+  es: { twoWordAnagrams: 3, fodderInflected: true, fodderZipf: 3.0, minPieceZipf: 3.2, pieceDefZipf: 3.1, nounZipf: 3.4, adjZipf: 3.7, litZipf: 3.1, delZipf: 3.2 },
+  en: {},
+};
+
+// Motor del banco: para el español recorre primero las respuestas tal como
+// están en el léxico y después sus formas flexionadas (CASAS, BLANCA,
+// CANTANDO…), cada una con definiciones en la misma forma. Cada respuesta es un
+// número: las de la forma k van desde (k + 1) × FORM_BASE.
+const FORM_BASE = 10000000;
+const PLURAL_BASE = FORM_BASE;
+const BANK_FORMS = { es: ['plural', 'feminine', 'feminine_plural', 'gerund', 'participle', 'present3', 'imperfect3'], en: [] };
+class BankEngine {
+  constructor(lang) {
+    this.lang = lang;
+    this.base = new Engine(lang, BANK_OPTS[lang] || {});
+    this.forms = (BANK_FORMS[lang] || []).map((form) => new Engine(lang, { ...BANK_OPTS[lang], form }));
+  }
+
+  answers() {
+    if (!this._answers) {
+      this._answers = this.base.answers().slice();
+      this.forms.forEach((E, k) => { for (const i of E.answers()) this._answers.push((k + 1) * FORM_BASE + i); });
+    }
+    return this._answers;
+  }
+
+  pick(a) {
+    const k = Math.floor(a / FORM_BASE);
+    return k === 0 ? [this.base, a] : [this.forms[k - 1], a - k * FORM_BASE];
+  }
+
+  forDifficulty(a, difficulty, max, perMechanism) { const [E, i] = this.pick(a); return E.forDifficulty(i, difficulty, max, perMechanism); }
+  candidates(a) { const [E, i] = this.pick(a); return E.candidates(i); }
+  dedupKey(...args) { return this.base.dedupKey(...args); }
+}
+
+const bankEngines = {};
+function bankEngine(lang) {
+  if (!bankEngines[lang]) bankEngines[lang] = new BankEngine(lang);
+  return bankEngines[lang];
+}
+
+module.exports = { Engine, engine, bankEngine, BankEngine, BANK_OPTS, BANK_FORMS, FORM_BASE, PLURAL_BASE, adjPluralEs, VERSION, hintsFor, genderEs, adjFormsEs, BASE, CATEGORY_BY_LEX };

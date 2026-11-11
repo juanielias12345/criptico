@@ -96,6 +96,7 @@ class Lexicon {
   // femeninos de adjetivos): se evitan como respuesta y como definición
   // porque suelen arrastrar errores de concordancia.
   inflected(i) {
+    if (this.form && this.isDerived(i)) return false;
     const t = this.text(i);
     if (t.includes(' ')) return false;
     const has = (x) => this.byText.has(x);
@@ -135,6 +136,7 @@ class Lexicon {
       if (this.zipf(j) < minZipf || t.split(' ').length > maxWords) return;
       if (stemClash(t, this.text(i))) return;
       if (!this.checkable(j) || this.inflected(j) || !this.agrees(i, j)) return;
+      if (!this.sameNumber(i, j, this.synsets[sid].p)) return;
       seen.add(t);
       out.push({ text: t, word: j, kind, synset: this.synsets[sid].id, sense: own, lex: this.synsets[own].x, rankA, rankD, shared, z: this.zipf(j) });
     };
@@ -179,9 +181,163 @@ class Lexicon {
   // Palabras por letras exactas (anagramas, inversiones, piezas de charadas).
   withKey(k) { return this.byKey.get(k) || []; }
 
+  // En un léxico de formas derivadas (plurales, femeninos, gerundios,
+  // participios), una definición tiene que estar en la misma forma que la
+  // palabra: plural con plural, gerundio con gerundio. Los sentidos de otras
+  // categorías gramaticales solo valen entre palabras sin derivar. En el
+  // léxico normal siempre concuerdan.
+  sameNumber(i, j, p) {
+    if (!this.form) return true;
+    const a = this.isDerived(i); const b = this.isDerived(j);
+    return this.formPos.has(p) ? a === b : !a && !b;
+  }
+
+  isDerived(i) { return Boolean(this.flags && this.flags[i]); }
+  isPlural(i) { return this.form === 'plural' && this.isDerived(i); }
+
   pos(i) { const s = this.senses(i)[0]; return s === undefined ? null : this.synsets[s].p; }
   region(i) { const s = this.senses(i)[0]; return s === undefined ? null : (this.synsets[s].r || null); }
 }
+
+// ── formas derivadas del español ──
+// Cada léxico derivado cambia el texto de algunas palabras por una forma
+// flexionada y conserva sus sentidos, así que las definiciones salen de las
+// mismas dos fuentes (wordnet y tesauro) que en el léxico normal. Toda forma
+// derivada tiene que figurar además en el diccionario de comprobación.
+//
+// Sustantivos: solo los de plural sin dudas, y nunca los que suelen ser
+// incontables (sustancias, comidas, estados, cualidades, sentimientos,
+// procesos y fenómenos: «saludes», «calores» suenan raros).
+const PLURAL_NO_LEX = new Set([7, 12, 13, 19, 22, 26, 27]);
+const PLURAL_SKIP = new Set(['carácter', 'régimen', 'espécimen', 'gente', 'dinero', 'sed', 'fe', 'sal', 'miel', 'leche', 'arroz']);
+const UNACCENT = { á: 'a', é: 'e', í: 'i', ó: 'o', ú: 'u' };
+// participios irregulares: la forma regular a veces existe pero es arcaica («rompido»)
+const IRREGULAR_PARTICIPLE = /(romper|hacer|decir|scribir|^ver|prever|poner|morir|volver|abrir|cubrir|solver|primir|freír|facer|pudrir)$/;
+
+function syllables(t) { return (t.match(/[aeiouáéíóúü]+/g) || []).length; }
+
+function pluralEs(t) {
+  if (!/^[a-záéíóúñü]+$/.test(t) || t.length < 3 || PLURAL_SKIP.has(t)) return null;
+  const last = t[t.length - 1];
+  if ('aeoiuáéó'.includes(last)) return t + 's';
+  if ('íú'.includes(last) || 's' === last || 'x' === last || 'y' === last) return null;
+  if (last === 'z') return t.slice(0, -1) + 'ces';
+  if (!'lrdjn'.includes(last)) return null;
+  // aguda con tilde (camión, compás): la tilde se cae en el plural
+  const m = t.match(/([áéíóú])([^aeiouáéíóú]*)$/);
+  if (m && t.indexOf(m[1]) === t.length - 1 - m[2].length) return t.slice(0, -1 - m[2].length) + UNACCENT[m[1]] + m[2] + 'es';
+  if (/[áéíóú]/.test(t)) return t + 'es';            // llana con tilde: árbol → árboles
+  if (last === 'n' && syllables(t) > 1) return null;  // examen → exámenes: tilde nueva, se evita
+  return t + 'es';                                    // papel, motor, ciudad, reloj, pan
+}
+
+// Formas de un adjetivo: masculino y femenino singular (null si varía de forma irregular).
+function adjForms(t) {
+  if (!/^[a-záéíóúñü]+$/.test(t) || /(or|ón|án|ín|és|n)$/.test(t)) return null;
+  if (/o$/.test(t)) return { m: t, f: t.slice(0, -1) + 'a' };
+  if (/a$/.test(t)) return null;
+  if (/[áéíóú]$/.test(t)) return null;
+  return { m: t, f: t };
+}
+function adjPlural(t) {
+  if (/[aeo]$/.test(t)) return t + 's';
+  if (/z$/.test(t)) return t.slice(0, -1) + 'ces';
+  if (/[lr]$/.test(t) && !/[áéíóú]/.test(t)) return t + 'es';
+  return null;
+}
+
+function gerundEs(t) {
+  if (!/^[a-zñ]+(ar|er|ir)$/.test(t)) return null;
+  const stem = t.slice(0, -2);
+  if (t.endsWith('ar')) return stem + 'ando';
+  return /[aeiou]$/.test(stem) ? stem + 'yendo' : stem + 'iendo';
+}
+function participleEs(t) {
+  if (!/^[a-zñ]+(ar|er|ir)$/.test(t) || IRREGULAR_PARTICIPLE.test(t)) return null;
+  const stem = t.slice(0, -2);
+  if (t.endsWith('ar')) return stem + 'ado';
+  return /[aeiou]$/.test(stem) ? null : stem + 'ido';
+}
+
+// Presente e imperfecto, tercera persona del singular (canta, corre; cantaba,
+// corría). Se dejan afuera los verbos muy irregulares y los terminados en
+// -iar/-uar, que a veces llevan tilde (envía, continúa).
+const IRREGULAR_VERB = new Set(['ser', 'estar', 'ir', 'haber', 'tener', 'hacer', 'decir', 'poder', 'poner', 'querer', 'saber', 'venir',
+  'ver', 'dar', 'oír', 'caber', 'andar', 'traer', 'valer', 'salir', 'satisfacer', 'errar']);
+// El diccionario no distingue tildes, así que «pensa» pasaría por «pensá»
+// (voseo): para descartar los verbos que cambian la raíz (piensa, cuenta,
+// vuelve, pide) se exige además la tercera persona del plural regular
+// («cantan», «corren»), que no choca con ninguna otra forma.
+function present3Es(t) {
+  if (!/^[a-zñ]{2,}(ar|er|ir)$/.test(t) || IRREGULAR_VERB.has(t) || /[iu]ar$/.test(t) || /uir$/.test(t)) return null;
+  const stem = t.slice(0, -2);
+  if (/[aeo]h?[iu][^aeiou]*$/.test(stem)) return null;   // reúne, prohíbe, aísla: tilde
+  const ar = t.endsWith('ar');
+  if (!mitWords.has('es', stem + (ar ? 'an' : 'en'))) return null;
+  return stem + (ar ? 'a' : 'e');
+}
+function imperfect3Es(t) {
+  if (!/^[a-zñ]{2,}(ar|er|ir)$/.test(t) || ['ser', 'ir', 'ver'].includes(t)) return null;
+  const stem = t.slice(0, -2);
+  return stem + (t.endsWith('ar') ? 'aba' : 'ía');
+}
+
+const isAdj = (p) => p === 'a' || p === 's';
+const FORMS = {
+  // plural: sustantivos y adjetivos (casas, perros, blancos, verdes)
+  plural: { pos: new Set(['n', 'a', 's']), derive(base, i, t, p) {
+    if (p === 'n') return PLURAL_NO_LEX.has(base.synsets[base.senses(i)[0]].x) ? null : pluralEs(t);
+    if (isAdj(p)) { const f = adjForms(t); return f ? adjPlural(f.m) : null; }
+    return null;
+  } },
+  // femenino de adjetivos (blanca); los invariables (verde) quedan igual y concuerdan con todos
+  feminine: { pos: new Set(['a', 's']), derive(base, i, t, p) { const f = isAdj(p) && adjForms(t); return f ? f.f : null; } },
+  feminine_plural: { pos: new Set(['a', 's']), derive(base, i, t, p) { const f = isAdj(p) && adjForms(t); return f ? adjPlural(f.f) : null; } },
+  gerund: { pos: new Set(['v']), derive(base, i, t, p) { return p === 'v' ? gerundEs(t) : null; } },
+  participle: { pos: new Set(['v']), derive(base, i, t, p) { return p === 'v' ? participleEs(t) : null; } },
+  present3: { pos: new Set(['v']), derive(base, i, t, p) { return p === 'v' ? present3Es(t) : null; } },
+  imperfect3: { pos: new Set(['v']), derive(base, i, t, p) { return p === 'v' ? imperfect3Es(t) : null; } },
+};
+
+function deriveForm(base, form) {
+  const rule = FORMS[form];
+  const words = base.words.map((w) => w.slice());
+  const flags = new Uint8Array(words.length);
+  const baseText = new Array(words.length);
+  base.words.forEach((w, i) => {
+    const t = w[0];
+    if (t.includes(' ') || /^[A-ZÁÉÍÓÚÑ]/.test(t) || !w[2].length) return;
+    // la categoría que decide la forma: la del primer sentido, o si no la del
+    // primer sentido que el léxico derivado flexiona («blanco» es primero sustantivo)
+    let p = base.pos(i);
+    if (!rule.pos.has(p)) { const s0 = w[2].find((sid) => rule.pos.has(base.synsets[sid].p)); p = s0 === undefined ? p : base.synsets[s0].p; }
+    const d = rule.derive(base, i, t, p);
+    if (!d || !mitWords.has('es', d)) return;
+    const dup = d === t ? undefined : base.byText.get(d);
+    if (dup !== undefined) {
+      // el wordnet trae algunas formas flexionadas como lema propio: se apartan
+      // para que la forma derivada sea la única; si es un lema real, se respeta
+      if (!base.inflected(dup)) return;
+      words[dup] = [d + ' (forma)', -9, words[dup][2]];
+    }
+    words[i] = [d, Math.round((w[1] - (d === t ? 0 : 0.2)) * 100) / 100, w[2]];
+    flags[i] = 1; baseText[i] = t;
+  });
+  const thes = {};
+  if (base.thes) for (const [t, set] of base.thes) { const i = base.byText.get(t); thes[i !== undefined ? words[i][0] : t] = [...set]; }
+  const L = new Lexicon('es', { sources: base.sources, words, synsets: base.synsets, pron: base.pron, thes });
+  L.form = form; L.formPos = rule.pos; L.flags = flags; L.baseText = baseText; L.singular = baseText;
+  return L;
+}
+
+function derived(lang, form) {
+  if (lang !== 'es' || !FORMS[form]) return null;
+  const key = lang + ':' + form;
+  if (!cache[key]) { const base = load(lang); cache[key] = base ? deriveForm(base, form) : null; }
+  return cache[key];
+}
+const plural = (lang) => derived(lang, 'plural');
+const FORM_NAMES = Object.keys(FORMS);
 
 function load(lang) {
   if (!cache[lang]) {
@@ -196,4 +352,4 @@ function available(lang) {
   return fs.existsSync(path.join(DIR, `${lang}.json.gz`));
 }
 
-module.exports = { load, available, stemClash, sameFamily };
+module.exports = { load, derived, plural, FORM_NAMES, pluralEs, gerundEs, participleEs, present3Es, imperfect3Es, adjForms, adjPlural, available, stemClash, sameFamily };

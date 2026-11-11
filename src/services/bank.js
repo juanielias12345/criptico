@@ -102,11 +102,15 @@ async function recoverCell(db, lang, d) {
 
 // ── evidencia léxica: se recalcula desde el léxico, sin confiar en el generador ──
 function verifyEvidence(lang, clue) {
-  const L = require('../lib/bank/lexicon').load(lang);
+  const lex = require('../lib/bank/lexicon');
+  const L = lex.load(lang);
   if (!L) return { ok: false, failed: ['lexicon_missing'] };
   const failed = [];
   for (const e of clue.evidence || []) {
-    const s = L.supports(e.word, e.def);
+    // las pistas en una forma flexionada (plural, femenino, gerundio, participio)
+    // se comprueban contra el léxico de esa forma, derivado del mismo léxico
+    const src = e.form ? lex.derived(lang, e.form) : L;
+    const s = src && src.supports(e.word, e.def);
     if (!s) failed.push(`${e.word} → ${e.def}`);
   }
   return { ok: failed.length === 0 && (clue.evidence || []).length > 0, failed };
@@ -154,7 +158,7 @@ async function runBatch(db, { lang, difficulty, size, runId = uuid(), holder = '
     const published = (await db.get("SELECT COUNT(*) AS n FROM clues WHERE language_code = ? AND difficulty = ? AND status = 'published'", [lang, difficulty])).n;
     if (published >= cell.target) { await release(db, lang, difficulty, 'done'); return { done: true, published }; }
 
-    const engine = gen.engine(lang);
+    const engine = gen.bankEngine(lang);
     const answers = engine.answers();
     const cursor = cell.generator_version === gen.VERSION ? cell.cursor : 0;
     if (cursor >= answers.length) { await release(db, lang, difficulty, 'exhausted'); return { exhausted: true, published, cursor }; }
