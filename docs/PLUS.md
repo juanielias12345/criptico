@@ -5,40 +5,43 @@ Críptico Plus del día (dificultad 4 o más, no suma a la racha del diario), la
 comunidad (últimos 30 días, recalculada como mucho una vez por día), la insignia Plus y avatares
 exclusivos. No da ventajas en torneos ni duelos.
 
-## Cobro: Lemon Squeezy
+## Cobro: Polar
 
-Lemon Squeezy actúa como **vendedor registrado** (merchant of record): cobra con tarjeta o PayPal,
-emite los comprobantes y liquida los impuestos de cada país. Paga a la empresa por PayPal o
-transferencia bancaria. Se eligió porque PayPal Business no está disponible en Argentina.
+Polar (polar.sh) actúa como **vendedor registrado** (merchant of record): cobra con tarjeta, emite los
+comprobantes y liquida los impuestos de cada país. Paga a la cuenta conectada en Finance → Payout
+account. Reemplazó a Lemon Squeezy, que no aprobó la tienda (30/10/2026); antes PayPal Business no
+estaba disponible.
 
 Flujo:
-1. `POST /api/billing/plus/checkout {plan}` crea un checkout (`POST /v1/checkouts`) con
-   `custom.user_id` y vuelve a `/es/plus?plus=ok`.
+1. `POST /api/billing/plus/checkout {plan}` crea un checkout (`POST /v1/checkouts/`) con el producto
+   del plan, `external_customer_id` y `metadata.user_id` = id de la cuenta, y vuelve a `/es/plus?plus=ok`.
 2. La página consulta `/api/billing/plus` unos segundos mientras llega el webhook.
-3. `POST /api/billing/webhook` verifica `X-Signature` (HMAC-SHA256 del cuerpo crudo con el secreto)
-   y aplica los avisos `subscription_*`. El dueño de una suscripción queda fijado en el primer
-   aviso. `active`, `on_trial` y `past_due` dan Plus hasta `renews_at` + 3 días; `cancelled`
-   hasta `ends_at`; `expired`, `unpaid` y `paused` lo quitan. Avisos repetidos se ignoran.
+3. `POST /api/billing/webhook` verifica la firma Standard Webhooks (`webhook-id`, `webhook-timestamp`,
+   `webhook-signature`: HMAC-SHA256 de `id.timestamp.cuerpo`; acepta el secreto `whsec_…` en base64 o
+   sus bytes tal cual) y aplica los avisos `subscription.*`. El dueño de una suscripción queda fijado
+   en el primer aviso. `active`, `trialing` y `past_due` dan Plus hasta `current_period_end` + 3 días;
+   cancelada (o con `cancel_at_period_end`) hasta `ends_at`; `unpaid`, `incomplete_expired` o
+   terminada la quitan. Un mismo `webhook-id` se aplica una vez.
+4. `GET /api/billing/plus/portal` abre el portal de cliente de Polar (sesión con `external_customer_id`)
+   para administrar o cancelar.
 
 El beneficio vive en `users.plus_until`, que viaja con la sesión: no suma lecturas a Turso.
 
 ## Puesta en marcha
 
-1. Crear la cuenta en https://app.lemonsqueezy.com, la tienda «Play Crípticos» y completar la
-   verificación de identidad y los datos de cobro (PayPal o banco).
-2. Products → New product «Play Crípticos Plus», tipo suscripción, con dos variantes:
-   mensual USD 1,50 y anual USD 12. Anotar el número del producto («…» → Copy ID) y el de la tienda
-   (Settings → Stores). Las variantes mensual y anual se buscan solas por la API.
-3. Settings → API → crear una API key.
-4. Settings → Webhooks → `https://playcripticos.com/api/billing/webhook`, un secreto de firma
-   largo y los eventos `subscription_created`, `subscription_updated`, `subscription_cancelled`,
-   `subscription_resumed`, `subscription_expired`, `subscription_paused`, `subscription_unpaused`,
-   `subscription_payment_success`, `subscription_payment_failed`.
-5. En Vercel: `LEMONSQUEEZY_API_KEY`, `LEMONSQUEEZY_STORE_ID`, `LEMONSQUEEZY_PRODUCT_ID`,
-   `LEMONSQUEEZY_WEBHOOK_SECRET`, y Redeploy (opcional: `LEMONSQUEEZY_VARIANT_MONTHLY` y
-   `LEMONSQUEEZY_VARIANT_YEARLY` para fijarlas a mano).
-6. En /admin → Legal, aprobar la revisión `plus-ls-2026-10-26` (términos, privacidad y
-   encargados). Al publicarse los términos se enciende `billing.lemonsqueezy` y aparece el botón.
+1. Crear la cuenta en https://polar.sh y la organización «Play Crípticos»; en Finance → Payout account
+   conectar el cobro y verificar la identidad.
+2. Products → dos productos de suscripción: mensual USD 1,50 (month) y anual USD 12 (year). Anotar
+   sus ids (UUID).
+3. Settings → Developers → token de organización con `checkouts:write`, `customer_sessions:write`,
+   `products:read` y `subscriptions:read`.
+4. Settings → Webhooks → `https://playcripticos.com/api/billing/webhook`, formato Raw, eventos
+   `subscription.*`. Anotar el secreto.
+5. En Vercel: `POLAR_ACCESS_TOKEN`, `POLAR_PRODUCT_MONTHLY`, `POLAR_PRODUCT_YEARLY`,
+   `POLAR_WEBHOOK_SECRET` y Redeploy. Se pueden borrar las `LEMONSQUEEZY_*`.
+6. En /admin → Legal (o Actions → «Aprobar textos legales»), aprobar la revisión
+   `plus-polar-2026-11-11` (términos, privacidad y encargados). Al publicarse los términos se
+   enciende `billing.polar` y aparece el botón.
 
-Para probar, Lemon Squeezy tiene modo de prueba (Test mode) con tarjetas de prueba; las claves
-y variantes de prueba son distintas de las reales.
+Para probar sin cobrar: crear un descuento del 100% en Polar, o usar https://sandbox.polar.sh con
+`POLAR_SERVER=sandbox` (claves y productos del sandbox, distintos de los reales).

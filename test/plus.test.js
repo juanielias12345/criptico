@@ -10,31 +10,29 @@ const { setSetting } = require('../src/services/settings');
 
 let env;
 const realFetch = globalThis.fetch;
-// Lemon Squeezy falso: guarda los checkouts creados y responde como la API real.
-const ls = { checkouts: [] };
-function fakeLemon(url, init = {}) {
+const PM = '11111111-1111-4111-8111-111111111111';   // producto mensual
+const PY = '22222222-2222-4222-8222-222222222222';   // producto anual
+const SECRET = 'whsec_' + Buffer.from('secreto-de-prueba-polar-123').toString('base64');
+// Polar falso: guarda los checkouts creados y responde como la API real.
+const polar = { checkouts: [], sessions: [] };
+function fakePolar(url, init = {}) {
   const u = new URL(url);
-  const json = (status, body) => Promise.resolve(new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/vnd.api+json' } }));
-  if (u.pathname === '/v1/checkouts' && init.method === 'POST') {
-    if (init.headers.Authorization !== 'Bearer key') return json(401, {});
-    const b = JSON.parse(init.body);
-    ls.checkouts.push(b.data);
-    return json(201, { data: { type: 'checkouts', id: 'co-1', attributes: { url: 'https://playcripticos.lemonsqueezy.com/checkout/custom/abc' } } });
+  const json = (status, body) => Promise.resolve(new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } }));
+  if (init.headers?.Authorization !== 'Bearer tok') return json(401, {});
+  if (u.pathname === '/v1/checkouts/' && init.method === 'POST') {
+    polar.checkouts.push(JSON.parse(init.body));
+    return json(201, { id: 'co-1', url: 'https://buy.polar.sh/polar_c_abc' });
   }
-  if (u.pathname === '/v1/variants' && u.searchParams.get('filter[product_id]') === '777') {
-    ls.variantLookups = (ls.variantLookups || 0) + 1;
-    return json(200, { data: [
-      { id: '300', attributes: { is_subscription: false, status: 'pending', interval: null } },
-      { id: '301', attributes: { is_subscription: true, status: 'published', interval: 'month', interval_count: 1 } },
-      { id: '312', attributes: { is_subscription: true, status: 'published', interval: 'year', interval_count: 1 } },
-    ] });
+  if (u.pathname === '/v1/customer-sessions/' && init.method === 'POST') {
+    polar.sessions.push(JSON.parse(init.body));
+    return json(201, { token: 't', customer_portal_url: 'https://polar.sh/play-cripticos/portal?customer_session_token=t' });
   }
   return json(404, {});
 }
 
 test.before(async () => {
   env = await makeEnv({ spanishOnly: true });
-  globalThis.fetch = (url, init) => (/lemonsqueezy\.com/.test(String(url)) ? fakeLemon(String(url), init) : realFetch(url, init));
+  globalThis.fetch = (url, init) => (/polar\.sh/.test(String(url)) ? fakePolar(String(url), init) : realFetch(url, init));
 });
 test.after(async () => { globalThis.fetch = realFetch; await env.close(); });
 
@@ -45,23 +43,25 @@ async function player(name) {
   return { c, user: r.json.user };
 }
 const configure = () => {
-  env.config.lemonsqueezy = { apiKey: 'key', storeId: '111', variantMonthly: '201', variantYearly: '212', webhookSecret: 'secreto' };
+  env.config.polar = { accessToken: 'tok', productMonthly: PM, productYearly: PY, webhookSecret: SECRET, server: 'production' };
 };
 const days = (n) => new Date(Date.now() + n * 86400000).toISOString();
-let seq = 0;
-function event(name, userId, attrs = {}, subId = '9001') {
-  return { meta: { event_name: name, custom_data: userId ? { user_id: userId } : undefined },
-    data: { type: 'subscriptions', id: subId, attributes: { store_id: 111, variant_id: 201, status: 'active', renews_at: days(30), ends_at: null,
-      updated_at: `2026-10-26T00:00:${String(seq++).padStart(2, '0')}Z`, urls: { customer_portal: 'https://playcripticos.lemonsqueezy.com/billing?x=1' }, ...attrs } } };
+function event(type, userId, attrs = {}, subId = 'sub-9001') {
+  return { type, timestamp: new Date().toISOString(), data: { id: subId, status: 'active', product_id: PM, recurring_interval: 'month',
+    current_period_end: days(30), cancel_at_period_end: false, ends_at: null, ended_at: null,
+    metadata: userId ? { user_id: userId } : {}, customer: { id: 'cus-1', external_id: userId || null }, ...attrs } };
 }
-function hook(ev, secret = 'secreto') {
+let seq = 0;
+function hook(ev, { secret = SECRET, id = `msg_${++seq}`, ts = Math.floor(Date.now() / 1000) } = {}) {
   const raw = JSON.stringify(ev);
-  const sig = crypto.createHmac('sha256', secret).update(raw).digest('hex');
-  return realFetch(`${env.base}/api/billing/webhook`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-signature': sig }, body: raw })
+  const key = Buffer.from(secret.replace(/^whsec_/, ''), 'base64');
+  const sig = crypto.createHmac('sha256', key).update(`${id}.${ts}.${raw}`).digest('base64');
+  return realFetch(`${env.base}/api/billing/webhook`, { method: 'POST',
+    headers: { 'content-type': 'application/json', 'webhook-id': id, 'webhook-timestamp': String(ts), 'webhook-signature': `v1,${sig}` }, body: raw })
     .then(async (r) => ({ status: r.status, json: await r.json().catch(() => ({})) }));
 }
 
-test('sin claves de Lemon Squeezy o sin términos publicados, el pago no está disponible', async () => {
+test('sin claves de Polar o sin términos publicados, el pago no está disponible', async () => {
   const ana = await player('ana_plus');
   let st = await ana.c.get('/api/billing/plus');
   assert.equal(st.status, 200);
@@ -72,9 +72,9 @@ test('sin claves de Lemon Squeezy o sin términos publicados, el pago no está d
   configure();
   st = await ana.c.get('/api/billing/plus');
   assert.equal(st.json.available, false, 'faltan los términos del plan publicados');
-  await setSetting(env.db, 'billing.enabled', true, null);
-  assert.equal((await ana.c.get('/api/billing/plus')).json.available, false, 'los términos con PayPal no alcanzan');
   await setSetting(env.db, 'billing.lemonsqueezy', true, null);
+  assert.equal((await ana.c.get('/api/billing/plus')).json.available, false, 'los términos con Lemon Squeezy no alcanzan');
+  await setSetting(env.db, 'billing.polar', true, null);
   st = await ana.c.get('/api/billing/plus');
   assert.equal(st.json.available, true);
   assert.equal(st.json.plans.yearly.available, true);
@@ -82,25 +82,29 @@ test('sin claves de Lemon Squeezy o sin términos publicados, el pago no está d
 
 test('suscripción: checkout con la cuenta, webhook da Plus y deja de ver anuncios', async () => {
   configure();
-  await setSetting(env.db, 'billing.lemonsqueezy', true, null);
+  await setSetting(env.db, 'billing.polar', true, null);
   assert.equal((await client(env.base).post('/api/billing/plus/checkout', { plan: 'monthly' })).status, 401, 'sin cuenta no se suscribe');
   const beto = await player('beto_plus');
   const co = await beto.c.post('/api/billing/plus/checkout', { plan: 'yearly' });
   assert.equal(co.status, 200, co.text);
-  assert.match(co.json.url, /lemonsqueezy\.com/);
-  const sent = ls.checkouts.pop();
-  assert.equal(sent.relationships.variant.data.id, '212');
-  assert.equal(sent.relationships.store.data.id, '111');
-  assert.equal(sent.attributes.checkout_data.custom.user_id, beto.user.id, 'la cuenta viaja en custom.user_id');
-  assert.match(sent.attributes.product_options.redirect_url, /\/es\/plus\?plus=ok$/);
+  assert.match(co.json.url, /polar\.sh/);
+  const sent = polar.checkouts.pop();
+  assert.deepEqual(sent.products, [PY]);
+  assert.equal(sent.external_customer_id, beto.user.id, 'la cuenta viaja como cliente externo');
+  assert.equal(sent.metadata.user_id, beto.user.id);
+  assert.match(sent.success_url, /\/es\/plus\?plus=ok$/);
 
-  const r = await hook(event('subscription_created', beto.user.id, { variant_id: 212, renews_at: days(365) }, '9100'));
+  const r = await hook(event('subscription.created', beto.user.id, { product_id: PY, recurring_interval: 'year', current_period_end: days(365) }, 'sub-9100'));
   assert.equal(r.status, 200, JSON.stringify(r.json));
   assert.equal(r.json.user, true);
   const st = await beto.c.get('/api/billing/plus');
   assert.equal(st.json.active, true);
   assert.equal(st.json.subscription.plan, 'yearly');
-  assert.match(st.json.manage_url, /lemonsqueezy\.com\/billing/);
+  assert.equal(st.json.manage_url, '/api/billing/plus/portal');
+  const portal = await beto.c.get('/api/billing/plus/portal');
+  assert.equal(portal.status, 303, portal.text);
+  assert.match(portal.headers.get('location'), /polar\.sh\/.*portal/);
+  assert.equal(polar.sessions.pop().external_customer_id, beto.user.id);
   assert.equal((await beto.c.post('/api/billing/plus/checkout', { plan: 'monthly' })).status, 409, 'no se suscribe dos veces');
 
   env.config.adsenseClient = 'ca-pub-1234567890123456';
@@ -115,37 +119,53 @@ test('suscripción: checkout con la cuenta, webhook da Plus y deja de ver anunci
   ADS.clearCache();
 });
 
-test('webhook: firma HMAC, cancelación respeta lo pagado, la cuenta no se cambia y avisos repetidos se ignoran', async () => {
+test('webhook: firma Standard Webhooks, cancelación respeta lo pagado, la cuenta no se cambia y avisos repetidos se ignoran', async () => {
   configure();
   const caro = await player('caro_plus');
   const otro = await player('otro_plus');
-  assert.equal((await hook(event('subscription_created', caro.user.id, {}, '9200'), 'otro-secreto')).status, 401, 'firma inválida');
-  const created = event('subscription_created', caro.user.id, {}, '9200');
-  let r = await hook(created);
+  const otherSecret = 'whsec_' + Buffer.from('otro-secreto-distinto-456').toString('base64');
+  assert.equal((await hook(event('subscription.created', caro.user.id, {}, 'sub-9200'), { secret: otherSecret })).status, 401, 'firma inválida');
+  assert.equal((await hook(event('subscription.created', caro.user.id, {}, 'sub-9200'), { ts: Math.floor(Date.now() / 1000) - 3600 })).status, 401, 'aviso viejo');
+  const created = event('subscription.created', caro.user.id, {}, 'sub-9200');
+  let r = await hook(created, { id: 'msg_dup' });
   assert.equal(r.status, 200, JSON.stringify(r.json));
   let u = await env.db.get('SELECT plus_until FROM users WHERE id = ?', [caro.user.id]);
   assert.ok(Date.parse(u.plus_until) > Date.now() + 29 * 86400000, 'activa hasta el próximo cobro (más el margen)');
-  assert.equal((await hook(created)).json.duplicate, true, 'el mismo aviso no se aplica dos veces');
+  assert.equal((await hook(created, { id: 'msg_dup' })).json.duplicate, true, 'el mismo aviso no se aplica dos veces');
 
-  // Un aviso con otra cuenta en custom_data no le pasa la suscripción a otra persona.
-  await hook(event('subscription_updated', otro.user.id, {}, '9200'));
+  // Un aviso con otra cuenta en metadata no le pasa la suscripción a otra persona.
+  await hook(event('subscription.updated', otro.user.id, {}, 'sub-9200'));
   assert.equal((await env.db.get('SELECT plus_until FROM users WHERE id = ?', [otro.user.id])).plus_until, null);
 
-  r = await hook(event('subscription_cancelled', caro.user.id, { status: 'cancelled', ends_at: days(20) }, '9200'));
+  r = await hook(event('subscription.canceled', caro.user.id, { cancel_at_period_end: true, current_period_end: days(20), ends_at: days(20) }, 'sub-9200'));
   assert.equal(r.status, 200);
   u = await env.db.get('SELECT plus_until FROM users WHERE id = ?', [caro.user.id]);
   assert.ok(Date.parse(u.plus_until) > Date.now() + 19 * 86400000, 'conserva el período pagado');
+  assert.ok(Date.parse(u.plus_until) < Date.now() + 21 * 86400000, 'sin margen extra al cancelar');
   const st = await caro.c.get('/api/billing/plus');
   assert.equal(st.json.active, true);
   assert.equal(st.json.subscription.status, 'cancelled');
 
-  await hook(event('subscription_expired', caro.user.id, { status: 'expired', ends_at: days(-1) }, '9200'));
+  await hook(event('subscription.revoked', caro.user.id, { status: 'canceled', ends_at: days(-1), ended_at: days(-1) }, 'sub-9200'));
   u = await env.db.get('SELECT plus_until FROM users WHERE id = ?', [caro.user.id]);
   assert.equal(u.plus_until, null);
-  r = await hook({ meta: { event_name: 'order_created' }, data: { type: 'orders', id: '1', attributes: {} } });
+  r = await hook({ type: 'order.created', data: { id: 'o1' } });
   assert.ok(r.json.ignored, 'otros avisos se ignoran');
-  r = await hook(event('subscription_created', caro.user.id, { variant_id: 999 }, '9300'));
-  assert.equal(r.json.ignored, 'other_variant', 'productos ajenos se ignoran');
+  r = await hook(event('subscription.created', caro.user.id, { product_id: '99999999-9999-4999-8999-999999999999' }, 'sub-9300'));
+  assert.equal(r.json.ignored, 'other_product', 'productos ajenos se ignoran');
+});
+
+test('webhook: secretos viejos de Polar (bytes del secreto tal cual) también se aceptan', async () => {
+  const legacy = 'polar_whs_textoplano';
+  env.config.polar = { accessToken: 'tok', productMonthly: PM, productYearly: PY, webhookSecret: legacy, server: 'production' };
+  const fer = await player('fer_plus');
+  const raw = JSON.stringify(event('subscription.active', fer.user.id, {}, 'sub-9500'));
+  const id = 'msg_legacy'; const ts = Math.floor(Date.now() / 1000);
+  const sig = crypto.createHmac('sha256', Buffer.from(legacy, 'utf8')).update(`${id}.${ts}.${raw}`).digest('base64');
+  const r = await realFetch(`${env.base}/api/billing/webhook`, { method: 'POST',
+    headers: { 'content-type': 'application/json', 'webhook-id': id, 'webhook-timestamp': String(ts), 'webhook-signature': `v1,${sig}` }, body: raw });
+  assert.equal(r.status, 200, await r.text());
+  configure();
 });
 
 test('beneficios: Críptico Plus del día, comparación con la comunidad y avatares exclusivos', async () => {
@@ -192,30 +212,14 @@ test('beneficios: Críptico Plus del día, comparación con la comunidad y avata
   assert.doesNotMatch(pub, /PayPal Business|cuenta de PayPal/);
 });
 
-test('con solo el número del producto, las variantes mensual y anual se buscan una vez', async () => {
-  env.config.lemonsqueezy = { apiKey: 'key', storeId: '111', productId: '777', webhookSecret: 'secreto' };
-  PLUS.clearVariantCache();
-  await setSetting(env.db, 'billing.lemonsqueezy', true, null);
-  const eva = await player('eva_plus');
-  const st = await eva.c.get('/api/billing/plus');
-  assert.equal(st.json.plans.monthly.available, true);
-  assert.equal(st.json.plans.yearly.available, true);
-  const co = await eva.c.post('/api/billing/plus/checkout', { plan: 'monthly' });
-  assert.equal(co.status, 200, co.text);
-  assert.equal(ls.checkouts.pop().relationships.variant.data.id, '301');
-  const r = await hook(event('subscription_created', eva.user.id, { variant_id: 312, renews_at: days(365) }, '9400'));
-  assert.equal(r.json.user, true, JSON.stringify(r.json));
-  assert.equal((await eva.c.get('/api/billing/plus')).json.subscription.plan, 'yearly');
-  assert.equal(ls.variantLookups, 1, 'las variantes se buscan una sola vez');
-  configure();
-});
-
-test('cuenta: untilFor según el estado de Lemon Squeezy', () => {
+test('cuenta: untilFor según el estado de Polar', () => {
   const next = days(10);
-  assert.ok(Date.parse(PLUS.untilFor({ status: 'active', renews_at: next })) > Date.parse(next), 'activa: próximo cobro + margen');
-  assert.ok(PLUS.untilFor({ status: 'past_due', renews_at: next }), 'cobro demorado: se mantiene mientras reintenta');
-  assert.equal(PLUS.untilFor({ status: 'cancelled', ends_at: next }), new Date(next).toISOString());
-  assert.equal(PLUS.untilFor({ status: 'expired', ends_at: next }), null);
+  assert.ok(Date.parse(PLUS.untilFor({ status: 'active', current_period_end: next })) > Date.parse(next), 'activa: próximo cobro + margen');
+  assert.ok(PLUS.untilFor({ status: 'past_due', current_period_end: next }), 'cobro demorado: se mantiene mientras reintenta');
+  assert.equal(PLUS.untilFor({ status: 'active', cancel_at_period_end: true, current_period_end: next }), new Date(next).toISOString(), 'cancelada al final del período');
+  assert.equal(PLUS.untilFor({ status: 'canceled', ends_at: next }), new Date(next).toISOString());
+  assert.equal(PLUS.untilFor({ status: 'canceled', ended_at: days(-1) }), null);
   assert.equal(PLUS.untilFor({ status: 'unpaid' }), null);
-  assert.equal(PLUS.untilFor({ status: 'paused' }), null);
+  assert.equal(PLUS.untilFor({ status: 'incomplete_expired' }), null);
+  assert.equal(PLUS.statusOf({ status: 'trialing' }), 'on_trial');
 });

@@ -1,13 +1,13 @@
 'use strict';
 
-// Plan Plus: suscripción mensual o anual cobrada con Lemon Squeezy (vendedor registrado: cobra,
+// Plan Plus: suscripción mensual o anual cobrada con Polar (vendedor registrado: cobra,
 // factura y liquida los impuestos de cada país). Incluye: sin anuncios, 10 Crípticos Plus por día,
 // la comparación con la comunidad, la insignia Plus y avatares exclusivos. Nunca da ventajas en
 // torneos ni duelos. Flujo de pago sin scripts de terceros:
-//  1) POST /api/billing/plus/checkout crea un checkout de Lemon Squeezy con el id de la cuenta
-//     (custom.user_id) y devuelve su enlace.
-//  2) Lemon Squeezy vuelve a /es/plus?plus=ok; la página espera a que llegue el webhook.
-//  3) El webhook (firma HMAC con el secreto del webhook) da y mantiene el beneficio:
+//  1) POST /api/billing/plus/checkout crea un checkout de Polar con el id de la cuenta
+//     (external_customer_id y metadata.user_id) y devuelve su enlace.
+//  2) Polar vuelve a /es/plus?plus=ok; la página espera a que llegue el webhook.
+//  3) El webhook (firma Standard Webhooks con el secreto del webhook) da y mantiene el beneficio:
 //     altas, renovaciones, cancelaciones, vencimientos.
 // El beneficio se guarda en users.plus_until, que viaja con la sesión: ver si una
 // página lleva anuncios no suma lecturas a la base. Ver docs/PLUS.md.
@@ -17,146 +17,167 @@ const { now, HttpError } = require('./util');
 const { audit } = require('./audit');
 const { getSetting } = require('./settings');
 
-// Precios que se muestran (el cobro real lo define cada variante en Lemon Squeezy).
+// Precios que se muestran (el cobro real lo define cada producto en Polar).
 const PLANS = {
   monthly: { price: 'USD 1,50', per: 'mes', months: 1 },
   yearly: { price: 'USD 12', per: 'año', months: 12, note: 'equivale a USD 1 por mes' },
 };
 const GRACE_MS = 3 * 86400000;          // margen si el cobro de la renovación se demora
-const API = 'https://api.lemonsqueezy.com/v1';
+const SIGNATURE_TOLERANCE_S = 5 * 60;   // avisos con más de 5 minutos de diferencia se rechazan
+const SETTING = 'billing.polar';
 
-const cfgOf = (config) => config.lemonsqueezy || {};
+const cfgOf = (config) => config.polar || {};
+const apiBase = (config) => (cfgOf(config).server === 'sandbox' ? 'https://sandbox-api.polar.sh/v1' : 'https://api.polar.sh/v1');
 function configured(config) {
   const c = cfgOf(config);
-  return !!(c.apiKey && c.storeId && c.webhookSecret && (c.variantMonthly || c.variantYearly || c.productId));
+  return !!(c.accessToken && c.webhookSecret && (c.productMonthly || c.productYearly));
 }
-// Qué planes se pueden contratar (los que tienen variante en Lemon Squeezy). Con LEMONSQUEEZY_PRODUCT_ID
-// las variantes se buscan una vez en la API (la mensual y la anual publicadas) y se recuerdan.
-let variantCache = { key: '', ids: null, exp: 0 };
-async function variantIds(config, fetchImpl = fetch) {
+// Qué planes se pueden contratar: en Polar cada plan es un producto con su propio id.
+function productIds(config) {
   const c = cfgOf(config);
-  const fixed = Object.fromEntries([['monthly', c.variantMonthly], ['yearly', c.variantYearly]].filter(([, id]) => id));
-  if (Object.keys(fixed).length || !c.productId || !c.apiKey) return fixed;
-  const key = `${c.productId}:${c.apiKey.slice(-6)}`;
-  if (variantCache.key === key && variantCache.exp > Date.now()) return variantCache.ids;
-  const ids = {};
-  try {
-    const res = await fetchImpl(`${API}/variants?filter[product_id]=${encodeURIComponent(c.productId)}`, {
-      headers: { Accept: 'application/vnd.api+json', Authorization: `Bearer ${c.apiKey}` } });
-    const body = res.ok ? await res.json() : {};
-    for (const v of body.data || []) {
-      const a = v.attributes || {};
-      if (!a.is_subscription || a.status !== 'published' || Number(a.interval_count || 1) !== 1) continue;
-      const plan = a.interval === 'month' ? 'monthly' : a.interval === 'year' ? 'yearly' : null;
-      if (plan && !ids[plan]) ids[plan] = String(v.id);
-    }
-  } catch { /* sin conexión: se reintenta en la próxima consulta */ }
-  // Si no encontró nada se vuelve a intentar en un minuto; si encontró, se recuerda una hora.
-  variantCache = { key, ids, exp: Date.now() + (Object.keys(ids).length ? 3600000 : 60000) };
-  return ids;
+  return Object.fromEntries([['monthly', c.productMonthly], ['yearly', c.productYearly]].filter(([, id]) => id));
 }
-const clearVariantCache = () => { variantCache = { key: '', ids: null, exp: 0 }; };
-const planOf = async (config, variantId) => Object.entries(await variantIds(config)).find(([, id]) => String(id) === String(variantId))?.[0] || null;
+const planOf = (config, productId) => Object.entries(productIds(config)).find(([, id]) => String(id) === String(productId))?.[0] || null;
 
-// El pago se habilita con las claves y los términos del plan (con Lemon Squeezy) publicados.
+// El pago se habilita con las claves y los términos del plan (con Polar) publicados.
 async function available(db, config) {
   if (!configured(config)) return false;
-  try { return (await getSetting(db, 'billing.lemonsqueezy')) === true; } catch { return false; }
+  try { return (await getSetting(db, SETTING)) === true; } catch { return false; }
 }
 
 function isPlus(user) {
   return !!(user && user.plus_until && Date.parse(user.plus_until) > Date.now());
 }
 
+const PORTAL_PATH = '/api/billing/plus/portal';
 async function status(db, config, user) {
   const sub = user ? await db.get('SELECT plan, status, renews_at, ends_at, portal_url FROM subscriptions WHERE user_id = ? ORDER BY updated_at DESC LIMIT 1', [user.id]) : null;
   const ok = await available(db, config);
-  const ids = ok ? await variantIds(config) : {};
+  const ids = ok ? productIds(config) : {};
   return {
     available: ok, plans: Object.fromEntries(Object.entries(PLANS).map(([k, p]) => [k, { ...p, available: ok && !!ids[k] }])),
     active: isPlus(user), until: user ? user.plus_until || null : null,
     subscription: sub ? { plan: sub.plan, status: sub.status, renews_at: sub.renews_at, ends_at: sub.ends_at } : null,
-    manage_url: (sub && sub.portal_url) || 'https://app.lemonsqueezy.com/my-orders',
+    manage_url: PORTAL_PATH,
   };
 }
 
-// Crea el checkout en Lemon Squeezy y devuelve su enlace.
+const authHeaders = (config) => ({ Accept: 'application/json', 'Content-Type': 'application/json', Authorization: `Bearer ${cfgOf(config).accessToken}` });
+
+// Crea el checkout en Polar y devuelve su enlace.
 async function checkout(db, config, user, plan = 'monthly', fetchImpl = fetch) {
   if (!user) throw new HttpError(401, 'login_required', 'Entrá o creá una cuenta gratis para hacerte Plus.');
   if (!(await available(db, config))) throw new HttpError(503, 'not_configured', 'El pago todavía no está disponible.');
-  const variant = (await variantIds(config, fetchImpl))[plan];
-  if (!variant) throw new HttpError(400, 'invalid_plan');
+  const product = productIds(config)[plan];
+  if (!product) throw new HttpError(400, 'invalid_plan');
   if (isPlus(user)) throw new HttpError(409, 'already_active', 'Ya sos Plus.');
-  const c = cfgOf(config);
-  const res = await fetchImpl(`${API}/checkouts`, {
-    method: 'POST',
-    headers: { Accept: 'application/vnd.api+json', 'Content-Type': 'application/vnd.api+json', Authorization: `Bearer ${c.apiKey}` },
-    body: JSON.stringify({ data: { type: 'checkouts', attributes: {
-      checkout_data: { custom: { user_id: user.id } },
-      product_options: { redirect_url: `${config.siteUrl}/es/plus?plus=ok` },
-      checkout_options: { embed: false },
-    }, relationships: {
-      store: { data: { type: 'stores', id: String(c.storeId) } },
-      variant: { data: { type: 'variants', id: String(variant) } },
-    } } }),
+  const res = await fetchImpl(`${apiBase(config)}/checkouts/`, {
+    method: 'POST', headers: authHeaders(config),
+    body: JSON.stringify({ products: [product], external_customer_id: user.id, metadata: { user_id: user.id, plan },
+      success_url: `${config.siteUrl}/es/plus?plus=ok` }),
   }).catch(() => null);
   const body = res ? await res.json().catch(() => ({})) : {};
-  const url = res && res.ok && body.data && body.data.attributes && body.data.attributes.url;
+  const url = res && res.ok && body.url;
   if (!url || !/^https:\/\//.test(url)) throw new HttpError(502, 'checkout_failed', 'No se pudo abrir el pago. Probá de nuevo en un rato.');
   return { url };
 }
 
-// Hasta cuándo queda Plus según la suscripción de Lemon Squeezy.
-function untilFor(sub) {
-  const st = String(sub.status || '').toLowerCase();
-  const renews = Date.parse(sub.renews_at || '');
-  const ends = Date.parse(sub.ends_at || '');
-  if (['active', 'on_trial', 'past_due'].includes(st)) {
-    const base = st === 'on_trial' && Number.isFinite(Date.parse(sub.trial_ends_at || '')) ? Date.parse(sub.trial_ends_at) : renews;
-    return Number.isFinite(base) ? new Date(base + GRACE_MS).toISOString() : null;
-  }
-  // Cancelada: se respeta lo ya pagado, hasta el final del período.
-  if (st === 'cancelled') return Number.isFinite(ends) && ends > Date.now() ? new Date(ends).toISOString() : null;
-  return null;   // expired, unpaid, paused
+// Portal de cliente de Polar (administrar o cancelar): se abre con una sesión de un solo uso.
+async function portal(config, user, fetchImpl = fetch) {
+  if (!user) throw new HttpError(401, 'login_required');
+  if (!configured(config)) throw new HttpError(503, 'not_configured');
+  const res = await fetchImpl(`${apiBase(config)}/customer-sessions/`, {
+    method: 'POST', headers: authHeaders(config), body: JSON.stringify({ external_customer_id: user.id }),
+  }).catch(() => null);
+  const body = res ? await res.json().catch(() => ({})) : {};
+  const url = res && res.ok && body.customer_portal_url;
+  if (!url || !/^https:\/\//.test(url)) throw new HttpError(502, 'portal_failed', 'No se pudo abrir la administración del plan. Probá de nuevo en un rato.');
+  return { url };
 }
 
-const safeEqual = (a, b) => a.length === b.length && crypto.timingSafeEqual(a, b);
+// Estado de Polar → el que guarda y muestra el sitio (active, on_trial, past_due, cancelled, expired).
+function statusOf(sub) {
+  const st = String(sub.status || '').toLowerCase();
+  if (['active', 'trialing', 'past_due'].includes(st)) {
+    if (sub.cancel_at_period_end || sub.ends_at) return 'cancelled';
+    return st === 'trialing' ? 'on_trial' : st;
+  }
+  if (st === 'canceled') return 'cancelled';
+  return st === 'incomplete' ? 'incomplete' : 'expired';   // incomplete_expired, unpaid
+}
 
-// Webhook de Lemon Squeezy: firma HMAC-SHA256 del cuerpo crudo con el secreto del webhook.
+// Hasta cuándo queda Plus según la suscripción de Polar.
+function untilFor(sub) {
+  const st = statusOf(sub);
+  const fut = (iso) => { const t = Date.parse(iso || ''); return Number.isFinite(t) && t > Date.now() ? t : null; };
+  if (['active', 'on_trial', 'past_due'].includes(st)) {
+    const base = Date.parse((st === 'on_trial' && sub.trial_end) || sub.current_period_end || '');
+    return Number.isFinite(base) ? new Date(base + GRACE_MS).toISOString() : null;
+  }
+  // Cancelada: se respeta lo ya pagado, hasta el final del período (si ya terminó, se quita).
+  if (st === 'cancelled') {
+    if (sub.ended_at && !fut(sub.ended_at)) return null;
+    const end = fut(sub.ends_at) || fut(sub.current_period_end);
+    return end ? new Date(end).toISOString() : null;
+  }
+  return null;
+}
+
+// Claves posibles del secreto (Standard Webhooks): el «whsec_…» decodificado de base64, o sus bytes
+// tal cual (secretos de Polar anteriores a septiembre de 2026).
+function secretKeys(secret) {
+  const s = String(secret || '');
+  const keys = [Buffer.from(s, 'utf8')];
+  const b64 = s.replace(/^whsec_/, '');
+  if (/^[A-Za-z0-9+/]+=*$/.test(b64)) { const k = Buffer.from(b64, 'base64'); if (k.length >= 16) keys.unshift(k); }
+  return keys;
+}
+function validSignature(secret, id, ts, buf, header) {
+  const sigs = String(header || '').split(' ').map((p) => p.split(',')).filter(([v, s]) => v === 'v1' && s).map(([, s]) => Buffer.from(s, 'base64'));
+  if (!sigs.length) return false;
+  const signed = Buffer.concat([Buffer.from(`${id}.${ts}.`, 'utf8'), buf]);
+  for (const key of secretKeys(secret)) {
+    const expected = crypto.createHmac('sha256', key).update(signed).digest();
+    if (sigs.some((s) => s.length === expected.length && crypto.timingSafeEqual(s, expected))) return true;
+  }
+  return false;
+}
+
+// Webhook de Polar (Standard Webhooks): firma HMAC-SHA256 de «id.timestamp.cuerpo».
 async function handleWebhook(db, config, raw, headers) {
   const c = cfgOf(config);
   if (!configured(config)) throw new HttpError(503, 'not_configured');
   const buf = Buffer.isBuffer(raw) ? raw : Buffer.from(String(raw || ''), 'utf8');
-  const sig = String(headers['x-signature'] || '');
-  const expected = crypto.createHmac('sha256', c.webhookSecret).update(buf).digest('hex');
-  if (!/^[0-9a-f]{64}$/i.test(sig) || !safeEqual(Buffer.from(sig.toLowerCase()), Buffer.from(expected))) throw new HttpError(401, 'bad_signature');
+  const id = String(headers['webhook-id'] || '');
+  const ts = String(headers['webhook-timestamp'] || '');
+  if (!id || !/^\d{1,12}$/.test(ts) || Math.abs(Date.now() / 1000 - Number(ts)) > SIGNATURE_TOLERANCE_S) throw new HttpError(401, 'bad_signature');
+  if (!validSignature(c.webhookSecret, id, ts, buf, headers['webhook-signature'])) throw new HttpError(401, 'bad_signature');
   let ev;
   try { ev = JSON.parse(buf.toString('utf8')); } catch { throw new HttpError(400, 'invalid_json'); }
-  const meta = ev.meta || {};
-  const kind = String(meta.event_name || '');
+  const kind = String(ev.type || '');
   const data = ev.data || {};
-  if (!/^subscription_/.test(kind) || data.type !== 'subscriptions' || !data.id) return { ok: true, ignored: kind || null };
-  const attrs = data.attributes || {};
-  if (c.storeId && attrs.store_id != null && String(attrs.store_id) !== String(c.storeId)) return { ok: true, ignored: 'other_store' };
-  const plan = await planOf(config, attrs.variant_id);
-  if (!plan) return { ok: true, ignored: 'other_variant' };
-  // Un mismo aviso (mismo evento, misma suscripción, misma fecha de actualización) se aplica una vez.
-  const eventId = `lemonsqueezy:${kind}:${data.id}:${attrs.updated_at || ''}`;
+  if (!/^subscription\./.test(kind) || !data.id) return { ok: true, ignored: kind || null };
+  const plan = planOf(config, data.product_id);
+  if (!plan) return { ok: true, ignored: 'other_product' };
+  // Un mismo aviso (mismo id de entrega) se aplica una vez.
+  const eventId = `polar:${id}`;
   if (await db.get('SELECT id FROM payment_events WHERE id = ?', [eventId])) return { ok: true, duplicate: true };
-  const subId = `lemonsqueezy:${data.id}`;
+  const subId = `polar:${data.id}`;
   const prev = await db.get('SELECT user_id FROM subscriptions WHERE id = ?', [subId]);
-  const claimed = (meta.custom_data || {}).user_id;
+  const claimed = (data.metadata || {}).user_id || (data.customer || {}).external_id;
   const owner = prev && prev.user_id ? prev.user_id : claimed;
   const user = owner ? await db.get('SELECT id FROM users WHERE id = ?', [String(owner)]) : null;
-  const until = untilFor(attrs);
-  const st = String(attrs.status || 'unknown');
+  const until = untilFor(data);
+  const st = statusOf(data);
+  const renews = ['active', 'on_trial', 'past_due'].includes(st) ? data.current_period_end || null : null;
+  const ends = st === 'cancelled' ? data.ends_at || data.ended_at || data.current_period_end || null : null;
   await db.tx(async (t) => {
-    await t.run(`INSERT INTO subscriptions (id, user_id, provider, plan, status, renews_at, ends_at, portal_url, updated_at) VALUES (?, ?, 'lemonsqueezy', ?, ?, ?, ?, ?, ?)
+    await t.run(`INSERT INTO subscriptions (id, user_id, provider, plan, status, renews_at, ends_at, portal_url, updated_at) VALUES (?, ?, 'polar', ?, ?, ?, ?, NULL, ?)
       ON CONFLICT(id) DO UPDATE SET user_id = COALESCE(subscriptions.user_id, excluded.user_id), plan = excluded.plan, status = excluded.status,
-        renews_at = excluded.renews_at, ends_at = excluded.ends_at, portal_url = COALESCE(excluded.portal_url, subscriptions.portal_url), updated_at = excluded.updated_at`,
-    [subId, user ? user.id : null, plan, st, attrs.renews_at || null, attrs.ends_at || null, ((attrs.urls || {}).customer_portal) || null, now()]);
+        renews_at = excluded.renews_at, ends_at = excluded.ends_at, updated_at = excluded.updated_at`,
+    [subId, user ? user.id : null, plan, st, renews, ends, now()]);
     if (user) await t.run('UPDATE users SET plus_until = ? WHERE id = ?', [until, user.id]);
-    await t.run('INSERT OR IGNORE INTO payment_events (id, provider, kind) VALUES (?, ?, ?)', [eventId, 'lemonsqueezy', kind]);
+    await t.run('INSERT OR IGNORE INTO payment_events (id, provider, kind) VALUES (?, ?, ?)', [eventId, 'polar', kind]);
   });
   await audit(db, { actorId: null, action: 'billing.subscription', targetKind: 'user', targetId: user ? user.id : null,
     details: { source: kind, plan, status: st, until } });
@@ -217,4 +238,4 @@ async function comparison(db, user, lang = 'es') {
   return { days: BENCH_DAYS, computed_at: community.length ? community[0].computed_at : null, rows };
 }
 
-module.exports = { benchmarks, comparison, PLANS, configured, available, isPlus, status, checkout, handleWebhook, untilFor, clearVariantCache };
+module.exports = { benchmarks, comparison, PLANS, configured, available, isPlus, status, checkout, portal, handleWebhook, untilFor, statusOf, SETTING };
