@@ -86,6 +86,7 @@
   // Contador agregado de la interfaz (sin identificadores); respeta «No rastrear». Nunca rompe el juego.
   const uiEvent = (kind) => { if (navigator.doNotTrack === '1' || navigator.globalPrivacyControl) return; api('/api/ui-event', { method: 'POST', body: { kind }, keepalive: true }).catch(() => {}); };
   const growth = () => meta().then((m) => m.growth || {}).catch(() => ({}));
+  const isPlusMe = () => !!(me && me.plus_until && Date.parse(me.plus_until) > Date.now());
 
   // Origen de la visita: de qué sitio llegó (solo el dominio), la campaña del enlace y la primera página.
   // Se guarda en el almacenamiento de sesión, y solo si la política de privacidad publicada lo prevé.
@@ -414,6 +415,7 @@
         const data = await api(kind === 'daily' ? '/api/daily/start' : kind === 'plus' ? '/api/plus/daily/start' : '/api/game/start', { method: 'POST', body });
         Object.assign(st, { game: data.game_id, clue: data.clue, notice: data.notice, recycled: data.recycled, hints: [], solved: false, finished: false,
           solution: null, next: null, autoPrefs: st.autoPrefs && !st.game, plus: data.plus || null, maxHints: data.max_hints, timed: data.timed_seconds, dailyDone: data.finished, attempts: 0, hintsUsed: 0, feedback: null, daily: null, tried: [] });
+        if (data.plus && data.plus.taste && !data.finished) uiEvent('plus_taste_start');
         if (data.finished) { st.finished = true; st.solved = data.finished.result === 'solved'; st.solution = data.finished.solution; st.attempts = data.finished.attempts; st.hintsUsed = data.finished.hints_used; }
         if (st.clue && !data.finished) session.bump('seen');
         if (st.mode === 'guided' && st.game && !st.finished) await hint(true);
@@ -580,6 +582,41 @@
     const once = (kind) => { if (!shownOnce.has(kind + st.game)) { shownOnce.add(kind + st.game); uiEvent(kind); } };
     const sget = (k) => { try { return sessionStorage.getItem(k); } catch (e) { return null; } };
     const sset = (k, v) => { try { sessionStorage.setItem(k, v); } catch (e) { /* sin almacenamiento */ } };
+    // Prueba gratis del Críptico Plus (cuentas sin Plus): al terminarla, la invitación a los 10 de cada día.
+    function plusTasteCard() {
+      once('plus_taste_done');
+      const more = Math.max(0, (st.plus.full || 10) - 1);
+      return el('aside', { class: 'next-step plus-upsell', id: 'plus-taste-done', 'aria-label': 'Plus' },
+        el('h2', {}, el('span', { class: 'plus-badge', text: 'Plus' }), ' ', st.solved ? '¡Lo resolviste! Quedan ' + more + ' más hoy.' : 'Hoy quedan ' + more + ' crípticos Plus más.'),
+        el('p', { text: 'Ese era tu críptico Plus gratis de hoy. Con Plus jugás los ' + (st.plus.full || 10) + ' difíciles de cada día, sin anuncios, con tu nivel contra la comunidad. Desde USD 1 por mes en el plan anual.' }),
+        el('div', { class: 'form-actions' }, el('a', { class: 'btn primary small', href: route('plus') + '#plus-plans', id: 'plus-taste-cta', text: 'Quiero los ' + (st.plus.full || 10), onclick: () => {
+          uiEvent('plus_taste_click');
+          const box = document.getElementById('plus-plans');
+          if (box) { box.scrollIntoView({ behavior: 'smooth' }); }
+        } })));
+    }
+    // Invitación a Plus al resolver (cuentas sin Plus): tras varios resueltos en la sesión o uno difícil.
+    function plusUpsellCard(g) {
+      if (!g.plus_upsell || !me || isPlusMe() || !st.solved || kind !== 'play') return null;
+      const solvedInSession = session.get().solved;
+      const hard = st.clue && st.clue.difficulty >= 4;
+      if (solvedInSession < (g.plus_upsell_after || 5) && !hard) return null;
+      if (Number(store.get('pc_plus_snooze') || 0) > Date.now()) return null;
+      if (sget('pc_plus_seen') && sget('pc_plus_seen') !== String(st.game)) return null;
+      sset('pc_plus_seen', String(st.game));
+      once('plus_upsell_shown');
+      const title = hard ? '¿Te gustan los difíciles?' : '¿Te quedaste con ganas?';
+      const body = g.plus_taste ? 'Con Plus tenés 10 crípticos difíciles nuevos por día y jugás sin anuncios. Probá gratis el de hoy.' : 'Con Plus tenés 10 crípticos difíciles nuevos por día y jugás sin anuncios.';
+      return el('aside', { class: 'next-step plus-upsell', id: 'plus-upsell', 'aria-label': title },
+        el('h2', {}, el('span', { class: 'plus-badge', text: 'Plus' }), ' ', title), el('p', { text: body }),
+        el('div', { class: 'form-actions' },
+          el('a', { class: 'btn ink small', href: route('plus') + (g.plus_taste ? '#probar' : ''), id: 'plus-upsell-cta', text: g.plus_taste ? 'Probar gratis' : 'Conocer Plus', onclick: () => uiEvent('plus_upsell_click') }),
+          el('button', { class: 'btn quiet small', type: 'button', id: 'plus-upsell-later', text: 'Ahora no', onclick: (e) => {
+            uiEvent('plus_upsell_dismiss');
+            store.set('pc_plus_snooze', Date.now() + 7 * 86400000, !!(getPrefs() || {}).remember);
+            e.target.closest('.next-step').remove();
+          } })));
+    }
     async function nextStepCard() {
       const g = await growth();
       const card = (id, title, body, actions) => el('aside', { class: 'next-step', id, 'aria-label': title }, el('h2', { text: title }), body, el('div', { class: 'form-actions' }, actions));
@@ -590,7 +627,10 @@
         const left = (mins >= 60 ? Math.floor(mins / 60) + ' h ' : '') + (mins % 60) + ' min';
         const time = nextAt.toLocaleTimeString(L === 'es' ? 'es' : 'en-GB', { hour: '2-digit', minute: '2-digit' });
         once('daily_next_shown');
-        return card('daily-next', t('daily_next_t'), el('p', { text: t('daily_next', { time, left }) }), []);
+        const tasteOk = g.plus_taste && me && !isPlusMe();
+        if (tasteOk) once('plus_upsell_shown');
+        return card('daily-next', t('daily_next_t'), el('p', { text: t('daily_next', { time, left }) }),
+          tasteOk ? [el('a', { class: 'btn small', href: route('plus') + '#probar', id: 'daily-plus-cta', text: 'Mientras tanto: probá gratis el Críptico Plus de hoy', onclick: () => uiEvent('plus_upsell_click') })] : []);
       }
       if (kind !== 'play') return null;
       const solvedInSession = session.get().solved;
@@ -607,6 +647,8 @@
             e.target.closest('.next-step').remove();
           } })]);
       }
+      const up = plusUpsellCard(g);
+      if (up) return up;
       if (g.next_step && st.next && st.next.daily_pending && !sget('pc_daily_nudged')) {
         sset('pc_daily_nudged', '1');
         once('daily_nudge_shown');
@@ -695,7 +737,8 @@
           st.mode === 'guided' ? el('p', { class: 'muted small', text: t('mechhelp_' + s.mechanism) }) : null,
           st.daily && st.daily.players ? el('p', { class: 'small', text: t('daily_stats', { p: st.daily.players, s: st.daily.solved }) }) : null,
           kind === 'daily' && st.dailyDone ? el('p', { class: 'small muted', text: t('daily_done') }) : null,
-          kind === 'plus' && st.plus && st.plus.done >= st.plus.total ? el('p', { class: 'small muted', text: t('plus_done') }) : null,
+          kind === 'plus' && st.plus && st.plus.taste ? plusTasteCard() : null,
+          kind === 'plus' && st.plus && !st.plus.taste && st.plus.done >= st.plus.total ? el('p', { class: 'small muted', text: t('plus_done') }) : null,
           c.origin === 'external' ? el('p', { class: 'attribution' }, t('source') + ': ', c.source_url ? el('a', { href: c.source_url, rel: 'noopener nofollow', text: c.attribution || c.source_url }) : (c.attribution || '—'),
             ' · ', c.author ? t('author_label') + ': ' + c.author : t('author_unknown'), c.license ? ' · ' + t('license_label') + ': ' + (LICENSE_NAMES[c.license] || c.license) : null) : null,
           c.origin === 'generated' ? el('p', { class: 'attribution' }, t('gen_by') + ' · ', el('a', { href: route('credits'), text: t('gen_sources') })) : null,

@@ -4,6 +4,7 @@
   const C = window.__cripta;
   if (!C) return;
   const { el, api, route, toast } = C;
+  const uiEvent = (kind) => { if (navigator.doNotTrack === '1' || navigator.globalPrivacyControl) return; api('/api/ui-event', { method: 'POST', body: { kind }, keepalive: true }).catch(() => {}); };
   const $ = (s) => document.querySelector(s);
   const fmtDate = (iso) => new Date(iso).toLocaleDateString('es', { day: 'numeric', month: 'long', year: 'numeric' });
   const fmtTime = (ms) => { if (ms == null) return '—'; const s = Math.round(ms / 1000); return s < 60 ? s + ' s' : Math.floor(s / 60) + ' min ' + String(s % 60).padStart(2, '0') + ' s'; };
@@ -50,10 +51,10 @@
       if (!me) { slot.replaceChildren(el('a', { class: 'btn primary', href: route('account') + '?next=' + encodeURIComponent(location.pathname), text: 'Creá tu cuenta y suscribite' })); continue; }
       const err = el('p', { class: 'field-error', role: 'alert' });
       const btn = el('button', { class: 'btn ' + (plan === 'yearly' ? 'primary' : 'ink'), type: 'button', text: plan === 'yearly' ? 'Quiero el anual' : 'Quiero el mensual', onclick: async () => {
-        err.textContent = ''; btn.setAttribute('aria-busy', 'true');
+        err.textContent = ''; btn.setAttribute('aria-busy', 'true'); uiEvent('plus_checkout_' + plan);
         try { const r = await api('/api/billing/plus/checkout', { method: 'POST', body: { plan } }); location.href = r.url; } catch (x) { err.textContent = errText(x); btn.removeAttribute('aria-busy'); }
       } });
-      slot.replaceChildren(btn, el('p', { class: 'small muted', text: 'Pagás con tarjeta o PayPal. Impuestos incluidos.' }), err);
+      slot.replaceChildren(btn, el('p', { class: 'small muted', text: 'Pagás con tarjeta. Impuestos incluidos. Garantía de 10 días.' }), err);
     }
   }
 
@@ -81,5 +82,7 @@
       el('p', { class: 'small muted', text: 'Tiempo: mediana de los crípticos resueltos. Pistas: promedio por partida.' }));
   }
 
+  // Vista de la página para medir el embudo (una vez por sesión del navegador).
+  try { if (!sessionStorage.getItem('pc_plus_view')) { sessionStorage.setItem('pc_plus_view', '1'); uiEvent('plus_page_view'); } } catch (e) { /* sin almacenamiento */ }
   returnFromCheckout().then(() => Promise.all([plans(), comparison()]));
 })();

@@ -371,12 +371,14 @@ async function ensurePlusDaily(db, lang, date = today()) {
 }
 
 // Abre el primer críptico de la tanda que la persona todavía no terminó (o retoma el que dejó a medias).
-async function startPlusDaily(db, { playerId, choice, country, origin }) {
+// Con taste (cuentas sin Plus) solo se abre el primero de la tanda: la prueba gratis del día.
+async function startPlusDaily(db, { playerId, choice, country, origin, taste = false }) {
   const sel = await resolveVariant(db, choice || 'es');
   if (!sel.enabled) return { clue: null, notice: { kind: 'language_unavailable', language: sel.lang } };
   const player = await ensurePlayer(db, playerId, { country, variant: choice, origin });
   const date = today();
-  const ids = await ensurePlusDaily(db, sel.lang, date);
+  const all = await ensurePlusDaily(db, sel.lang, date);
+  const ids = taste ? all.slice(0, 1) : all;
   if (!ids.length) return { player_id: player.id, clue: null, notice: { kind: 'empty', alternatives: [] } };
   // Las partidas del Plus no llevan daily_date: así no se mezclan con el diario común ni con su racha.
   const games = await db.all(`SELECT * FROM games WHERE player_id = ? AND mode = 'plus_daily' AND clue_id IN (${ids.map(() => '?').join(',')}) ORDER BY started_at DESC`, [player.id, ...ids]);
@@ -391,7 +393,7 @@ async function startPlusDaily(db, { playerId, choice, country, origin }) {
   else if (!prev.finished_at) await track.resumeIfAbandoned(db, prev);
   return {
     player_id: player.id, game_id: gameId, date, clue: publicClue(clue), max_hints: await getSetting(db, 'game.max_hints'),
-    plus: { done, total: ids.length, number: Math.min(done + 1, ids.length) },
+    plus: { done, total: ids.length, number: Math.min(done + 1, ids.length), ...(taste ? { taste: true, full: all.length } : {}) },
     finished: prev && prev.finished_at ? { result: prev.result, attempts: prev.attempts, hints_used: prev.hints_used, solution: solutionView(clue) } : null,
   };
 }

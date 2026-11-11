@@ -80,7 +80,8 @@ test('las cuentas del equipo no cuentan en embudo, retención ni sesiones', asyn
 
 test('/api/meta expone los interruptores de crecimiento', async () => {
   const m = await client(env.base).get('/api/meta');
-  assert.deepEqual(m.json.growth, { direct_start: true, signup_prompt: true, signup_prompt_after: 3, next_step: true });
+  assert.deepEqual(m.json.growth, { direct_start: true, signup_prompt: true, signup_prompt_after: 3, next_step: true,
+    plus_taste: true, plus_upsell: true, plus_upsell_after: 5 });
 });
 
 test('las primeras partidas de un jugador nuevo son fáciles; después, de cualquier dificultad', async () => {

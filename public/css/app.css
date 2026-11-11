@@ -999,6 +999,9 @@ dialog::backdrop { background: var(--scrim); }
 .next-step p { margin: 0 0 var(--s-2); }
 .next-step .form-actions { display: flex; gap: var(--s-3); flex-wrap: wrap; margin-top: var(--s-3); }
 .next-step .form-actions:empty { display: none; }
+.plus-upsell h2 { display: flex; align-items: center; gap: var(--s-2); flex-wrap: wrap; }
+.plus-taste { padding: var(--s-4); border: var(--b-1); border-radius: var(--r-1); background: var(--paper-2); }
+.plus-guarantee { margin: calc(-1 * var(--s-3)) 0 var(--s-6); padding: var(--s-3) var(--s-4); border-left: 3px solid var(--accent); background: var(--accent-soft); }
 #account-via { margin: 0 0 var(--s-4); }
 
 /* Artículos, quiénes somos y textos bajo el juego */
