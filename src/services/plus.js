@@ -187,6 +187,42 @@ async function handleWebhook(db, config, raw, headers) {
   return { ok: true, user: !!user, until };
 }
 
+// ── Panel: suscriptores, compras y embudo de Plus (ver docs/PLUS.md) ──
+// Lee tablas chicas (subscriptions, ui_events_daily) y cuenta usuarios Plus con un índice simple:
+// unas pocas lecturas por apertura del panel.
+const FUNNEL_KINDS = ['plus_page_view', 'plus_upsell_shown', 'plus_upsell_click', 'plus_upsell_dismiss', 'plus_taste_start', 'plus_taste_done',
+  'plus_taste_click', 'plus_checkout_monthly', 'plus_checkout_yearly', 'plus_checkout_created', 'plus_subscribed'];
+const MONTHLY_USD = { monthly: 1.5, yearly: 1 };   // ingreso mensual equivalente por plan (USD 12 / 12)
+async function adminSummary(db, { from, to }) {
+  const at = now();
+  const active = await db.all(`SELECT s.plan, COUNT(DISTINCT s.user_id) AS n FROM subscriptions s JOIN users u ON u.id = s.user_id
+    WHERE u.plus_until > ? AND s.status IN ('active','on_trial','past_due') GROUP BY s.plan`, [at]);
+  const byPlan = { monthly: 0, yearly: 0 };
+  for (const r of active) byPlan[r.plan] = Number(r.n || 0);
+  const plusUsers = Number((await db.get('SELECT COUNT(*) AS n FROM users WHERE plus_until > ?', [at])).n || 0);
+  const cancelling = Number((await db.get(`SELECT COUNT(DISTINCT s.user_id) AS n FROM subscriptions s JOIN users u ON u.id = s.user_id
+    WHERE u.plus_until > ? AND s.status = 'cancelled'`, [at])).n || 0);
+  const subs = await db.all(`SELECT s.id, s.plan, s.status, s.renews_at, s.ends_at, s.created_at, s.updated_at, s.provider, u.id AS user_id, u.username, u.display_name, u.plus_until
+    FROM subscriptions s LEFT JOIN users u ON u.id = s.user_id ORDER BY s.created_at DESC LIMIT 100`);
+  const inPeriod = (t) => t && t >= from && t < to;
+  const rows = await db.all(`SELECT day, kind, n FROM ui_events_daily WHERE day >= ? AND day < ? AND kind IN (${FUNNEL_KINDS.map(() => '?').join(',')}) ORDER BY day`,
+    [from.slice(0, 10), to.slice(0, 10), ...FUNNEL_KINDS]);
+  const totals = Object.fromEntries(FUNNEL_KINDS.map((k) => [k, 0]));
+  const days = {};
+  for (const r of rows) { totals[r.kind] += Number(r.n || 0); (days[r.day] = days[r.day] || {})[r.kind] = Number(r.n || 0); }
+  return {
+    subscribers: { total: byPlan.monthly + byPlan.yearly, monthly: byPlan.monthly, yearly: byPlan.yearly, cancelling, plus_users: plusUsers,
+      mrr_usd: Math.round((byPlan.monthly * MONTHLY_USD.monthly + byPlan.yearly * MONTHLY_USD.yearly) * 100) / 100 },
+    period: { new_subscriptions: subs.filter((x) => inPeriod(x.created_at)).length,
+      cancellations: subs.filter((x) => ['cancelled', 'expired'].includes(x.status) && inPeriod(x.updated_at)).length },
+    purchases: subs.map((x) => ({ id: x.id, provider: x.provider, plan: x.plan, status: x.status, bought_at: x.created_at, updated_at: x.updated_at,
+      renews_at: x.renews_at, ends_at: x.ends_at, user_id: x.user_id || null, username: x.username || null, name: x.display_name || null,
+      plus_active: !!(x.plus_until && x.plus_until > at) })),
+    funnel: totals,
+    days: Object.entries(days).map(([day, k]) => ({ day, ...k })),
+  };
+}
+
 // ── Comparación con la comunidad (Plus) ──
 // alguien Plus las pide): leen las partidas de los últimos 30 días una vez, no en cada visita.
 const BENCH_TTL = 24 * 3600000;
@@ -241,4 +277,4 @@ async function comparison(db, user, lang = 'es') {
   return { days: BENCH_DAYS, computed_at: community.length ? community[0].computed_at : null, rows };
 }
 
-module.exports = { benchmarks, comparison, PLANS, configured, available, isPlus, status, checkout, portal, handleWebhook, untilFor, statusOf, SETTING };
+module.exports = { benchmarks, comparison, PLANS, configured, available, isPlus, status, checkout, portal, handleWebhook, untilFor, statusOf, SETTING, adminSummary, FUNNEL_KINDS };

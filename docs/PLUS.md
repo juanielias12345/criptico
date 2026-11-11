@@ -62,3 +62,13 @@ Para probar sin cobrar: crear un descuento del 100% en Polar, o usar https://san
   pagar (mensual / anual), pagos abiertos y suscripciones nuevas. Contadores diarios sin identificadores.
 
 Cada interruptor se apaga en /admin → Ajustes sin desplegar.
+
+## Panel: Plus (suscriptores y embudo)
+
+/admin → «Plus: suscriptores y embudo» (permiso `analytics.read`; los nombres de quién compró, solo
+con `players.read`). Muestra suscriptores activos (mensual / anual), cancelaciones que siguen hasta fin
+de período, ingreso mensual estimado (antes de comisiones; el dato exacto está en Polar), compras y
+bajas del período, el embudo completo (invitación → página → prueba gratis → clic en pagar → pago
+abierto → compra), el gráfico día por día y la lista de las últimas 100 compras con cuenta, plan,
+estado y fecha. El Resumen del panel suma una fila «Plus» con los mismos números clave.
+API: `GET /api/admin/analytics/plus?period=30d`.

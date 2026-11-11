@@ -39,6 +39,14 @@ module.exports = function panel({ need, log }) {
   r.get('/analytics/geo', need('analytics.read'), a(async (req, res) => res.json(await analytics.geo(req.app.locals.db, req.query))));
   r.get('/analytics/origins', need('analytics.read'), a(async (req, res) => res.json(await analytics.origins(req.app.locals.db, req.query))));
   r.get('/analytics/funnel', need('analytics.read'), a(async (req, res) => res.json(await analytics.funnel(req.app.locals.db, req.query))));
+  // Plus: suscriptores, compras (quién y cuándo) y embudo por día.
+  r.get('/analytics/plus', need('analytics.read'), a(async (req, res) => {
+    const p = analytics.parsePeriod(req.query);
+    const out = await require('../services/plus').adminSummary(req.app.locals.db, p);
+    // Quién compró: solo con permiso para ver jugadores; si no, la lista va sin nombres.
+    if (!can(req.user, 'players.read')) out.purchases = out.purchases.map((x) => ({ ...x, user_id: null, username: null, name: null }));
+    res.json({ ...out, from: p.from, to: p.to });
+  }));
   r.get('/analytics/retention', need('analytics.read'), a(async (req, res) => res.json(await analytics.retention(req.app.locals.db, req.query))));
   r.get('/analytics/clues', need('analytics.read'), a(async (req, res) => res.json(await analytics.clueStats(req.app.locals.db, req.query))));
   r.get('/analytics/catalog', need('catalog.read'), a(async (req, res) => res.json(await analytics.catalogStats(req.app.locals.db))));
