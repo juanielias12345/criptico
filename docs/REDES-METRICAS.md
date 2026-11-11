@@ -87,3 +87,23 @@ Medición después del 3/12, comparada con 23/10–10/11:
 - Sitio: visitas desde TikTok, Instagram y YouTube, y cuántas resuelven su primer críptico.
 
 Si Relámpago supera al video largo en TikTok, pasa a ser el formato principal en las próximas semanas.
+
+## 6. Campaña Plus (12/11–2/12)
+
+Las promos de producto son lo que peor rinde (alcance 126–246), así que la campaña de Plus no vende directo: muestra un críptico difícil y ofrece **probar uno gratis hoy** en /es/plus (`growth.plus_taste`). Plus: USD 1,50 por mes o USD 12 por año, sin anuncios, 10 Crípticos Plus por día, comparación con la comunidad, insignia. Sin ventajas en torneos ni duelos.
+
+| Fecha (12:30 ART) | Pieza | Redes |
+|---|---|---|
+| 12/11 13:00 IG, 13:30 FB · 13/11 13:00 TikTok | Carrusel «Gratis y Plus: qué cambia» (k5, 5 láminas, pago con Polar) | IG, FB, TikTok (JPEG) |
+| 14/11 | p1 «Sol y dado se juntan: militar (7)» | IG reel, FB reel, TikTok, YouTube Short |
+| 19/11 | p2 «Da vueltas al astro rey: flor amarilla (7)» | ídem |
+| 21/11 | p3 «Bolsa grande al revés: aves de corral (4)» | ídem |
+| 25/11 | p4 «Nota musical y océano: mover la barca (5)» | ídem |
+| 28/11 | p5 «Animal andino que escupe, o fuego de la vela (5)» | ídem |
+| 2/12 | p6 «Detiene tropiezos: lo abrís al saltar del avión (10)» | ídem |
+
+Videos «Nivel Plus» de 8,6 s (`scripts/social/relampago/plus-serie.json`, `node scripts/social/relampago/render.js plus-serie.json`). Enlaces de FB y YouTube con `utm_campaign=plus`. 28 piezas en total.
+
+No publicar los borradores del video v6 (dicen «Muy pronto»).
+
+Medición: en /admin → «Plus: suscriptores y embudo» (visitas a /es/plus, prueba gratis, checkout, altas) y visitas con `utm_campaign=plus`.
