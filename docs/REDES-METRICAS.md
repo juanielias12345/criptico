@@ -66,7 +66,10 @@ Sirven para la Bandeja de entrada de Metricool (si el plan tiene respuestas auto
 | PROPONER | ¡Nos encanta! Mandá tu críptico desde https://playcripticos.com/es/contribuir Lo revisamos y, si queda, sale con tu nombre. |
 | APP | Por ahora no hay app en las tiendas, pero podés instalar la web: abrí playcripticos.com en el celular y elegí «Agregar a la pantalla de inicio». |
 
-Comentarios con palabra clave: TRUCOS (pública «¡Te los mandamos por mensaje! 💡» + DM de TRUCOS) y QUIERO (pública «¡Va por mensaje! 🧩» + DM de JUGAR). Nunca responder automáticamente a todos los comentarios: la gente comenta su respuesta.
+Comentarios con palabra clave: TRUCOS (pública «¡Te los mandamos por mensaje! 💡» + DM de TRUCOS) y QUIERO (pública «¡Va por mensaje! 🧩» + DM de JUGAR). La mayoría de los comentarios son la respuesta al críptico. Por eso hay una automatización más, para **cualquier comentario** en todas las publicaciones, con respuesta neutra que no confirma si está bien (no spoilea):
+- Públicas (rotan): «🧩 ¡Gracias por jugar! La solución sale en historias a las 00:00 UTC.» / «👀 Anotada. ¿Acertaste? Lo sabés a las 00:00 UTC en historias.» / «¡Buena! 🧩 Si te quedaste con ganas, hay más en el enlace que te mandamos.»
+- DM: «¡Gracias por jugar! 🧩 Si querés saber al instante si acertaste, cada críptico se puede resolver en la web, con ayudas: https://playcripticos.com/es/diario»
+No responder «¡Correcto!» automáticamente (exige configurarlo a mano cada día y spoilea).
 
 ### Mensaje automático (fuera de horario, 0 a 9 h)
 
