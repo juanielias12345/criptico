@@ -255,3 +255,26 @@ test('embudo de Plus: los contadores de la interfaz y del servidor se aceptan', 
   assert.equal(meta.json.growth.plus_taste, true);
   assert.equal(meta.json.growth.plus_upsell_after, 5);
 });
+
+test('panel: suscriptores, compras (quién y cuándo) y embudo de Plus', async () => {
+  configure();
+  const jefa = await player('jefa_plus');
+  await env.db.run("UPDATE users SET role = 'owner' WHERE id = ?", [jefa.user.id]);
+  const buyer = await player('compra_panel');
+  await hook(event('subscription.created', buyer.user.id, {}, 'sub-9600'));
+  const r = await jefa.c.get('/api/admin/analytics/plus?period=30d');
+  assert.equal(r.status, 200, r.text);
+  assert.ok(r.json.subscribers.total >= 1);
+  assert.ok(r.json.subscribers.monthly >= 1);
+  assert.ok(r.json.subscribers.mrr_usd >= 1.5);
+  assert.ok(r.json.period.new_subscriptions >= 1);
+  const mine = r.json.purchases.find((x) => x.id === 'polar:sub-9600');
+  assert.ok(mine, 'la compra aparece en la lista');
+  assert.equal(mine.username, 'compra_panel', 'se ve quién compró');
+  assert.equal(mine.plan, 'monthly');
+  assert.equal(mine.plus_active, true);
+  assert.ok(mine.bought_at, 'y cuándo');
+  assert.ok(r.json.funnel.plus_subscribed >= 1, 'la compra suma al embudo');
+  assert.ok(Array.isArray(r.json.days));
+  assert.equal((await buyer.c.get('/api/admin/analytics/plus')).status, 403, 'un jugador no ve el panel');
+});

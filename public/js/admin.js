@@ -291,7 +291,7 @@
   V.dashboard = async () => {
     if (!can('analytics.read')) return dashboardBasic();
     const q = qs();
-    const d = await api('/api/admin/analytics/overview?' + apiQs(q, PERIOD_KEYS));
+    const [d, plus] = await Promise.all([api('/api/admin/analytics/overview?' + apiQs(q, PERIOD_KEYS)), api('/api/admin/analytics/plus?' + apiQs(q, ['period', 'from', 'to'])).catch(() => null)]);
     const c = d.current; const p = d.previous; const cg = c.games; const pg = p ? p.games : null;
     // Sin datos en el período anterior: no se muestra comparación en cada tarjeta.
     const P = (k) => (pg ? pg[k] : undefined); const PB = (k) => (p ? p[k] : undefined);
@@ -315,6 +315,13 @@
         kpi('DAU', d.dau, { def: def('dau') }), kpi('WAU', d.wau, { def: def('wau') }), kpi('MAU', d.mau, { def: def('mau') }),
         kpi('Visitas (páginas)', c.visits.pageview, { prev: p ? p.visits.pageview : undefined, def: def('visits') }),
         kpi('Navegadores nuevos', c.visits.new_visitor, { prev: p ? p.visits.new_visitor : undefined, def: def('visits') })),
+      plus ? el('h2', { text: 'Plus' }) : '',
+      plus ? el('div', { class: 'cards' },
+        kpi('Suscriptores activos', plus.subscribers.total, { href: '#plus', link: 'Ver Plus' }),
+        kpi('Compras en el período', plus.period.new_subscriptions, { href: '#plus', link: 'Quién y cuándo' }),
+        kpi('Visitas a la página de Plus', plus.funnel.plus_page_view, { href: '#plus', link: 'Ver embudo' }),
+        kpi('Clics en pagar', plus.funnel.plus_checkout_monthly + plus.funnel.plus_checkout_yearly, { href: '#plus' }),
+        kpi('Ingreso mensual estimado', plus.subscribers.mrr_usd, { fmt: (v) => 'USD ' + nf(v), def: 'Mensuales × USD 1,50 + anuales × USD 1. Antes de comisiones; el dato exacto está en Polar.' })) : '',
       el('h2', { text: 'Partidas' }),
       el('div', { class: 'cards' },
         kpi('Iniciadas', cg.started, { prev: P('started'), def: def('started'), href: '#games' }),
@@ -655,6 +662,56 @@
         el('p', { class: 'small muted', text: seg === 'registered' ? 'Cada cuenta es una persona identificada.' : 'Un identificador es un navegador, no una persona: alguien que juega en dos dispositivos sin cuenta cuenta dos veces. «—» = la ventana todavía no se cumplió.' }),
         r.cohorts.length ? table(['Semana (lunes)', 'Nuevos', 'D1', 'D7', 'D30', 'Volvieron alguna vez'], r.cohorts.map((c) => el('tr', {}, el('td', { text: c.week }), el('td', { class: 'num', text: c.size }),
           ...['d1', 'd7', 'd30', 'returned'].map((k) => el('td', { class: 'heat', 'data-v': isNum(c[k]) ? String(Math.min(4, Math.floor(c[k] / 20))) : '', text: isNum(c[k]) ? pct(c[k]) : '—' }))))) : empty()));
+  };
+
+  // ── Plus: suscriptores, compras y embudo (docs/PLUS.md) ──
+  const SUB_STATUS = { active: 'Activa', on_trial: 'En prueba', past_due: 'Cobro demorado', cancelled: 'Cancelada (sigue hasta el fin del período)', expired: 'Terminada', incomplete: 'Pago incompleto' };
+  V.plus = async () => {
+    const q = qs();
+    const d = await api('/api/admin/analytics/plus?' + apiQs(q, ['period', 'from', 'to']));
+    const f = d.funnel; const S = d.subscribers;
+    const rate = (a, b) => (b ? pct((a / b) * 100) : NA);
+    const usd = (v) => 'USD ' + nf(v);
+    const checkout = f.plus_checkout_monthly + f.plus_checkout_yearly;
+    const steps = [
+      ['Vieron una invitación a Plus (al resolver o al terminar el diario)', f.plus_upsell_shown, ''],
+      ['… la tocaron', f.plus_upsell_click, rate(f.plus_upsell_click, f.plus_upsell_shown) + ' de las vistas'],
+      ['… la cerraron («Ahora no»)', f.plus_upsell_dismiss, rate(f.plus_upsell_dismiss, f.plus_upsell_shown) + ' de las vistas'],
+      ['Entraron a la página de Plus (una vez por sesión)', f.plus_page_view, ''],
+      ['Empezaron la prueba gratis del día', f.plus_taste_start, rate(f.plus_taste_start, f.plus_page_view) + ' de las visitas'],
+      ['… la terminaron', f.plus_taste_done, rate(f.plus_taste_done, f.plus_taste_start) + ' de las empezadas'],
+      ['… tocaron «Quiero los 10»', f.plus_taste_click, rate(f.plus_taste_click, f.plus_taste_done) + ' de las terminadas'],
+      ['Tocaron un botón de pago', checkout, nf(f.plus_checkout_monthly, 0) + ' mensual · ' + nf(f.plus_checkout_yearly, 0) + ' anual · ' + rate(checkout, f.plus_page_view) + ' de las visitas'],
+      ['Se abrió la página de pago', f.plus_checkout_created, rate(f.plus_checkout_created, checkout) + ' de los clics'],
+      ['Compraron (suscripciones nuevas)', f.plus_subscribed, rate(f.plus_subscribed, f.plus_checkout_created) + ' de los pagos abiertos'],
+    ];
+    const max = Math.max(1, ...steps.map((x) => x[1]));
+    const series = [{ k: 'plus_page_view', t: 'Visitas a Plus' }, { k: 'plus_upsell_click', t: 'Clics en la invitación' }, { k: 'plus_checkout', t: 'Clics en pagar' }, { k: 'plus_subscribed', t: 'Compras' }];
+    const points = d.days.map((x) => ({ ...x, plus_checkout: (x.plus_checkout_monthly || 0) + (x.plus_checkout_yearly || 0) }));
+    main.replaceChildren(el('div', { class: 'adm-head' }, el('h1', { text: 'Plus: suscriptores y embudo' })),
+      filterBar(q, { geo: false }),
+      el('div', { class: 'cards' },
+        kpi('Suscriptores activos', S.total, { def: 'Cuentas con una suscripción que se renueva (mensual o anual) y Plus vigente. Sin las canceladas.' }),
+        kpi('Mensuales / anuales', nf(S.monthly, 0) + ' / ' + nf(S.yearly, 0), { txt: true, fmt: (v) => v }),
+        kpi('Ingreso mensual estimado', S.mrr_usd, { fmt: usd, def: 'Mensuales × USD 1,50 + anuales × USD 1 (USD 12 / 12). Antes de comisiones e impuestos; el dato exacto está en Polar.' }),
+        kpi('Cancelaron (siguen hasta fin de período)', S.cancelling, { warn: true }),
+        kpi('Compras en el período', d.period.new_subscriptions, { def: 'Suscripciones nuevas creadas en el período elegido.' }),
+        kpi('Bajas en el período', d.period.cancellations, { warn: true })),
+      section('Embudo del período: ¿quién entra, aprieta y compra?',
+        el('p', { class: 'small muted', text: 'Contadores diarios sin identificadores (no cuentan los navegadores con «No rastrear»). «Se abrió la página de pago» y «Compraron» los anota el servidor.' }),
+        el('ol', { class: 'funnel' }, steps.map(([t, n, r]) => el('li', {}, el('span', { class: 'bar-label', text: t }),
+          el('span', { class: 'bar-track' }, el('span', { class: 'bar-fill', style: 'width:' + Math.max(1, Math.round((n / max) * 100)) + '%' })),
+          el('span', { class: 'bar-value', text: nf(n, 0) + (r ? ' · ' + r : '') }))))),
+      section('Día por día', points.length ? lineChart(points, series, { height: 160, label: 'Embudo de Plus por día' }) : empty('Todavía no hay movimiento de Plus en este período.')),
+      section('Compras (últimas 100)',
+        d.purchases.length ? table(['Fecha de compra', 'Cuenta', 'Plan', 'Estado', 'Próximo cobro / fin', 'Plus vigente'], d.purchases.map((x) => el('tr', {},
+          el('td', { text: fmt(x.bought_at) }),
+          el('td', {}, x.user_id ? el('a', { href: '#player/' + x.user_id, text: x.username || x.name || x.user_id }) : (x.username === null && x.user_id === null ? 'Cuenta no vinculada o sin permiso' : '—')),
+          el('td', { text: x.plan === 'yearly' ? 'Anual' : 'Mensual' }),
+          el('td', { text: SUB_STATUS[x.status] || x.status }),
+          el('td', { text: fmt(x.renews_at || x.ends_at) }),
+          el('td', { text: x.plus_active ? 'Sí' : 'No' })))) : empty('Todavía no hay compras.'),
+        el('p', { class: 'small muted', text: 'Los reembolsos se ven en Polar (Sales). Una compra reembolsada y cancelada aparece acá como «Terminada».' })));
   };
 
   // Invitaciones y siguientes pasos (docs/CRECIMIENTO-PRODUCTO.md): contadores diarios sin identificadores.
