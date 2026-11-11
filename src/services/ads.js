@@ -10,9 +10,11 @@
 const crypto = require('crypto');
 const { getSetting } = require('./settings');
 
-// Páginas con contenido propio donde pueden ir anuncios. Nunca en el panel, la cuenta,
-// el perfil, los legales ni las páginas de error.
-const AD_PAGES = new Set(['home', 'play', 'daily', 'archive', 'clue', 'help', 'guide', 'arena', 'tournament']);
+// Páginas con contenido editorial propio donde pueden ir anuncios. Nunca en el panel, la cuenta,
+// el perfil, los legales, las páginas de error ni las pantallas de juego (jugar, diario, duelos,
+// torneos): AdSense no admite anuncios en pantallas sin contenido del editor y las marca como
+// «contenido de poco valor». Tampoco en páginas con noindex (ver render en routes/pages.js).
+const AD_PAGES = new Set(['home', 'archive', 'clue', 'help', 'guide', 'faq', 'articles', 'article']);
 const TTL = 5 * 60000;
 let cache = { at: 0, value: false };
 
