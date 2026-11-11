@@ -27,7 +27,7 @@ const company = require('../src/services/company');
   console.log(`Aprueba: ${user.username}`);
   const out = await company.approveGlobalLegal(db, user, config.siteUrl);
   for (const x of out.items) console.log(`${x.doc}${x.version ? ' v' + x.version : ''}: ${x.status}`);
-  const pay = await db.get("SELECT value FROM settings WHERE key = 'billing.lemonsqueezy'");
+  const pay = await db.get("SELECT value FROM settings WHERE key = 'billing.polar'");
   console.log(`Publicados: ${out.published}. Pago de Plus habilitado: ${pay ? pay.value : 'no'}`);
   db.close();
 })().catch((e) => { console.error(e.message || e); process.exit(1); });

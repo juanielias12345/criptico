@@ -304,10 +304,10 @@ async function markLegalPublished(db, docId, version, language, evidence, actor)
     await audit(db, { actorId: actor.id, action: 'setting.update', targetKind: 'setting', targetId: 'privacy.store_origin', details: { value: true, reason: 'privacidad publicada' } });
   }
   // El pago del plan Plus se habilita cuando están publicados los términos que lo explican.
-  // Desde el cambio a Lemon Squeezy cuenta la revisión que lo nombra como procesador.
-  if (docId === 'terms' && v.source_note === G.PLUS_LS_NOTE) {
-    await setSetting(db, 'billing.lemonsqueezy', true, actor.id);
-    await audit(db, { actorId: actor.id, action: 'setting.update', targetKind: 'setting', targetId: 'billing.lemonsqueezy', details: { value: true, reason: 'términos con el plan Plus (Lemon Squeezy) publicados' } });
+  // Desde el cambio a Polar cuenta la revisión que lo nombra como procesador.
+  if (docId === 'terms' && v.source_note === G.PLUS_POLAR_NOTE) {
+    await setSetting(db, 'billing.polar', true, actor.id);
+    await audit(db, { actorId: actor.id, action: 'setting.update', targetKind: 'setting', targetId: 'billing.polar', details: { value: true, reason: 'términos con el plan Plus (Polar) publicados' } });
   }
   // Los anuncios se encienden cuando están publicadas la privacidad y las cookies que los explican.
   if (['privacy', 'cookies'].includes(docId) && v.source_note === G.ADS_NOTE) {

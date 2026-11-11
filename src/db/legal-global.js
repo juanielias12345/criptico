@@ -537,7 +537,25 @@ const PLUS_LS_REVISIONS = {
     `| ${LS} | Cobro del plan Plus como vendedor registrado (impuestos y comprobantes) | Datos de pago, facturación y de la suscripción; nosotros solo recibimos el identificador, el plan y el estado de la suscripción | Estados Unidos y otros | Responsable independiente; política de privacidad de Lemon Squeezy |`),
 };
 
-// Revisiones en orden: cada una se arma sobre la versión anterior del mismo documento.
-const REVISION_SETS = [[ORIGIN_NOTE, REVISIONS], [ADS_NOTE, ADS_REVISIONS], [PREMIUM_NOTE, PREMIUM_REVISIONS], [PLUS_LS_NOTE, PLUS_LS_REVISIONS]];
+// Revisión del 11/11/2026: el cobro de Plus pasa de Lemon Squeezy a Polar (Lemon Squeezy no aprobó la
+// tienda). Al publicarse los términos de esta revisión se habilita el pago con Polar.
+const PLUS_POLAR_NOTE = 'plus-polar-2026-11-11';
+const POLAR = 'Polar (Polar Software, Inc.)';
+const PLUS_POLAR_REVISIONS = {
+  terms: (t) => {
+    t = swap(t, `El cobro lo hace ${LS}, que actúa como vendedor registrado`, `El cobro lo hace ${POLAR}, que actúa como vendedor registrado`);
+    return swap(t, 'o del correo de Lemon Squeezy.', 'o del correo de Polar.');
+  },
+  privacy: (t) => {
+    t = swap(t, 'El pago lo procesa Lemon Squeezy: nunca vemos', 'El pago lo procesa Polar: nunca vemos');
+    return swap(t, `el pago lo procesa ${LS}, que actúa como vendedor registrado y responsable independiente de los datos de pago y de facturación según su propia política de privacidad: https://www.lemonsqueezy.com/privacy.`,
+      `el pago lo procesa ${POLAR}, que actúa como vendedor registrado y responsable independiente de los datos de pago y de facturación según su propia política de privacidad: https://polar.sh/legal/privacy.`);
+  },
+  processors: (t) => swap(t, `| ${LS} | Cobro del plan Plus como vendedor registrado (impuestos y comprobantes) | Datos de pago, facturación y de la suscripción; nosotros solo recibimos el identificador, el plan y el estado de la suscripción | Estados Unidos y otros | Responsable independiente; política de privacidad de Lemon Squeezy |`,
+    `| ${POLAR} | Cobro del plan Plus como vendedor registrado (impuestos y comprobantes) | Datos de pago, facturación y de la suscripción; nosotros solo recibimos el identificador, el plan y el estado de la suscripción | Estados Unidos y otros | Responsable independiente; política de privacidad de Polar |`),
+};
 
-module.exports = { NOTE, ORIGIN_NOTE, ADS_NOTE, PREMIUM_NOTE, PLUS_LS_NOTE, REVISIONS, ADS_REVISIONS, PREMIUM_REVISIONS, PLUS_LS_REVISIONS, REVISION_SETS, OWNER, PUBLIC, DOCS, ownerReady, fill };
+// Revisiones en orden: cada una se arma sobre la versión anterior del mismo documento.
+const REVISION_SETS = [[ORIGIN_NOTE, REVISIONS], [ADS_NOTE, ADS_REVISIONS], [PREMIUM_NOTE, PREMIUM_REVISIONS], [PLUS_LS_NOTE, PLUS_LS_REVISIONS], [PLUS_POLAR_NOTE, PLUS_POLAR_REVISIONS]];
+
+module.exports = { NOTE, ORIGIN_NOTE, ADS_NOTE, PREMIUM_NOTE, PLUS_LS_NOTE, PLUS_POLAR_NOTE, REVISIONS, ADS_REVISIONS, PREMIUM_REVISIONS, PLUS_LS_REVISIONS, PLUS_POLAR_REVISIONS, REVISION_SETS, OWNER, PUBLIC, DOCS, ownerReady, fill };

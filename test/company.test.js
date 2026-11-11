@@ -446,9 +446,10 @@ test('textos legales globales: sin datos del titular no se cargan; con datos, un
   assert.match(page.text, /cookies de anuncios/, 'las cookies publicadas explican los anuncios');
   assert.equal(await getSetting(env.db, 'ads.enabled'), true, 'publicar privacidad y cookies con anuncios los enciende');
   assert.match((await client(env.base).get('/es/condiciones')).text, /Plan Plus/, 'los términos publicados explican Plus');
-  assert.match((await client(env.base).get('/es/privacidad')).text, /Lemon Squeezy/, 'la privacidad publicada explica el cobro con Lemon Squeezy');
-  assert.equal(await getSetting(env.db, 'billing.lemonsqueezy'), true, 'publicar los términos de Plus con Lemon Squeezy habilita el pago');
-  assert.doesNotMatch((await client(env.base).get('/es/condiciones')).text, /PayPal/, 'los términos ya no nombran PayPal');
+  assert.match((await client(env.base).get('/es/condiciones')).text, /Polar \(Polar Software/, 'los términos nombran a Polar como vendedor registrado');
+  assert.match((await client(env.base).get('/es/privacidad')).text, /Polar Software/, 'la privacidad publicada explica el cobro con Polar');
+  assert.doesNotMatch((await client(env.base).get('/es/privacidad')).text, /Lemon Squeezy/, 'ya no nombra a Lemon Squeezy');
+  assert.equal(await getSetting(env.db, 'billing.polar'), true, 'publicar los términos de Plus con Polar habilita el pago');
   assert.match((await client(env.base).get('/es/condiciones')).text, new RegExp(G.OWNER.name));
   assert.match((await client(env.base).get('/es/legal/ip')).text, new RegExp(G.OWNER.name));
   assert.match((await client(env.base).get('/es/legal')).text, /\/es\/legal\/cookies/);

@@ -25,14 +25,14 @@ function loadConfig(env = process.env) {
     // Google AdSense: ID de editor (ca-pub-…) y, opcional, un bloque de anuncios manual. Ver docs/MONETIZACION.md.
     adsenseClient: /^ca-pub-\d{10,20}$/.test(env.ADSENSE_CLIENT || '') ? env.ADSENSE_CLIENT : '',
     adsenseSlot: /^\d{6,20}$/.test(env.ADSENSE_SLOT || '') ? env.ADSENSE_SLOT : '',
-    // Plan Plus: suscripción de Lemon Squeezy (mensual y anual). Sin estas claves, el botón de pago queda deshabilitado.
-    lemonsqueezy: {
-      apiKey: env.LEMONSQUEEZY_API_KEY || '',
-      storeId: /^\d{1,12}$/.test(env.LEMONSQUEEZY_STORE_ID || '') ? env.LEMONSQUEEZY_STORE_ID : '',
-      productId: /^\d{1,12}$/.test(env.LEMONSQUEEZY_PRODUCT_ID || '') ? env.LEMONSQUEEZY_PRODUCT_ID : '',
-      variantMonthly: /^\d{1,12}$/.test(env.LEMONSQUEEZY_VARIANT_MONTHLY || '') ? env.LEMONSQUEEZY_VARIANT_MONTHLY : '',
-      variantYearly: /^\d{1,12}$/.test(env.LEMONSQUEEZY_VARIANT_YEARLY || '') ? env.LEMONSQUEEZY_VARIANT_YEARLY : '',
-      webhookSecret: env.LEMONSQUEEZY_WEBHOOK_SECRET || '',
+    // Plan Plus: suscripción de Polar (un producto mensual y otro anual). Sin estas claves, el botón de pago queda deshabilitado.
+    polar: {
+      accessToken: env.POLAR_ACCESS_TOKEN || '',
+      productMonthly: /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(env.POLAR_PRODUCT_MONTHLY || '') ? env.POLAR_PRODUCT_MONTHLY : '',
+      productYearly: /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(env.POLAR_PRODUCT_YEARLY || '') ? env.POLAR_PRODUCT_YEARLY : '',
+      webhookSecret: env.POLAR_WEBHOOK_SECRET || '',
+      // «sandbox» para probar con https://sandbox.polar.sh; cualquier otro valor usa la cuenta real.
+      server: env.POLAR_SERVER === 'sandbox' ? 'sandbox' : 'production',
     },
     siteUrl: siteUrlFrom(env),
     databaseUrl: env.DATABASE_URL || `file:${path.join(process.cwd(), 'data', 'criptico.db')}`,

@@ -20,6 +20,12 @@ module.exports = function billingApi() {
     if (req.user && !(await hit(req.app.locals.db, `checkout:${req.user.id}`, 20, 'day')).allowed) throw new HttpError(429, 'rate_limited', 'Probá de nuevo más tarde.');
     res.json(await P.checkout(req.app.locals.db, req.app.locals.config, req.user, (req.body || {}).plan === 'yearly' ? 'yearly' : 'monthly'));
   }));
+  // Administrar o cancelar: abre el portal de cliente de Polar con una sesión nueva.
+  r.get('/billing/plus/portal', a(async (req, res) => {
+    res.set('Cache-Control', 'no-store');
+    if (!req.user) return res.redirect(302, '/es/cuenta?next=/es/plus');
+    res.redirect(303, (await P.portal(req.app.locals.config, req.user)).url);
+  }));
   // Comparación con la comunidad (solo Plus).
   r.get('/plus/comparison', a(async (req, res) => {
     if (!req.user) throw new HttpError(401, 'login_required');

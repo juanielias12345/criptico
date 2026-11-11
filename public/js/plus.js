@@ -39,7 +39,7 @@
       box.replaceChildren(el('article', { class: 'plan mine' }, el('h3', { text: 'Tu suscripción' }),
         el('p', { text: renews ? `Plan ${sub.plan === 'yearly' ? 'anual' : 'mensual'}, activo hasta el ${fmtDate(st.until)}. Se renueva solo.`
           : sub && sub.status === 'cancelled' ? `Cancelada: seguís con Plus hasta el ${fmtDate(st.until)}.` : `Sos Plus hasta el ${fmtDate(st.until)}.` }),
-        renews ? el('p', {}, el('a', { class: 'btn', href: st.manage_url, target: '_blank', rel: 'noopener', text: 'Administrar o cancelar' })) : null));
+        sub ? el('p', {}, el('a', { class: 'btn', href: st.manage_url, target: '_blank', rel: 'noopener', text: renews ? 'Administrar o cancelar' : 'Administrar mi plan' })) : null));
       return;
     }
     for (const card of box.querySelectorAll('.plan')) {
