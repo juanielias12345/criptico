@@ -55,7 +55,8 @@ module.exports = function api() {
     res.json({ languages, variants, totals, categories, modes: await getSetting(db, 'modes.enabled'), max_hints: await getSetting(db, 'game.max_hints'),
       store_origin: await getSetting(db, 'privacy.store_origin'),
       growth: { direct_start: await getSetting(db, 'growth.direct_start'), signup_prompt: await getSetting(db, 'growth.signup_prompt'),
-        signup_prompt_after: await getSetting(db, 'growth.signup_prompt_after'), next_step: await getSetting(db, 'growth.next_step') } });
+        signup_prompt_after: await getSetting(db, 'growth.signup_prompt_after'), next_step: await getSetting(db, 'growth.next_step'),
+        plus_taste: await getSetting(db, 'growth.plus_taste'), plus_upsell: await getSetting(db, 'growth.plus_upsell'), plus_upsell_after: await getSetting(db, 'growth.plus_upsell_after') } });
   }));
 
   // Origen de la visita para un jugador o cuenta nueva. Solo si la política de privacidad
@@ -104,11 +105,13 @@ module.exports = function api() {
     res.json(out);
   }));
 
-  // Críptico Plus del día: solo cuentas Plus (ver services/plus.js).
+  // Crípticos Plus del día: la tanda de 10 es de Plus; con growth.plus_taste, las cuentas sin Plus
+  // prueban gratis el primero de la tanda (ver services/plus.js y docs/PLUS.md).
   r.post('/plus/daily/start', a(async (req, res) => {
-    if (!req.user) throw new HttpError(401, 'login_required', 'Entrá con tu cuenta Plus para jugarlo.');
-    if (!require('../services/plus').isPlus(req.user)) throw new HttpError(403, 'plus_required', 'El Críptico Plus del día es exclusivo de Plus.');
-    const out = await game.startPlusDaily(req.app.locals.db, { playerId: req.playerId, ...readStart(req), origin: await originFor(req, (req.body || {}).origin) });
+    if (!req.user) throw new HttpError(401, 'login_required', 'Entrá con tu cuenta para jugarlo.');
+    const taste = !require('../services/plus').isPlus(req.user);
+    if (taste && !(await getSetting(req.app.locals.db, 'growth.plus_taste'))) throw new HttpError(403, 'plus_required', 'El Críptico Plus del día es exclusivo de Plus.');
+    const out = await game.startPlusDaily(req.app.locals.db, { playerId: req.playerId, ...readStart(req), taste, origin: await originFor(req, (req.body || {}).origin) });
     await linkPlayer(req, res, out.player_id);
     delete out.player_id;
     res.json(out);

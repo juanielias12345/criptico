@@ -16,6 +16,7 @@ const crypto = require('node:crypto');
 const { now, HttpError } = require('./util');
 const { audit } = require('./audit');
 const { getSetting } = require('./settings');
+const UI = require('./uievents');
 
 // Precios que se muestran (el cobro real lo define cada producto en Polar).
 const PLANS = {
@@ -79,6 +80,7 @@ async function checkout(db, config, user, plan = 'monthly', fetchImpl = fetch) {
   const body = res ? await res.json().catch(() => ({})) : {};
   const url = res && res.ok && body.url;
   if (!url || !/^https:\/\//.test(url)) throw new HttpError(502, 'checkout_failed', 'No se pudo abrir el pago. Probá de nuevo en un rato.');
+  await UI.bump(db, 'plus_checkout_created').catch(() => {});
   return { url };
 }
 
@@ -179,6 +181,7 @@ async function handleWebhook(db, config, raw, headers) {
     if (user) await t.run('UPDATE users SET plus_until = ? WHERE id = ?', [until, user.id]);
     await t.run('INSERT OR IGNORE INTO payment_events (id, provider, kind) VALUES (?, ?, ?)', [eventId, 'polar', kind]);
   });
+  if (kind === 'subscription.created') await UI.bump(db, 'plus_subscribed').catch(() => {});
   await audit(db, { actorId: null, action: 'billing.subscription', targetKind: 'user', targetId: user ? user.id : null,
     details: { source: kind, plan, status: st, until } });
   return { ok: true, user: !!user, until };

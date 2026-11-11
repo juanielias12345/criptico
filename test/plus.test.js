@@ -170,8 +170,26 @@ test('webhook: secretos viejos de Polar (bytes del secreto tal cual) también se
 
 test('beneficios: Críptico Plus del día, comparación con la comunidad y avatares exclusivos', async () => {
   const dani = await player('dani_plus');
-  assert.equal((await dani.c.post('/api/plus/daily/start', {})).status, 403, 'sin Plus no hay Críptico Plus del día');
+  // Sin Plus: prueba gratis del primero de la tanda (growth.plus_taste); apagada, nada.
+  await setSetting(env.db, 'growth.plus_taste', false, null);
+  assert.equal((await dani.c.post('/api/plus/daily/start', {})).status, 403, 'sin Plus ni prueba gratis no hay Críptico Plus del día');
+  await setSetting(env.db, 'growth.plus_taste', true, null);
+  assert.equal((await client(env.base).post('/api/plus/daily/start', {})).status, 401, 'la prueba gratis necesita cuenta');
   assert.equal((await dani.c.get('/api/plus/comparison')).status, 403);
+  await env.db.run("UPDATE clues SET difficulty = 4 WHERE id IN (SELECT id FROM clues WHERE language_code = 'es' AND variant_code IS NULL AND difficulty = 3 LIMIT 4)");
+  const t1 = await dani.c.post('/api/plus/daily/start', {});
+  assert.equal(t1.status, 200, t1.text);
+  assert.equal(t1.json.plus.taste, true);
+  assert.equal(t1.json.plus.total, 1, 'la prueba gratis es uno solo');
+  assert.equal(t1.json.plus.full, 10);
+  await dani.c.post('/api/game/' + t1.json.game_id + '/skip', {});
+  const t2 = await dani.c.post('/api/plus/daily/start', {});
+  assert.equal(t2.json.clue.id, t1.json.clue.id, 'terminada la prueba no se abre otro');
+  assert.ok(t2.json.finished, 'queda como terminada');
+  const taste = await dani.c.get('/es/plus');
+  assert.match(taste.text, /Probá gratis el Críptico Plus de hoy/);
+  assert.match(taste.text, /id="game"/, 'con cuenta se juega en la página');
+  assert.match(taste.text, /Garantía de 10 días/);
   assert.equal((await dani.c.put('/api/me/profile', { avatar: '★-2' })).status, 400, 'avatar Plus bloqueado');
 
   await env.db.run('UPDATE users SET plus_until = ? WHERE id = ?', [new Date(Date.now() + 86400000).toISOString(), dani.user.id]);
@@ -183,14 +201,14 @@ test('beneficios: Críptico Plus del día, comparación con la comunidad y avata
   assert.ok(diff >= 4, 'es de los difíciles');
   const s2 = await dani.c.post('/api/plus/daily/start', {});
   assert.equal(s2.json.game_id, s1.json.game_id, 'volver a entrar retoma la misma partida');
-  assert.equal(s1.json.plus.number, 1);
+  assert.equal(s1.json.plus.number, 2, 'el de la prueba gratis ya cuenta como jugado');
   assert.equal(s1.json.plus.total, 10, 'una tanda de 10 por día');
   const set = await env.db.all('SELECT clue_id FROM plus_daily_set WHERE date = ?', [new Date().toISOString().slice(0, 10)]);
   assert.equal(new Set(set.map((x) => x.clue_id)).size, 10, 'sin repetidos');
   await dani.c.post('/api/game/' + s1.json.game_id + '/skip', {});
   const s3 = await dani.c.post('/api/plus/daily/start', {});
   assert.notEqual(s3.json.clue.id, s1.json.clue.id, 'al terminar uno sigue el próximo de la tanda');
-  assert.equal(s3.json.plus.number, 2);
+  assert.equal(s3.json.plus.number, 3);
   const daily = await env.db.get('SELECT clue_id FROM daily_challenges WHERE date = ?', [new Date().toISOString().slice(0, 10)]);
   if (daily) assert.notEqual(daily.clue_id, s1.json.clue.id, 'distinto del diario común');
   const g = await env.db.get('SELECT mode, daily_date FROM games WHERE id = ?', [s1.json.game_id]);
@@ -209,6 +227,8 @@ test('beneficios: Críptico Plus del día, comparación con la comunidad y avata
   assert.match(page.text, /Tu Plus/);
   const pub = (await client(env.base).get('/es/plus')).text;
   assert.match(pub, /USD 12/);
+  assert.match(pub, /Creá tu cuenta gratis y probalo/, 'sin cuenta: invitación a crear una para probar');
+  assert.doesNotMatch(page.text, /Garantía de 10 días/, 'a quien ya es Plus no se le vende');
   assert.doesNotMatch(pub, /PayPal Business|cuenta de PayPal/);
 });
 
@@ -222,4 +242,16 @@ test('cuenta: untilFor según el estado de Polar', () => {
   assert.equal(PLUS.untilFor({ status: 'unpaid' }), null);
   assert.equal(PLUS.untilFor({ status: 'incomplete_expired' }), null);
   assert.equal(PLUS.statusOf({ status: 'trialing' }), 'on_trial');
+});
+
+test('embudo de Plus: los contadores de la interfaz y del servidor se aceptan', async () => {
+  const UI = require('../src/services/uievents');
+  for (const k of ['plus_upsell_shown', 'plus_upsell_click', 'plus_upsell_dismiss', 'plus_taste_start', 'plus_taste_done', 'plus_taste_click', 'plus_page_view', 'plus_checkout_monthly', 'plus_checkout_yearly', 'plus_checkout_created', 'plus_subscribed']) {
+    assert.equal(await UI.bump(env.db, k), true, k);
+  }
+  const r = await client(env.base).post('/api/ui-event', { kind: 'plus_subscribed' });
+  assert.notEqual(r.status, 204, 'una suscripción no la puede anotar el navegador');
+  const meta = await client(env.base).get('/api/meta');
+  assert.equal(meta.json.growth.plus_taste, true);
+  assert.equal(meta.json.growth.plus_upsell_after, 5);
 });

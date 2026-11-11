@@ -45,3 +45,20 @@ El beneficio vive en `users.plus_until`, que viaja con la sesión: no suma lectu
 
 Para probar sin cobrar: crear un descuento del 100% en Polar, o usar https://sandbox.polar.sh con
 `POLAR_SERVER=sandbox` (claves y productos del sandbox, distintos de los reales).
+
+## Conseguir suscriptores (sin ventajas en torneos ni duelos)
+
+- **Prueba gratis del día** (`growth.plus_taste`): cualquier cuenta sin Plus juega gratis el primero de
+  los 10 Crípticos Plus del día, en /es/plus («Probá gratis…»). Al terminarlo ve cuántos le quedan y el
+  botón «Quiero los 10». Si después se suscribe, ese críptico ya cuenta como jugado. Sin cuenta, la
+  página invita a crear una para probarlo.
+- **Invitación al resolver** (`growth.plus_upsell`, `growth.plus_upsell_after` = 5): en el modo libre,
+  a una cuenta sin Plus que resolvió 5 en la sesión o uno difícil (4★ o más). Una vez por sesión;
+  «Ahora no» la calla 7 días en ese navegador. Al terminar el diario, el aviso del próximo suma
+  «Mientras tanto: probá gratis el Críptico Plus de hoy».
+- **Garantía visible**: debajo de los planes, la garantía de 10 días (la misma de los términos).
+- **Embudo** en /admin → Crecimiento → «Invitaciones y siguientes pasos»: invitación mostrada /
+  tocada / cerrada, prueba empezada / terminada / «Quiero los 10», visitas a la página, clics en
+  pagar (mensual / anual), pagos abiertos y suscripciones nuevas. Contadores diarios sin identificadores.
+
+Cada interruptor se apaga en /admin → Ajustes sin desplegar.

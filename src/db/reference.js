@@ -158,6 +158,11 @@ const DEFAULT_SETTINGS = {
   'growth.signup_prompt': true,        // invitación a crear cuenta en la pantalla de resolución (sin cuenta)
   'growth.signup_prompt_after': 3,     // crípticos resueltos en la sesión antes de invitar
   'growth.next_step': true,
+  // Plus (docs/PLUS.md): prueba gratis del primer Críptico Plus del día para cuentas sin Plus,
+  // y la invitación a Plus al resolver (cuentas sin Plus, una vez por sesión, «Ahora no» la calla 7 días).
+  'growth.plus_taste': true,
+  'growth.plus_upsell': true,
+  'growth.plus_upsell_after': 5,       // crípticos resueltos en la sesión antes de invitar (o uno difícil, 4★ o más)
   'growth.easy_start_games': 3,        // las primeras N partidas del modo libre de un jugador nuevo son fáciles (dificultad 1–2); 0 = apagado            // al resolver: aviso del desafío diario pendiente o de cuándo llega el próximo
   // Seguimiento de partidas (ver docs/PANEL.md)
   'analytics.abandon_minutes': 30,

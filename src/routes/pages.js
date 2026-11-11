@@ -19,6 +19,7 @@ const { indicators: ES_INDICATORS } = require('../lib/lang/es');
 const ADS = require('../services/ads');
 const { isPlus } = require('../services/plus');
 const STATS = require('../services/catalog-stats');
+const { getSetting } = require('../services/settings');
 
 const a = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
 
@@ -870,9 +871,11 @@ ${rows.length ? `<section class="section" aria-labelledby="more-h"><h2 id="more-
     }));
 
     // ── Plus: plan pago (mensual o anual). Sin anuncios en esta página. Ver docs/PLUS.md. ──
-    r.get(P('plus'), (req, res) => {
+    r.get(P('plus'), async (req, res, next) => { try {
       const PLUS = require('../services/plus');
       const isPlus = PLUS.isPlus(req.user);
+      // Prueba gratis: sin Plus se juega el primero de la tanda del día (growth.plus_taste).
+      const taste = !isPlus && await getSetting(req.app.locals.db, 'growth.plus_taste');
       const m = PLUS.PLANS.monthly; const y = PLUS.PLANS.yearly;
       const perks = [
         ['Sin anuncios', 'Jugá sin publicidad en todo el sitio, en cualquier dispositivo donde entres con tu cuenta.'],
@@ -890,11 +893,15 @@ ${rows.length ? `<section class="section" aria-labelledby="more-h"><h2 id="more-
 <p class="lead">${isPlus ? '¡Gracias por apoyar Play Crípticos! Acá tenés tus 10 crípticos Plus de hoy y cómo te va contra la comunidad.' : 'Jugar sigue siendo gratis. Con Plus jugás sin publicidad, sumás 10 crípticos exclusivos por día y ves cómo te va contra todos.'}</p></header>
 ${isPlus ? `<section class="plus-daily"><h2>Crípticos Plus del día</h2><section class="game" id="game">${skeleton}</section></section>
 <section class="plus-compare" id="plus-compare" aria-live="polite"></section>` : ''}
+${taste ? `<section class="plus-daily plus-taste" id="probar"><h2>Probá gratis el Críptico Plus de hoy</h2>
+<p class="muted">Uno de los 10 difíciles de hoy (dificultad 4 o 5), gratis para cualquier cuenta. Con Plus jugás los 10, todos los días.</p>
+${req.user ? `<section class="game" id="game">${skeleton}</section>` : `<p><a class="btn primary" href="${esc(href(lang, 'account'))}?next=${encodeURIComponent(P('plus'))}&amp;via=plus_taste">Creá tu cuenta gratis y probalo</a></p>`}</section>` : ''}
 <section class="plus-perks" aria-label="Qué incluye"><ul>${perks.map(([h, d]) => `<li><h3>${esc(h)}</h3><p>${esc(d)}</p></li>`).join('')}</ul></section>
 <section class="plus-plans" id="plus-plans" aria-label="Planes">
   <article class="plan" data-plan="monthly"><h3>Mensual</h3><p class="price"><b>${esc(m.price)}</b> / ${esc(m.per)}</p><p class="muted small">Cancelás cuando quieras.</p><div class="plan-cta"></div></article>
   <article class="plan best" data-plan="yearly"><p class="tag-best">Ahorrás 33%</p><h3>Anual</h3><p class="price"><b>${esc(y.price)}</b> / ${esc(y.per)}</p><p class="muted small">${esc(y.note)}: pagás 8 meses y tenés 12.</p><div class="plan-cta"></div></article>
 </section>
+${isPlus ? '' : `<p class="plus-guarantee"><b>Garantía de 10 días:</b> si no te convence, escribinos y te devolvemos el pago completo. Cancelás cuando quieras, sin vueltas.</p>`}
 <section class="plus-faq"><h2>Preguntas frecuentes</h2>
 <details><summary>¿Cómo pago?</summary><p>Con tarjeta de crédito o débito a través de Polar, que procesa el pago e incluye los impuestos de tu país. Nosotros nunca vemos tus datos de pago.</p></details>
 <details><summary>¿Puedo cancelar?</summary><p>Sí, cuando quieras, desde el enlace «Administrar o cancelar» de esta página o del correo de Polar. Seguís con Plus hasta el final del período que ya pagaste.</p></details>
@@ -902,7 +909,7 @@ ${isPlus ? `<section class="plus-daily"><h2>Crípticos Plus del día</h2><sectio
 <details><summary>¿Da ventajas en torneos o duelos?</summary><p>No. Los torneos y duelos son iguales para todos: Plus no da puntos, pistas ni tiempo extra.</p></details>
 </section>`,
       });
-    });
+    } catch (e) { next(e); } });
 
     // ── Duelos y torneos ──
     const ARENA_BODY = (extra = '') => `<header class="page-head arena-head"><p class="eyebrow">${esc(t(lang, 'nav_arena'))}</p><h1>${esc(lang === 'es' ? 'Duelos y torneos' : 'Duels & tournaments')}</h1>

@@ -12,8 +12,12 @@ const CLIENT_KINDS = new Set([
   'daily_nudge_shown', 'daily_nudge_click',
   'daily_next_shown',        // al terminar el diario: cuándo llega el próximo
   'next_after_solve',        // «Otro críptico» después de resolver o revelar
+  // Plus (docs/PLUS.md): invitación al resolver, prueba gratis del día y botones de pago
+  'plus_upsell_shown', 'plus_upsell_click', 'plus_upsell_dismiss',
+  'plus_taste_start', 'plus_taste_done', 'plus_taste_click',
+  'plus_page_view', 'plus_checkout_monthly', 'plus_checkout_yearly',
 ]);
-const SERVER_KINDS = /^signup_(completed|completed_post_solve|error_[a-z_]{2,30})$/;
+const SERVER_KINDS = /^(signup_(completed|completed_post_solve|error_[a-z_]{2,30})|plus_checkout_created|plus_subscribed)$/;
 
 async function bump(db, kind, at = now()) {
   if (!CLIENT_KINDS.has(kind) && !SERVER_KINDS.test(kind)) return false;
