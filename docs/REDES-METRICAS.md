@@ -52,6 +52,28 @@ Sirven para la Bandeja de entrada de Metricool (si el plan tiene respuestas auto
 - **¿A qué hora sale el diario?** A las 00:00 UTC: 18 h México, 19 h Colombia y Perú, 21 h Chile, 1 h España.
 - **Tengo un críptico para proponer.** ¡Genial! Mandalo desde https://playcripticos.com/es/contribuir y lo revisamos.
 
+### Más palabras clave para mensajes directos
+
+| Palabra clave | Respuesta |
+|---|---|
+| TRUCOS | Los 5 trucos más comunes: anagrama («revuelto», «loco»), palabra escondida («oculta», «en»), quitar letras («sin», «pierde»), sonar igual («se oye», «suena») y unir partes. Practicalos acá: https://playcripticos.com/es/jugar |
+| PISTA | Cada críptico en la web tiene ayudas paso a paso: primero te marca la definición, después el truco y al final una letra. Probalo acá: https://playcripticos.com/es/diario |
+| SOLUCIÓN | ¡No te la podemos spoilear! 😄 La solución sale en historias a las 00:00 UTC. Mientras, en la web podés pedir ayudas sin ver la respuesta: https://playcripticos.com/es/diario |
+| EMPEZAR, PRINCIPIANTE | ¡Bienvenido! Arrancá por la guía de 7 pasos, que tiene ejemplos para resolver ahí mismo: https://playcripticos.com/es/ayuda Después probá los de dificultad 1 en https://playcripticos.com/es/jugar |
+| DESAFÍO, DUELO | Podés retar a un amigo a un duelo o anotarte en el torneo semanal: https://playcripticos.com/es/desafios |
+| TORNEO | El torneo es semanal y gratis. Cada ronda abre a las 00:00 UTC y sumás puntos por cada críptico resuelto: https://playcripticos.com/es/torneos |
+| RACHA | Para no perder tu racha, creá una cuenta gratis en la web: así guarda tus resultados aunque cambies de celular. https://playcripticos.com/es/cuenta |
+| PROPONER | ¡Nos encanta! Mandá tu críptico desde https://playcripticos.com/es/contribuir Lo revisamos y, si queda, sale con tu nombre. |
+| APP | Por ahora no hay app en las tiendas, pero podés instalar la web: abrí playcripticos.com en el celular y elegí «Agregar a la pantalla de inicio». |
+
+Comentarios con palabra clave: TRUCOS (pública «¡Te los mandamos por mensaje! 💡» + DM de TRUCOS) y QUIERO (pública «¡Va por mensaje! 🧩» + DM de JUGAR). Nunca responder automáticamente a todos los comentarios: la gente comenta su respuesta.
+
+### Mensaje automático (fuera de horario, 0 a 9 h)
+
+> ¡Gracias por escribir! Ahora no estamos conectados, pero te respondemos apenas volvamos. Mientras, el críptico de hoy te espera en https://playcripticos.com/es/diario 🧩
+
+Dónde se configura: Meta Business Suite > Mensajes > Automatizaciones (business.facebook.com/latest/inbox/automated_responses). Si Instagram no aparece como canal: en Instagram, Configuración > Mensajes y respuestas a historias > Herramientas conectadas > Permitir acceso a los mensajes.
+
 Regla: las respuestas automáticas nunca dan la solución del día. Las consultas de pagos, cuentas o quejas las contesta una persona.
 
 ## 5. Cómo medimos
