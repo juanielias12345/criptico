@@ -8,6 +8,7 @@ const auth = require('../services/auth');
 const security = require('../services/security');
 const { publicClue } = require('../services/clues');
 const { getSetting } = require('../services/settings');
+const STATS = require('../services/catalog-stats');
 const { hit } = require('../services/ratelimit');
 const { tick } = require('../services/jobs');
 const { audit } = require('../services/audit');
@@ -41,13 +42,16 @@ module.exports = function api() {
   r.get('/meta', a(async (req, res) => {
     const db = req.app.locals.db;
     const languages = await db.all('SELECT code, name_native, enabled FROM languages ORDER BY sort_order');
-    const variants = await db.all(`SELECT v.code, v.language_code, v.name_native, v.enabled,
-      (SELECT COUNT(*) FROM clues c WHERE c.status = 'published' AND c.variant_code = v.code) AS own,
-      (SELECT COUNT(*) FROM clues c WHERE c.status = 'published' AND c.language_code = v.language_code AND c.variant_code IS NULL) AS general
-      FROM language_variants v ORDER BY v.code`);
-    const totals = await db.all("SELECT language_code AS code, COUNT(*) AS n FROM clues WHERE status = 'published' AND language_code IN (SELECT code FROM languages WHERE enabled = 1) GROUP BY language_code");
+    // Antes se contaba el catálogo dos veces por variante en cada pedido; ahora es una sola
+    // lectura agrupada y guardada unos minutos (services/catalog-stats.js).
+    const counts = await STATS.variantCounts(db);
+    const countOf = (lang, variant) => (counts.find((x) => x.lang === lang && x.variant === variant) || { n: 0 }).n;
+    const variants = (await db.all('SELECT code, language_code, name_native, enabled FROM language_variants ORDER BY code'))
+      .map((v) => ({ ...v, own: v.code ? countOf(v.language_code, v.code) : 0, general: countOf(v.language_code, null) }));
+    const totals = await STATS.totalsByLanguage(db);
     const categories = await db.all('SELECT slug, name_es, name_en FROM categories WHERE enabled = 1 ORDER BY slug');
-    res.set('Cache-Control', 'public, max-age=60');
+    // s-maxage: la CDN de Vercel responde sin invocar la función ni leer la base.
+    res.set('Cache-Control', 'public, max-age=60, s-maxage=300, stale-while-revalidate=3600');
     res.json({ languages, variants, totals, categories, modes: await getSetting(db, 'modes.enabled'), max_hints: await getSetting(db, 'game.max_hints'),
       store_origin: await getSetting(db, 'privacy.store_origin'),
       growth: { direct_start: await getSetting(db, 'growth.direct_start'), signup_prompt: await getSetting(db, 'growth.signup_prompt'),
@@ -172,7 +176,7 @@ module.exports = function api() {
     if (/^[a-z_]{2,40}$/.test(q.category || '')) { where.push('category = ?'); args.push(q.category); }
     if (/^[a-z_]{2,40}$/.test(q.mechanism || '')) { where.push('mechanism = ?'); args.push(q.mechanism); }
     const page = Math.max(1, Math.min(1000, Number(q.page) || 1)); const per = 24;
-    const total = (await db.get(`SELECT COUNT(*) AS n FROM clues WHERE ${where.join(' AND ')}`, args)).n;
+    const total = await STATS.filteredCount(db, `SELECT COUNT(*) AS n FROM clues WHERE ${where.join(' AND ')}`, args);
     const rows = await db.all(`SELECT * FROM clues WHERE ${where.join(' AND ')} ORDER BY published_at DESC, id LIMIT ? OFFSET ?`, [...args, per, (page - 1) * per]);
     res.set('Cache-Control', 'public, max-age=60');
     res.json({ total, page, per_page: per, items: rows.map(publicClue) });
