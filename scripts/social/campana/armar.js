@@ -119,9 +119,9 @@ const CAROUSELS = {
   'k5-gratis-vs-plus': [
     `<div class="k" style="margin-top:auto">Preguntas frecuentes</div><h1 style="margin-top:28px">Gratis y <em>Plus</em>: qué cambia</h1><p style="margin-top:36px">Spoiler: jugar sigue siendo gratis.</p>`,
     `<div class="k" style="margin-top:100px">Comparación</div>${table([['Crípticos sin límite', 'Sí', 'Sí'], ['Diario, torneo y duelos', 'Sí', 'Sí'], ['Perfil, niveles y logros', 'Sí', 'Sí'], ['Sin anuncios', '—', 'Sí'], ['10 Crípticos Plus por día (dif. 4 y 5)', '—', 'Sí'], ['Tu nivel contra la comunidad', '—', 'Sí'], ['Insignia y avatares Plus', '—', 'Sí']], ['', 'Gratis', 'Plus'])}`,
-    `<div class="k" style="margin-top:110px">Precio</div><h2 style="margin-top:28px">USD 1,50 por mes<br>o USD 12 por año</h2><p style="margin-top:32px">El anual equivale a USD 1 por mes. Pagás con tarjeta o PayPal; Lemon Squeezy procesa el pago e incluye los impuestos de tu país.</p>`,
+    `<div class="k" style="margin-top:110px">Precio</div><h2 style="margin-top:28px">USD 1,50 por mes<br>o USD 12 por año</h2><p style="margin-top:32px">El anual equivale a USD 1 por mes. Pagás con tarjeta; Polar procesa el pago e incluye los impuestos de tu país.</p>`,
     `<div class="k" style="margin-top:110px">Sin letra chica</div>${list(['Cancelás cuando quieras y seguís con Plus hasta el final del período pagado', 'Si te arrepentís dentro de los 10 días del primer pago, te devolvemos ese pago', 'Plus no da puntos, pistas ni tiempo extra en torneos ni duelos'], 38)}`,
-    `<div class="k" style="margin-top:auto">Más info</div><h2 style="margin-top:28px">playcripticos.com/es/plus</h2><p style="margin-top:32px">Plus banca el proyecto. Gracias a quienes se suman.</p>`,
+    `<div class="k" style="margin-top:auto">Más info</div><h2 style="margin-top:28px">Probá uno gratis hoy</h2><p style="margin-top:32px">Cada día podés jugar gratis uno de los 10 Crípticos Plus en playcripticos.com/es/plus</p>`,
   ],
   'k6-en-el-telefono': [
     `<div class="k" style="margin-top:auto">Mientras llega la app</div><h1 style="margin-top:28px">Play Crípticos <em>en tu teléfono</em>, hoy</h1><p style="margin-top:36px">Un ícono en tu pantalla de inicio, sin descargar nada.</p>`,
