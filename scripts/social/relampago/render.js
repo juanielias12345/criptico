@@ -8,17 +8,19 @@
 // 5 segundos con una ayuda a mitad de camino, respuesta y una sola línea de por qué.
 // Corto para que se vea entero y se repita (TikTok premia el tiempo de visionado).
 //
-//   node scripts/social/relampago/render.js       # escribe public/social/relampago/rNN.mp4
+//   node scripts/social/relampago/render.js                 # escribe public/social/relampago/rNN.mp4
+//   node scripts/social/relampago/render.js plus-serie.json # otra serie; cada pieza puede traer
+//                                                           # dir, hook, end_title y end_line
 
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { execFileSync } = require('child_process');
 const { page, tiles, top, esc, MARK, C } = require('../render');
-const SERIES = require('./serie.json');
+const SERIES = require(path.resolve(__dirname, process.argv[2] || 'serie.json'));
 
 const ROOT = path.join(__dirname, '..', '..', '..');
-const OUT = path.join(ROOT, 'public', 'social', 'relampago');
+const outDir = (r) => path.join(ROOT, 'public', 'social', r.dir || 'relampago');
 
 const clueSize = (t) => (t.length > 52 ? 64 : 76);
 const shell = (inner) => page(1080, 1920, `<div style="padding:180px 88px 300px;display:flex;flex-direction:column;height:100%">${top()}<div style="margin:auto 0;display:flex;flex-direction:column">${inner}</div></div>`);
@@ -33,14 +35,14 @@ function frames(r) {
   const out = [];
   for (const s of [5, 4, 3, 2, 1]) {
     const hint = s <= 2;
-    out.push([shell(`<h2 style="font-size:84px">¿Lo sacás en <span style="color:${C.accent}">5 segundos</span>?</h2>${sheet}<div style="margin-top:48px">${hint ? hintTiles(r.answer) : tiles(r.answer)}</div>
+    out.push([shell(`<h2 style="font-size:84px">${r.hook || `¿Lo sacás en <span style="color:${C.accent}">5 segundos</span>?`}</h2>${sheet}<div style="margin-top:48px">${hint ? hintTiles(r.answer) : tiles(r.answer)}</div>
       <div style="margin-top:40px;display:flex;align-items:baseline;gap:28px"><span style="font-family:Fraunces,Georgia,serif;font-size:200px;line-height:1;color:${C.accent}">${s}</span>
       <span style="font-size:40px;color:${C.ink2}">${hint ? `Ayuda: empieza con ${esc([...r.answer][0])}` : ''}</span></div>${bar(s)}`), s === 5 ? 1.4 : 1.0]);
   }
   out.push([shell(`<div class="k">Respuesta</div>${sheet}<div style="margin-top:48px">${tiles(r.answer, { fill: true, ok: true })}</div>
     <p style="margin-top:48px;font-size:44px;color:${C.ink}">${esc(r.why)}</p>`), 2.2]);
   out.push([page(1080, 1920, `<div style="padding:180px 88px 300px;display:flex;flex-direction:column;height:100%;justify-content:center;align-items:flex-start">${MARK(140)}
-    <h2 style="margin-top:48px">¿Te salió? Contá en cuántos segundos 👇</h2><p style="margin-top:40px;font-size:52px;font-weight:600;color:${C.ink}">Uno nuevo cada día en playcripticos.com</p></div>`), 1.0]);
+    <h2 style="margin-top:48px">${esc(r.end_title || '¿Te salió? Contá en cuántos segundos 👇')}</h2><p style="margin-top:40px;font-size:52px;font-weight:600;color:${C.ink}">${esc(r.end_line || 'Uno nuevo cada día en playcripticos.com')}</p></div>`), 1.0]);
   return out;
 }
 
@@ -48,8 +50,8 @@ async function main() {
   const { chromium } = require('playwright-core');
   const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || '/opt/pw-browsers/chromium' });
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'relampago-'));
-  fs.mkdirSync(OUT, { recursive: true });
   for (const r of SERIES) {
+    const OUT = outDir(r); fs.mkdirSync(OUT, { recursive: true });
     const fr = frames(r); const dir = fs.mkdtempSync(path.join(tmp, 'v-')); const list = [];
     for (let i = 0; i < fr.length; i++) {
       const f = path.join(dir, `f${i}.png`);

@@ -1,0 +1,74 @@
+[
+ {
+  "id": "p1",
+  "date": "2026-11-14",
+  "dir": "plus",
+  "answer": "SOLDADO",
+  "clue_text": "Sol y dado se juntan: militar (7)",
+  "mechanism": "charade",
+  "why": "SOL + DADO = SOLDADO. Definición: «militar».",
+  "hook": "<span style=\"color:#8a5c0c\">Nivel Plus</span><br>¿Lo sacás en 5 segundos?",
+  "end_title": "Hay 10 así por día en Plus 💎",
+  "end_line": "Probá uno gratis hoy en playcripticos.com/es/plus"
+ },
+ {
+  "id": "p2",
+  "date": "2026-11-19",
+  "dir": "plus",
+  "answer": "GIRASOL",
+  "clue_text": "Da vueltas al astro rey: flor amarilla (7)",
+  "mechanism": "charade",
+  "why": "«Da vueltas» → GIRA y «astro rey» → SOL: GIRA + SOL = GIRASOL.",
+  "hook": "<span style=\"color:#8a5c0c\">Nivel Plus</span><br>¿Lo sacás en 5 segundos?",
+  "end_title": "Hay 10 así por día en Plus 💎",
+  "end_line": "Probá uno gratis hoy en playcripticos.com/es/plus"
+ },
+ {
+  "id": "p3",
+  "date": "2026-11-21",
+  "dir": "plus",
+  "answer": "OCAS",
+  "clue_text": "Bolsa grande al revés: aves de corral (4)",
+  "mechanism": "reversal",
+  "why": "«Bolsa grande» → SACO, y «al revés» se lee OCAS.",
+  "hook": "<span style=\"color:#8a5c0c\">Nivel Plus</span><br>¿Lo sacás en 5 segundos?",
+  "end_title": "Hay 10 así por día en Plus 💎",
+  "end_line": "Probá uno gratis hoy en playcripticos.com/es/plus"
+ },
+ {
+  "id": "p4",
+  "date": "2026-11-25",
+  "dir": "plus",
+  "answer": "REMAR",
+  "clue_text": "Nota musical y océano: mover la barca (5)",
+  "mechanism": "charade",
+  "why": "RE (la nota) + MAR (el océano) = REMAR.",
+  "hook": "<span style=\"color:#8a5c0c\">Nivel Plus</span><br>¿Lo sacás en 5 segundos?",
+  "end_title": "Hay 10 así por día en Plus 💎",
+  "end_line": "Probá uno gratis hoy en playcripticos.com/es/plus"
+ },
+ {
+  "id": "p5",
+  "date": "2026-11-28",
+  "dir": "plus",
+  "answer": "LLAMA",
+  "clue_text": "Animal andino que escupe, o fuego de la vela (5)",
+  "mechanism": "double",
+  "why": "Doble definición: el animal andino y el fuego de la vela son LLAMA.",
+  "hook": "<span style=\"color:#8a5c0c\">Nivel Plus</span><br>¿Lo sacás en 5 segundos?",
+  "end_title": "Hay 10 así por día en Plus 💎",
+  "end_line": "Probá uno gratis hoy en playcripticos.com/es/plus"
+ },
+ {
+  "id": "p6",
+  "date": "2026-12-02",
+  "dir": "plus",
+  "answer": "PARACAÍDAS",
+  "clue_text": "Detiene tropiezos: lo abrís al saltar del avión (10)",
+  "mechanism": "charade",
+  "why": "«Detiene» → PARA y «tropiezos» → CAÍDAS: PARA + CAÍDAS = PARACAÍDAS.",
+  "hook": "<span style=\"color:#8a5c0c\">Nivel Plus</span><br>¿Lo sacás en 5 segundos?",
+  "end_title": "Hay 10 así por día en Plus 💎",
+  "end_line": "Probá uno gratis hoy en playcripticos.com/es/plus"
+ }
+]
