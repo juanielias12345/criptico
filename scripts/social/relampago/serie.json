@@ -1,0 +1,128 @@
+[
+ {
+  "id": "r01",
+  "date": "2026-11-20",
+  "answer": "OSO",
+  "clue_text": "Queso solo esconde un animal del bosque (3)",
+  "slug": "queso-solo-esconde-un-animal-del-es",
+  "mechanism": "hidden",
+  "why": "«esconde» indica una palabra oculta: en «queso solo» se esconde OSO."
+ },
+ {
+  "id": "r02",
+  "date": "2026-11-21",
+  "answer": "ROMA",
+  "clue_text": "Amor de vuelta en la capital italiana (4)",
+  "slug": "amor-de-vuelta-en-la-capital-es",
+  "mechanism": "reversal",
+  "why": "«de vuelta» indica lectura al revés: AMOR → ROMA."
+ },
+ {
+  "id": "r03",
+  "date": "2026-11-22",
+  "answer": "OLA",
+  "clue_text": "Saludo sin principio forma una onda en el mar (3)",
+  "slug": "saludo-sin-principio-forma-una-onda-es",
+  "mechanism": "deletion",
+  "why": "«sin principio» indica quitar la primera letra a HOLA: OLA."
+ },
+ {
+  "id": "r04",
+  "date": "2026-11-23",
+  "answer": "AMOR",
+  "clue_text": "Ramo revuelto para el sentimiento (4)",
+  "slug": "ramo-revuelto-para-el-sentimiento-es",
+  "mechanism": "anagram",
+  "why": "«revuelto» indica un anagrama: las letras de RAMO se reordenan en AMOR."
+ },
+ {
+  "id": "r05",
+  "date": "2026-11-24",
+  "answer": "GATO",
+  "clue_text": "Felino que sirve para levantar un coche (4)",
+  "slug": "felino-que-sirve-para-levantar-un-es",
+  "mechanism": "double_definition",
+  "why": "Doble definición: «Felino» y «que sirve para levantar un coche» describen la misma palabra."
+ },
+ {
+  "id": "r06",
+  "date": "2026-11-25",
+  "answer": "LIMA",
+  "clue_text": "El imán contiene la capital peruana (4)",
+  "slug": "el-iman-contiene-la-capital-peruana-es",
+  "mechanism": "hidden",
+  "why": "«contiene» indica una palabra oculta: en «El imán» se esconde LIMA."
+ },
+ {
+  "id": "r07",
+  "date": "2026-11-26",
+  "answer": "MAR",
+  "clue_text": "Agua salada: al principio, mira arenas remotas (3)",
+  "slug": "agua-salada-al-principio-mira-arenas-es",
+  "mechanism": "initials",
+  "why": "«al principio» indica tomar las iniciales de «mira arenas remotas»: MAR."
+ },
+ {
+  "id": "r08",
+  "date": "2026-11-27",
+  "answer": "PARTO",
+  "clue_text": "Trapo roto en el alumbramiento (5)",
+  "slug": "trapo-roto-en-el-alumbramiento-es",
+  "mechanism": "anagram",
+  "why": "«roto» indica un anagrama: las letras de TRAPO se reordenan en PARTO."
+ },
+ {
+  "id": "r09",
+  "date": "2026-11-28",
+  "answer": "MANGO",
+  "clue_text": "Alemán gordo oculta una fruta tropical (5)",
+  "slug": "aleman-gordo-oculta-una-fruta-tropical-es",
+  "mechanism": "hidden",
+  "why": "«oculta» indica una palabra oculta: en «alemán gordo» se esconde MANGO."
+ },
+ {
+  "id": "r10",
+  "date": "2026-11-29",
+  "answer": "CASA",
+  "clue_text": "Hogar que, se oye, es una cacería (4)",
+  "slug": "hogar-que-se-oye-es-una-es",
+  "mechanism": "homophone",
+  "why": "«se oye» indica un homófono: CAZA suena igual que CASA."
+ },
+ {
+  "id": "r11",
+  "date": "2026-11-30",
+  "answer": "BANCO",
+  "clue_text": "Entidad financiera para sentarse en el parque (5)",
+  "slug": "entidad-financiera-para-sentarse-en-el-es",
+  "mechanism": "double_definition",
+  "why": "Doble definición: «Entidad financiera» y «para sentarse en el parque» describen la misma palabra."
+ },
+ {
+  "id": "r12",
+  "date": "2026-12-01",
+  "answer": "BOTE",
+  "clue_text": "Pequeña embarcación y salto de la pelota (4)",
+  "slug": "pequena-embarcacion-y-salto-de-la-es",
+  "mechanism": "double_definition",
+  "why": "Doble definición: «Pequeña embarcación» y «salto de la pelota» describen la misma palabra."
+ },
+ {
+  "id": "r13",
+  "date": "2026-12-02",
+  "answer": "MÉDICO",
+  "clue_text": "Décimo alterado para el doctor (6)",
+  "slug": "decimo-alterado-para-el-doctor-es",
+  "mechanism": "anagram",
+  "why": "«alterado» indica un anagrama: las letras de DECIMO se reordenan en MEDICO."
+ },
+ {
+  "id": "r14",
+  "date": "2026-12-03",
+  "answer": "CABO",
+  "clue_text": "Militar de bajo rango y punta de tierra en el mar (4)",
+  "slug": "militar-de-bajo-rango-y-punta-es",
+  "mechanism": "double_definition",
+  "why": "Doble definición: «Militar de bajo rango» y «punta de tierra en el mar» describen la misma palabra."
+ }
+]
