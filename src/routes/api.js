@@ -181,7 +181,7 @@ module.exports = function api() {
     const page = Math.max(1, Math.min(1000, Number(q.page) || 1)); const per = 24;
     const total = await STATS.filteredCount(db, `SELECT COUNT(*) AS n FROM clues WHERE ${where.join(' AND ')}`, args);
     const rows = await db.all(`SELECT * FROM clues WHERE ${where.join(' AND ')} ORDER BY published_at DESC, id LIMIT ? OFFSET ?`, [...args, per, (page - 1) * per]);
-    res.set('Cache-Control', 'public, max-age=60');
+    res.set('Cache-Control', 'public, max-age=60, s-maxage=3600, stale-while-revalidate=86400');
     res.json({ total, page, per_page: per, items: rows.map(publicClue) });
   }));
 
@@ -302,6 +302,11 @@ module.exports = function api() {
   }));
   r.get('/auth/me', a(async (req, res) => {
     res.set('Cache-Control', 'no-store');
+    // Marca legible por public/js/ads.js: las páginas pueden llegar desde la caché de la CDN
+    // (iguales para todos, con anuncios) y a quien es Plus no se le cargan.
+    const plus = require('../services/plus').isPlus(req.user);
+    if (plus) cookie(res, req.app.locals.config, 'cp', '1', { maxAge: 30 * 86400, httpOnly: false });
+    else if (req.cookies && req.cookies.cp) cookie(res, req.app.locals.config, 'cp', '', { maxAge: 0, httpOnly: false });
     res.json({ user: req.user, csrf: req.session ? req.session.csrf : null });
   }));
 
