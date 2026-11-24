@@ -5,6 +5,11 @@
   let boot = null;
   try { boot = JSON.parse(document.getElementById('boot').textContent).ads; } catch (e) { boot = null; }
   if (!boot || !/^ca-pub-\d+$/.test(boot.client || '')) return;
+  // La página pudo llegar desde la caché de la CDN (la misma para todos): quien es Plus no ve anuncios.
+  if (/(?:^|;\s*)cp=1(?:;|$)/.test(document.cookie)) {
+    document.querySelectorAll('.ad-slot, .ad-free-cta').forEach((n) => n.remove());
+    return;
+  }
   const queue = (window.adsbygoogle = window.adsbygoogle || []);
   // Si el navegador pide no ser rastreado, se piden anuncios no personalizados.
   if (navigator.doNotTrack === '1' || navigator.globalPrivacyControl) queue.requestNonPersonalizedAds = 1;

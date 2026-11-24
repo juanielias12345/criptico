@@ -116,6 +116,22 @@ ${legalHtml(v.body)}</article>`;
 
 const skeleton = '<div class="sheet"><div class="skeleton" aria-hidden="true"><i class="mid"></i><i class="big"></i><i class="big"></i><i class="tiles"></i></div></div>';
 
+// Caché de la CDN de Vercel para visitantes sin cookies (buscadores, bots de IA y quien llega
+// por primera vez): la CDN responde sin invocar la función ni leer Turso. Solo para páginas
+// iguales para todos; nunca se guarda una respuesta pedida con sesión o con jugador, así que
+// la copia guardada es siempre la anónima. A quien es Plus y recibe la copia con anuncios,
+// public/js/ads.js no se los carga (cookie «cp», ver /api/auth/me).
+const CDN_TTL = {
+  clue: 86400, guide: 86400, help: 86400, faq: 86400, articles: 86400, article: 86400, legal: 86400,
+  home: 600, daily: 600, play: 600,
+};
+function cachePublic(req, res, opts) {
+  const ttl = CDN_TTL[opts.page];
+  const c = req.cookies || {};
+  if (!ttl || req.method !== 'GET' || req.session || c.sid || c.pid || opts.status) return;
+  res.set('Cache-Control', `public, max-age=0, s-maxage=${ttl}, stale-while-revalidate=${ttl * 7}`);
+}
+
 module.exports = function pages() {
   const r = express.Router();
 
@@ -149,7 +165,9 @@ module.exports = function pages() {
   // Archivos iguales para todos (robots, llms, ads.txt, sitemaps): la CDN de Vercel los sirve
   // una hora sin invocar la función ni leer la base, aunque los bots los pidan seguido.
   r.use(/^\/(robots\.txt|llms\.txt|ads\.txt|sitemap[\w-]*\.xml)$/, (req, res, next) => {
-    res.set('Cache-Control', 'public, max-age=3600, s-maxage=3600, stale-while-revalidate=86400');
+    res.set('Cache-Control', /^\/sitemap/.test(req.originalUrl)
+      ? 'public, max-age=3600, s-maxage=86400, stale-while-revalidate=604800'
+      : 'public, max-age=3600, s-maxage=3600, stale-while-revalidate=86400');
     next();
   });
 
@@ -311,6 +329,7 @@ ${ARTICLES.es.items.map((x) => `- [${x.title}](${u('articles', '/' + x.slug)}): 
     const P = (route) => `/${lang}${R[route] ? '/' + R[route] : ''}`;
     // Las páginas con anuncios llevan su propia política de seguridad, con nonce (ver services/ads.js).
     const render = (req, res, opts) => {
+      cachePublic(req, res, opts);
       let ads = null;
       // Nunca en páginas que se le ocultan a Google (noindex): AdSense las revisa igual y cuentan como poco contenido.
       if (res.locals.adsOn && ADS.AD_PAGES.has(opts.page) && !opts.noindex) {
@@ -550,8 +569,11 @@ ${lang === 'es' ? `<section class="section play-about" aria-labelledby="play-abo
       const canonicalLang = UI_LANGS.includes(c.language_code) ? c.language_code : lang;
       const source = c.source_id ? await db.get('SELECT name, url FROM sources WHERE id = ?', [c.source_id]) : null;
       // Enlaces internos: crípticos del mismo mecanismo, para que buscadores y jugadores sigan navegando.
-      const related = await db.all("SELECT * FROM clues WHERE status = 'published' AND language_code = ? AND mechanism = ? AND id <> ? ORDER BY (id > ?) DESC, id LIMIT 6",
-        [c.language_code, c.mechanism, c.id, c.id]);
+      // Los seis siguientes por id (y, al final del catálogo, los primeros): con idx_clues_mech
+      // se leen solo esas filas. Antes un ORDER BY con expresión leía el idioma entero.
+      const REL = "SELECT * FROM clues WHERE status = 'published' AND language_code = ? AND mechanism = ? AND id";
+      let related = await db.all(`${REL} > ? ORDER BY id LIMIT 6`, [c.language_code, c.mechanism, c.id]);
+      if (related.length < 6) related = related.concat(await db.all(`${REL} < ? ORDER BY id LIMIT ?`, [c.language_code, c.mechanism, c.id, 6 - related.length]));
       const cats = related.length ? await db.all('SELECT * FROM categories WHERE enabled = 1') : [];
       const G = GUIDE[lang] && GUIDE[lang].mechs[pub.mechanism];
       const crumbs = [[t(lang, 'archive_title'), P('archive')], [t(lang, 'mech_' + pub.mechanism), G ? href(lang, 'guide', '/' + G.slug) : P('archive')], [pub.clue, href(canonicalLang, 'clue', '/' + c.slug)]];
