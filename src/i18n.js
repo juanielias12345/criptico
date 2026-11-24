@@ -13,7 +13,7 @@ const ROUTES = {
 const T = {
   es: {
     tagline: 'Crípticos sin límite, de todo el mundo',
-    nav_play: 'Jugar', nav_daily: 'Desafío diario', nav_archive: 'Archivo', nav_contribute: 'Proponer', nav_help: 'Ayuda', nav_faq: 'Preguntas frecuentes',
+    nav_play: 'Jugar', nav_daily: 'Críptico del día', nav_archive: 'Archivo', nav_contribute: 'Proponer', nav_help: 'Ayuda', nav_faq: 'Preguntas frecuentes',
     nav_profile: 'Mi perfil', nav_prefs: 'País e idioma', nav_account: 'Entrar', nav_arena: 'Desafíos', mode_plus_daily: 'Crípticos Plus del día', plus_done: 'Terminaste los crípticos Plus de hoy. Mañana hay una tanda nueva.', nav_plus: 'Plus',
     home_title: 'Acertijos de palabras para mentes curiosas',
     home_lead: 'Cada pista esconde una palabra: una parte la define y otra la arma con un juego de letras. Jugá todas las veces que quieras.',
@@ -181,7 +181,7 @@ Object.assign(T.es, {
   footer_play: 'Jugar', footer_community: 'Comunidad', nav_guide: 'Mecanismos', ui_language: 'Interfaz',
   nav_articles: 'Artículos', nav_about: 'Quiénes somos', nav_contact: 'Contacto', footer_learn: 'Aprender',
   footer_made: 'Crípticos originales y de fuentes con permiso, validados uno por uno. Gratis y sin registro obligatorio para jugar.',
-  home_eyebrow: 'Crípticos sin límite', home_title_a: 'Cada pista esconde', home_title_b: 'una palabra.',
+  home_eyebrow: 'Crípticos en español, gratis y sin límite', home_title_a: 'Crípticos: cada pista esconde', home_title_b: 'una palabra.',
   home_lead: 'Una parte la define; la otra la arma con un juego de letras. Encontrá las dos y resolvé tantos como quieras, sin límite diario ni registro.',
   home_cta: 'Jugar ahora', home_explore: 'Explorar el archivo', home_daily: 'Ver el desafío de hoy',
   fact_clues: 'crípticos validados', fact_langs: 'idiomas', fact_variants: 'variantes regionales',
