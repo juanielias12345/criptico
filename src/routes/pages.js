@@ -304,8 +304,8 @@ ${ARTICLES.es.items.map((x) => `- [${x.title}](${u('articles', '/' + x.slug)}): 
   const SEO = {
     es: {
       home: ['Crípticos en español: jugá gratis y sin límite | Play Crípticos', 'Resolvé crípticos (pistas de crucigrama críptico) en español, gratis y sin límite: ayudas progresivas, explicación paso a paso y un críptico del día. Con variantes regionales de todo el mundo hispanohablante.'],
-      play: ['Jugar crípticos online gratis | Play Crípticos', 'Crípticos en español para jugar online, sin registro y sin límite. Elegí la dificultad, pedí pistas y mirá la explicación de cada solución.'],
-      daily: ['Críptico del día: el desafío diario | Play Crípticos', 'Un críptico nuevo cada día, el mismo para todos. Resolvelo, compartí tu resultado y repasá los días anteriores.'],
+      play: ['Juego de crípticos infinito: jugar online gratis | Play Crípticos', 'Juego de crípticos infinitos en español para jugar online, sin registro y sin límite. Elegí la dificultad, pedí pistas y mirá la explicación de cada solución.'],
+      daily: ['Críptico del día de hoy: crucigrama críptico diario gratis | Play Crípticos', 'El críptico del día: una pista de crucigrama críptico nueva cada día, gratis y la misma para todos. Resolvelo hoy, compartí tu resultado y jugá los crípticos diarios anteriores.'],
       archive: ['Archivo de crípticos en español | Play Crípticos', 'Todos los crípticos publicados, con filtros por dificultad, tema y mecanismo: anagramas, palabras ocultas, iniciales y más.'],
       help: ['Qué es un críptico y cómo resolverlo, con ejemplos | Play Crípticos', 'Guía paso a paso para aprender a resolver crípticos: la definición, el juego de letras y los mecanismos más comunes, con ejemplos para practicar.'],
     },
@@ -475,7 +475,7 @@ ${lang === 'es' ? `<section class="section play-about" aria-labelledby="play-abo
         page: 'daily', path: P('daily'), alternates: altFor('daily'), title: t(lang, 'daily_title'), ...seo(lang, 'daily'),
         body: `<header class="daily-head">
   <div class="daily-date" aria-hidden="true"><span class="m">${esc(td.toLocaleDateString(loc, { month: 'short', timeZone: 'UTC' }).replace('.', ''))}</span><span class="d">${td.getUTCDate()}</span><span class="w">${esc(td.toLocaleDateString(loc, { weekday: 'long', timeZone: 'UTC' }))}</span></div>
-  <div><p class="eyebrow">${esc(t(lang, 'daily_title'))}</p><h1>${esc(td.toLocaleDateString(loc, { day: 'numeric', month: 'long', timeZone: 'UTC' }))}</h1>
+  <div><p class="eyebrow">${esc(t(lang, 'daily_title'))}</p><h1>${lang === 'es' ? 'Críptico del día: ' : ''}${esc(td.toLocaleDateString(loc, { day: 'numeric', month: 'long', timeZone: 'UTC' }))}</h1>
   <p class="lead">${esc(t(lang, 'daily_lead'))} <span class="muted small">${esc(t(lang, 'daily_rules'))}</span></p></div>
 </header>
 <section class="game" id="game">${skeleton}</section>
@@ -487,7 +487,10 @@ ${lang === 'es' ? `<section class="section play-about" aria-labelledby="play-abo
     </div></div>
   <ul class="cal-grid">${dows.map((w) => `<li class="dow" aria-hidden="true">${esc(w)}</li>`).join('')}${cells.join('')}</ul>
   <p class="cal-legend"><span><i></i>${esc(t(lang, 'cal_available'))}</span>${rows.length ? '' : `<span>${esc(t(lang, 'cal_none'))}</span>`}</p>
-</section>`,
+</section>
+${lang === 'es' ? `<section class="prose daily-about"><h2>Qué es el críptico del día</h2>
+<p>El críptico del día es una pista de crucigrama críptico nueva cada jornada, la misma para todos los que juegan. Se renueva a las 00:00 UTC, se juega gratis y sin registro, y tiene ayudas progresivas y la explicación de la solución.</p>
+<p>¿Querés más? En <a href="${P('play')}">el modo infinito</a> tenés crípticos ilimitados, y si recién empezás, la <a href="${P('help')}">guía para resolver crípticos</a> te explica cada mecanismo.</p></section>` : ''}`,
       });
     }));
 
