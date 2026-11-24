@@ -27,10 +27,28 @@ function memo(db, key, fn) {
   const hit = m.get(key);
   if (hit && hit.exp > Date.now()) return hit.p;
   if (m.size >= MAX_KEYS) m.clear();
-  const p = Promise.resolve().then(fn);
+  const p = Promise.resolve().then(() => shared(db, key, fn));
   m.set(key, { exp: Date.now() + ttl, p });
   p.catch(() => { if (m.get(key) && m.get(key).p === p) m.delete(key); });
   return p;
+}
+
+// Segundo nivel, en la base: una instancia nueva lee una fila en lugar de recalcular.
+// Si la tabla no existe todavía o falla, se calcula como antes.
+const SHARED_TTL = 30 * 60 * 1000;
+async function shared(db, key, fn) {
+  if (typeof db.get !== 'function' || typeof db.run !== 'function') return fn();
+  const k = key.length > 200 ? 'h:' + require('crypto').createHash('sha256').update(key).digest('hex') : key;
+  try {
+    const row = await db.get('SELECT value FROM stats_cache WHERE key = ? AND expires_at > ?', [k, Date.now()]);
+    if (row) return JSON.parse(row.value);
+  } catch { return fn(); }
+  const value = await fn();
+  try {
+    await db.run('INSERT INTO stats_cache(key, value, expires_at) VALUES (?,?,?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, expires_at = excluded.expires_at',
+      [k, JSON.stringify(value), Date.now() + Math.max(ttl, SHARED_TTL)]);
+  } catch { /* sin caché compartida */ }
+  return value;
 }
 
 const ENABLED = 'language_code IN (SELECT code FROM languages WHERE enabled = 1)';

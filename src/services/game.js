@@ -89,8 +89,10 @@ async function contentNotice(db, sel, pool) {
     return { kind: 'empty', alternatives: others };
   }
   if (sel.variant) {
-    const own = { n: (await STATS.variantCounts(db)).filter((x) => x.variant === sel.variant).reduce((s, x) => s + x.n, 0) };
-    if (own.n < (sel.minClues || 10)) return { kind: 'few_regional', regional: own.n, total: pool };
+    // Solo importa si llega al mínimo: se cuentan como mucho esas filas (idx_clues_pool).
+    const min = sel.minClues || 10;
+    const own = await db.get(`SELECT COUNT(*) AS n FROM (SELECT 1 FROM clues WHERE status = 'published' AND language_code = ? AND variant_code = ? LIMIT ${Number(min) | 0})`, [sel.lang, sel.variant]);
+    if (own.n < min) return { kind: 'few_regional', regional: own.n, total: pool };
   }
   return null;
 }

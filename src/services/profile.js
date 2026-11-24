@@ -1,5 +1,7 @@
 'use strict';
 
+const STATS = require('./catalog-stats');
+
 // Perfil personal del jugador. Todo se calcula a partir de las partidas y sus
 // eventos reales; si no hay datos suficientes para una conclusión, se dice.
 // Unidad de cálculo: la cuenta (todos sus identificadores de jugador) o, sin cuenta,
@@ -130,10 +132,16 @@ async function facts(db, ids) {
   const cons = await consecutiveSolves(db, ids);
   f.consecutive_best = cons.best; f.consecutive_current = cons.current;
   // Categorías completas: todas las publicadas de una categoría (con al menos 5) resueltas.
-  const comp = await db.get(`SELECT COUNT(*) AS n FROM (SELECT c.category, COUNT(*) AS total,
-      (SELECT COUNT(DISTINCT g.clue_id) FROM games g JOIN clues c2 ON c2.id = g.clue_id WHERE g.player_id IN (${p}) AND g.status = 'solved' AND c2.category = c.category AND c2.status = 'published') AS mine
-    FROM clues c WHERE c.status = 'published' GROUP BY c.category HAVING total >= 5 AND mine >= total)`, ids);
-  f.categories_complete = comp.n;
+  // Se parte de lo resuelto por el jugador (pocas filas) y, solo en las categorías donde ya
+  // resolvió 5 o más, se cuentan las publicadas hasta pasar ese número. Antes se recorría el
+  // catálogo entero en cada partida terminada (~54.000 filas leídas por vez).
+  const mineRows = await db.all(`SELECT c.category, COUNT(DISTINCT g.clue_id) AS mine FROM games g JOIN clues c ON c.id = g.clue_id
+    WHERE g.player_id IN (${p}) AND g.status = 'solved' AND c.status = 'published' AND c.category IS NOT NULL GROUP BY c.category`, ids);
+  f.categories_complete = 0;
+  for (const m of mineRows.filter((x) => x.mine >= 5)) {
+    const t = await db.get(`SELECT COUNT(*) AS n FROM (SELECT 1 FROM clues WHERE category = ? AND status = 'published' LIMIT ${(m.mine | 0) + 1})`, [m.category]);
+    if (t.n >= 5 && t.n <= m.mine) f.categories_complete++;
+  }
   f.xp_clues = Number(xpRow.xp); f.studied_only = studied.n;
   f.solve_rate = f.games - f.open > 0 ? r1((f.solved_games / (f.games - f.open)) * 100) : null;
   return f;
@@ -428,7 +436,7 @@ const MASTERY = (m) => {
 };
 
 async function strengths(db, unit) {
-  const catalog = await db.all("SELECT mechanism, COUNT(*) AS n FROM clues WHERE status = 'published' GROUP BY mechanism ORDER BY mechanism");
+  const catalog = await STATS.memo(db, 'mech:all', () => db.all("SELECT mechanism, COUNT(*) AS n FROM clues WHERE status = 'published' GROUP BY mechanism ORDER BY mechanism"));
   if (!unit.ids.length) return { min_games: MIN_MASTERY, items: catalog.map((c) => ({ mechanism: c.mechanism, available: c.n, games: 0, level: 'insufficient' })) };
   const rows = await db.all(`SELECT c.mechanism, g.status, g.duration_ms, g.hints_used, g.finished_at FROM games g JOIN clues c ON c.id = g.clue_id
     WHERE g.player_id IN (${marks(unit.ids)}) AND ${COUNTED} AND g.finished_at IS NOT NULL ORDER BY g.finished_at`, unit.ids);
@@ -532,8 +540,8 @@ async function recommendations(db, unit, { choice } = {}) {
   // 5) Una variante regional con crípticos propios que no jugó.
   const played = unit.ids.length ? await db.all(`SELECT DISTINCT c.variant_code AS v FROM games g JOIN clues c ON c.id = g.clue_id WHERE g.player_id IN (${marks(unit.ids)}) AND c.variant_code IS NOT NULL`, unit.ids) : [];
   const playedV = new Set(played.map((x) => x.v));
-  const variants = await db.all(`SELECT v.code, COUNT(c.id) AS n FROM language_variants v JOIN languages l ON l.code = v.language_code AND l.enabled = 1
-    JOIN clues c ON c.variant_code = v.code AND c.status = 'published' WHERE v.enabled = 1 GROUP BY v.code HAVING n >= 3 ORDER BY n DESC`);
+  const variants = await STATS.memo(db, 'rec:variants', () => db.all(`SELECT v.code, COUNT(c.id) AS n FROM language_variants v JOIN languages l ON l.code = v.language_code AND l.enabled = 1
+    JOIN clues c ON c.variant_code = v.code AND c.status = 'published' WHERE v.enabled = 1 GROUP BY v.code HAVING n >= 3 ORDER BY n DESC`));
   const v = variants.find((x) => !playedV.has(x.code));
   if (v) out.push({ kind: 'explore_variant', variant: v.code, available: v.n, params: { choice: v.code } });
   return { items: out.slice(0, 5), enough_data: rated.length > 0 };
