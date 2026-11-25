@@ -569,6 +569,9 @@ ${lang === 'es' ? `<section class="prose daily-about"><h2>Qué es el críptico d
       const c = await db.get("SELECT * FROM clues WHERE slug = ? AND status = 'published' AND language_code IN (SELECT code FROM languages WHERE enabled = 1)", [req.params.slug]);
       if (!c) return next();
       const pub = publicClue(c);
+      // Si fue críptico del día (solo fechas ya pasadas o de hoy), la página lleva esa fecha en el título.
+      const dayRow = await db.get('SELECT MIN(date) AS d FROM daily_challenges WHERE clue_id = ? AND date <= ?', [c.id, today()]);
+      const dayLabel = dayRow && dayRow.d ? new Date(dayRow.d + 'T00:00:00Z').toLocaleDateString('es', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' }) : '';
       const canonicalLang = UI_LANGS.includes(c.language_code) ? c.language_code : lang;
       const source = c.source_id ? await db.get('SELECT name, url FROM sources WHERE id = ?', [c.source_id]) : null;
       // Enlaces internos: crípticos del mismo mecanismo, para que buscadores y jugadores sigan navegando.
@@ -582,8 +585,9 @@ ${lang === 'es' ? `<section class="prose daily-about"><h2>Qué es el críptico d
       const crumbs = [[t(lang, 'archive_title'), P('archive')], [t(lang, 'mech_' + pub.mechanism), G ? href(lang, 'guide', '/' + G.slug) : P('archive')], [pub.clue, href(canonicalLang, 'clue', '/' + c.slug)]];
       render(req, res, {
         page: 'clue', path: href(canonicalLang, 'clue', '/' + c.slug), title: pub.clue, noindex: !isIndexable(c),
+        ...(dayLabel && lang === 'es' ? { seoTitle: `Críptico del día ${dayLabel}: ${pub.clue} | Play Crípticos` } : {}),
         description: lang === 'es'
-          ? `Críptico: «${pub.clue}». ${t(lang, 'mech_' + pub.mechanism)}, nivel ${t(lang, 'diff_' + pub.difficulty).toLowerCase()}. Resolvelo gratis en Play Crípticos, con pistas progresivas y la explicación paso a paso.`
+          ? `${dayLabel ? `Críptico del día del ${dayLabel}. ` : ''}Críptico: «${pub.clue}». ${t(lang, 'mech_' + pub.mechanism)}, nivel ${t(lang, 'diff_' + pub.difficulty).toLowerCase()}. Resolvelo gratis en Play Crípticos, con pistas progresivas y la explicación paso a paso.`
           : `${t(lang, 'mech_' + pub.mechanism)} · ${t(lang, 'diff_' + pub.difficulty)} — ${pub.clue}`,
         alternates: { [canonicalLang]: href(canonicalLang, 'clue', '/' + c.slug) },
         boot: { slug: c.slug, clueLang: c.language_code, clueVariant: c.variant_code },
