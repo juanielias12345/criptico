@@ -586,7 +586,9 @@ ${lang === 'es' ? `<section class="prose daily-about"><h2>Qué es el críptico d
       render(req, res, {
         page: 'clue', path: href(canonicalLang, 'clue', '/' + c.slug), title: pub.clue, noindex: !isIndexable(c),
         ...(dayLabel && lang === 'es' ? { seoTitle: `Críptico del día ${dayLabel}: ${pub.clue} | Play Crípticos` } : {}),
-        description: `${dayLabel && lang === 'es' ? `Críptico del día del ${dayLabel}. ` : ''}${t(lang, 'mech_' + pub.mechanism)} · ${t(lang, 'diff_' + pub.difficulty)} — ${pub.clue}`,
+        description: lang === 'es'
+          ? `${dayLabel ? `Críptico del día del ${dayLabel}. ` : ''}Críptico: «${pub.clue}». ${t(lang, 'mech_' + pub.mechanism)}, nivel ${t(lang, 'diff_' + pub.difficulty).toLowerCase()}. Resolvelo gratis en Play Crípticos, con pistas progresivas y la explicación paso a paso.`
+          : `${t(lang, 'mech_' + pub.mechanism)} · ${t(lang, 'diff_' + pub.difficulty)} — ${pub.clue}`,
         alternates: { [canonicalLang]: href(canonicalLang, 'clue', '/' + c.slug) },
         boot: { slug: c.slug, clueLang: c.language_code, clueVariant: c.variant_code },
         jsonLd: { '@context': 'https://schema.org', '@graph': [
